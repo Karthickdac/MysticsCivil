@@ -926,6 +926,42 @@ export interface PortfolioDashboard {
   projects: Project[];
 }
 
+export type SafetyTrendsDashboardJsaMonth = {
+  approved: number;
+  draft: number;
+  draftOverdue24h: number;
+  monthStart: string;
+};
+
+export type SafetyTrendsDashboardQcLast30 = {
+  pass: number;
+  fail: number;
+  total: number;
+  passRate: number;
+};
+
+export type SafetyTrendsDashboardWeeklyPassRateItem = {
+  weekStart: string;
+  pass: number;
+  total: number;
+  rate: number;
+};
+
+export type SafetyTrendsDashboardPerProjectItem = {
+  projectId: string;
+  projectName: string;
+  draftOverdue: number;
+  passRate30: number;
+  totalTests30: number;
+};
+
+export interface SafetyTrendsDashboard {
+  jsaMonth: SafetyTrendsDashboardJsaMonth;
+  qcLast30: SafetyTrendsDashboardQcLast30;
+  weeklyPassRate: SafetyTrendsDashboardWeeklyPassRateItem[];
+  perProject: SafetyTrendsDashboardPerProjectItem[];
+}
+
 export interface ActivityFeedItem {
   id: string;
   kind: string;

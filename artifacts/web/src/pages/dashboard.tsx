@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
-import { useGetPortfolioDashboard, useGetActivityFeed } from "@workspace/api-client-react";
+import { useGetPortfolioDashboard, useGetActivityFeed, useGetSafetyTrends } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,6 +16,8 @@ import {
   Camera,
   FileText,
   ClipboardCheck,
+  ShieldAlert,
+  FlaskConical,
 } from "lucide-react";
 import { formatINR, statusBadgeClass } from "@/lib/ocms-format";
 
@@ -24,6 +26,7 @@ type SortKey = "name" | "actualPercent" | "cpi" | "spi" | "contractValue" | "sta
 export default function Dashboard() {
   const { data, isLoading } = useGetPortfolioDashboard();
   const { data: feed } = useGetActivityFeed();
+  const { data: safety } = useGetSafetyTrends();
   const [q, setQ] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("actualPercent");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -101,6 +104,106 @@ export default function Dashboard() {
           </Card>
         ))}
       </div>
+
+      {safety && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-amber-600" /> JSAs this month
+              </CardTitle>
+              <span className="text-xs text-muted-foreground">since {new Date(safety.jsaMonth.monthStart).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-baseline gap-3">
+                <div className="text-3xl font-bold text-emerald-700 tabular-nums">{safety.jsaMonth.approved}</div>
+                <div className="text-sm text-muted-foreground">approved</div>
+                <div className="text-2xl font-semibold text-muted-foreground tabular-nums ml-3">{safety.jsaMonth.draft}</div>
+                <div className="text-sm text-muted-foreground">draft</div>
+              </div>
+              {safety.jsaMonth.draftOverdue24h > 0 && (
+                <div className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  {safety.jsaMonth.draftOverdue24h} draft{safety.jsaMonth.draftOverdue24h === 1 ? "" : "s"} overdue &gt;24h
+                </div>
+              )}
+              {safety.perProject.filter((p) => p.draftOverdue > 0).length > 0 && (
+                <div className="mt-3 space-y-1 border-t pt-2">
+                  <div className="text-xs text-muted-foreground">Most at risk</div>
+                  {safety.perProject.filter((p) => p.draftOverdue > 0).slice(0, 3).map((p) => (
+                    <Link key={p.projectId} href={`/projects/${p.projectId}/workforce?tab=jsa&status=draft`}>
+                      <a className="flex items-center justify-between text-sm hover:text-primary">
+                        <span className="truncate">{p.projectName}</span>
+                        <span className="text-xs tabular-nums text-rose-700">{p.draftOverdue} overdue</span>
+                      </a>
+                    </Link>
+                  ))}
+                </div>
+              )}
+              {safety.jsaMonth.draftOverdue24h === 0 && safety.jsaMonth.draft === 0 && safety.jsaMonth.approved === 0 && (
+                <div className="mt-2 text-xs text-muted-foreground">No JSAs recorded this month yet.</div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <FlaskConical className="h-4 w-4 text-blue-600" /> IS-code pass rate
+              </CardTitle>
+              <span className="text-xs text-muted-foreground">last 30 days</span>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-baseline gap-3">
+                <div className={`text-3xl font-bold tabular-nums ${safety.qcLast30.passRate < 0.9 ? "text-rose-700" : "text-emerald-700"}`}>
+                  {(safety.qcLast30.passRate * 100).toFixed(0)}%
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {safety.qcLast30.pass}/{safety.qcLast30.total} tests
+                  {safety.qcLast30.fail > 0 && <span className="text-rose-600"> · {safety.qcLast30.fail} fail</span>}
+                </div>
+              </div>
+              {safety.weeklyPassRate.length > 0 && safety.qcLast30.total > 0 && (
+                <svg viewBox="0 0 120 32" className="mt-3 w-full h-8" preserveAspectRatio="none" aria-label="Weekly pass rate sparkline">
+                  {(() => {
+                    const w = 120, h = 32, n = safety.weeklyPassRate.length;
+                    const pts = safety.weeklyPassRate.map((wp, i) => {
+                      const x = n === 1 ? w / 2 : (i / (n - 1)) * w;
+                      const y = h - wp.rate * h;
+                      return { x, y, wp };
+                    });
+                    const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+                    return (
+                      <>
+                        <path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" className="text-blue-600" />
+                        {pts.map((p, i) => (
+                          <circle key={i} cx={p.x} cy={p.y} r="2" className="fill-blue-600" />
+                        ))}
+                      </>
+                    );
+                  })()}
+                </svg>
+              )}
+              {safety.perProject.filter((p) => p.totalTests30 > 0 && p.passRate30 < 1).length > 0 && (
+                <div className="mt-3 space-y-1 border-t pt-2">
+                  <div className="text-xs text-muted-foreground">Lowest pass rate</div>
+                  {safety.perProject.filter((p) => p.totalTests30 > 0 && p.passRate30 < 1).slice(0, 3).map((p) => (
+                    <Link key={p.projectId} href={`/projects/${p.projectId}/workforce?tab=material-test&result=fail`}>
+                      <a className="flex items-center justify-between text-sm hover:text-primary">
+                        <span className="truncate">{p.projectName}</span>
+                        <span className="text-xs tabular-nums text-rose-700">{(p.passRate30 * 100).toFixed(0)}% · {p.totalTests30} tests</span>
+                      </a>
+                    </Link>
+                  ))}
+                </div>
+              )}
+              {safety.qcLast30.total === 0 && (
+                <div className="mt-2 text-xs text-muted-foreground">No IS-code tests recorded in the last 30 days.</div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">

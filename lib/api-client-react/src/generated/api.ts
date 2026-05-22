@@ -215,6 +215,7 @@ import type {
   ReleaseContractorPaymentBody,
   RetentionLedgerEntry,
   SafetyDashboard,
+  SafetyTrendsDashboard,
   SitePhoto,
   SitePhotoInput,
   SubmitGrn200,
@@ -5198,6 +5199,83 @@ export function useGetActivityFeed<TData = Awaited<ReturnType<typeof getActivity
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetActivityFeedQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetSafetyTrendsUrl = () => {
+
+
+
+
+  return `/api/dashboard/safety-trends`
+}
+
+/**
+ * @summary Portfolio-wide monthly JSA + IS-code material test trends
+ */
+export const getSafetyTrends = async ( options?: RequestInit): Promise<SafetyTrendsDashboard> => {
+
+  return customFetch<SafetyTrendsDashboard>(getGetSafetyTrendsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSafetyTrendsQueryKey = () => {
+    return [
+    `/api/dashboard/safety-trends`
+    ] as const;
+    }
+
+
+export const getGetSafetyTrendsQueryOptions = <TData = Awaited<ReturnType<typeof getSafetyTrends>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSafetyTrends>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSafetyTrendsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSafetyTrends>>> = ({ signal }) => getSafetyTrends({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSafetyTrends>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSafetyTrendsQueryResult = NonNullable<Awaited<ReturnType<typeof getSafetyTrends>>>
+export type GetSafetyTrendsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Portfolio-wide monthly JSA + IS-code material test trends
+ */
+
+export function useGetSafetyTrends<TData = Awaited<ReturnType<typeof getSafetyTrends>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSafetyTrends>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSafetyTrendsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

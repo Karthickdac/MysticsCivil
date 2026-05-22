@@ -1658,6 +1658,38 @@ export const GetActivityFeedResponse = zod.array(GetActivityFeedResponseItem)
 
 
 /**
+ * @summary Portfolio-wide monthly JSA + IS-code material test trends
+ */
+export const GetSafetyTrendsResponse = zod.object({
+  "jsaMonth": zod.object({
+  "approved": zod.number(),
+  "draft": zod.number(),
+  "draftOverdue24h": zod.number(),
+  "monthStart": zod.coerce.date()
+}),
+  "qcLast30": zod.object({
+  "pass": zod.number(),
+  "fail": zod.number(),
+  "total": zod.number(),
+  "passRate": zod.number()
+}),
+  "weeklyPassRate": zod.array(zod.object({
+  "weekStart": zod.coerce.date(),
+  "pass": zod.number(),
+  "total": zod.number(),
+  "rate": zod.number()
+})),
+  "perProject": zod.array(zod.object({
+  "projectId": zod.string(),
+  "projectName": zod.string(),
+  "draftOverdue": zod.number(),
+  "passRate30": zod.number(),
+  "totalTests30": zod.number()
+}))
+})
+
+
+/**
  * @summary List contractor RA bills for a project
  */
 export const ListContractorBillsParams = zod.object({

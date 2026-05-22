@@ -1151,6 +1151,17 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/ActivityFeedItem' }
+  /dashboard/safety-trends:
+    get:
+      tags: [Dashboard]
+      operationId: getSafetyTrends
+      summary: Portfolio-wide monthly JSA + IS-code material test trends
+      responses:
+        '200':
+          description: Safety + QC trend tiles
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SafetyTrendsDashboard' }
 
   # ── Financial: Contractor Bills ──────────────────────────────────────────────
   /projects/{projectId}/contractor-bills:
@@ -3624,6 +3635,47 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Project' }
 
+    SafetyTrendsDashboard:
+      type: object
+      required: [jsaMonth, qcLast30, weeklyPassRate, perProject]
+      properties:
+        jsaMonth:
+          type: object
+          required: [approved, draft, draftOverdue24h, monthStart]
+          properties:
+            approved: { type: integer }
+            draft: { type: integer }
+            draftOverdue24h: { type: integer }
+            monthStart: { type: string, format: date-time }
+        qcLast30:
+          type: object
+          required: [pass, fail, total, passRate]
+          properties:
+            pass: { type: integer }
+            fail: { type: integer }
+            total: { type: integer }
+            passRate: { type: number }
+        weeklyPassRate:
+          type: array
+          items:
+            type: object
+            required: [weekStart, pass, total, rate]
+            properties:
+              weekStart: { type: string, format: date-time }
+              pass: { type: integer }
+              total: { type: integer }
+              rate: { type: number }
+        perProject:
+          type: array
+          items:
+            type: object
+            required: [projectId, projectName, draftOverdue, passRate30, totalTests30]
+            properties:
+              projectId: { type: string }
+              projectName: { type: string }
+              draftOverdue: { type: integer }
+              passRate30: { type: number }
+              totalTests30: { type: integer }
     ActivityFeedItem:
       type: object
       required: [id, kind, projectId, projectName, title, actorName, occurredAt]

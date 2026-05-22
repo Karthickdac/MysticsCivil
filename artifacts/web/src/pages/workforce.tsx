@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearch } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1450,9 +1451,14 @@ function JsaTab({ projectId }: { projectId: string }) {
 function MaterialTestingTab({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const search = useSearch();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Record<string,string>>({ testType: "concrete_cube_28", testDate: new Date().toISOString().slice(0,10) });
-  const [filters, setFilters] = useState<{ testType: string; result: string; fromDate: string; toDate: string }>({ testType: "all", result: "all", fromDate: "", toDate: "" });
+  const initialResult = (() => {
+    const r = new URLSearchParams(search).get("result");
+    return r && ["pass","fail","pending"].includes(r) ? r : "all";
+  })();
+  const [filters, setFilters] = useState<{ testType: string; result: string; fromDate: string; toDate: string }>({ testType: "all", result: initialResult, fromDate: "", toDate: "" });
   const f = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
   const filterQs = (() => {
     const q = new URLSearchParams();
@@ -2051,10 +2057,23 @@ function ContractorBillTab({ projectId }: { projectId: string }) {
 }
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
+const VALID_WORKFORCE_TABS = ["workers","attendance","payroll","itp","inspections","ncr","permits","hira","jsa","ppe","incidents","material-test","contractor-bill","statutory","safety-dashboard"] as const;
+
 export default function WorkforcePage({ projectId }: { projectId: string }) {
+  const search = useSearch();
+  const initialTab = (() => {
+    const t = new URLSearchParams(search).get("tab");
+    return t && (VALID_WORKFORCE_TABS as readonly string[]).includes(t) ? t : "workers";
+  })();
+  const [tab, setTab] = useState<string>(initialTab);
+  useEffect(() => {
+    const t = new URLSearchParams(search).get("tab");
+    if (t && (VALID_WORKFORCE_TABS as readonly string[]).includes(t) && t !== tab) setTab(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="workers">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="bg-background border h-auto p-1 overflow-x-auto flex-nowrap w-full justify-start">
           <TabsTrigger value="workers" className="flex items-center gap-1.5"><Users className="h-4 w-4" />Workers</TabsTrigger>
           <TabsTrigger value="attendance" className="flex items-center gap-1.5"><CalendarCheck className="h-4 w-4" />Attendance</TabsTrigger>
