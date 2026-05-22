@@ -200,7 +200,30 @@ async function main() {
     { poId: po3.id, inventoryItemId: invItems[2].id, itemName: "TMT Steel 12mm (Fe500D)", unit: "MT", orderedQty: "20", receivedQty: "0", unitRate: "58000", gstRate: "18", amount: "1160000", gstAmount: "208800", specification: "IS:1786 Fe500D", hsnCode: "7213" },
     { poId: po3.id, inventoryItemId: invItems[3].id, itemName: "TMT Steel 16mm (Fe500D)", unit: "MT", orderedQty: "15", receivedQty: "0", unitRate: "57800", gstRate: "18", amount: "867000", gstAmount: "156060", specification: "IS:1786 Fe500D", hsnCode: "7213" },
   ]);
-  console.log(`✅ ${3} purchase orders with items created`);
+  const po4 = await db.insert(purchaseOrdersTable).values({
+    projectId: pid, poNumber: "PO-2025-004", poDate: new Date("2025-05-05"),
+    vendorId: vendors[3].id, indentId: indent2.id,
+    status: "draft", deliveryLocation: "Main Site Store",
+    deliveryDeadline: new Date("2025-05-25"), paymentTerms: "Net 45 days",
+    totalAmount: "345000", gstAmount: "17250", grandTotal: "362250",
+  }).returning().then(r => r[0]);
+  await db.insert(poItemsTable).values([
+    { poId: po4.id, inventoryItemId: invItems[8].id, itemName: "Autoclaved Aerated Concrete Blocks (AAC)", unit: "cu.m", orderedQty: "150", receivedQty: "0", unitRate: "2300", gstRate: "5", amount: "345000", gstAmount: "17250", specification: "IS:2185 Pt.4", hsnCode: "6810" },
+  ]);
+
+  const po5 = await db.insert(purchaseOrdersTable).values({
+    projectId: pid, poNumber: "PO-2025-005", poDate: new Date("2025-05-10"),
+    vendorId: vendors[5].id,
+    status: "closed", deliveryLocation: "Paint Store",
+    deliveryDeadline: new Date("2025-05-15"), paymentTerms: "Immediate",
+    totalAmount: "78000", gstAmount: "14040", grandTotal: "92040",
+    approvedAt: new Date("2025-05-11"),
+    notes: "Interior emulsion paint — 2 coats as per BOQ",
+  }).returning().then(r => r[0]);
+  await db.insert(poItemsTable).values([
+    { poId: po5.id, inventoryItemId: invItems[14].id, itemName: "Interior Emulsion Paint (White)", unit: "ltrs", orderedQty: "600", receivedQty: "600", unitRate: "130", gstRate: "18", amount: "78000", gstAmount: "14040", hsnCode: "3209" },
+  ]);
+  console.log(`✅ ${5} purchase orders with items created`);
 
   // ── GRNs ─────────────────────────────────────────────────────────────────────
   const grn1 = await db.insert(grnsTable).values({

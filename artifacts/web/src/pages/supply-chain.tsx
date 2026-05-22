@@ -671,6 +671,27 @@ function GrnTab({ projectId }: { projectId: string }) {
     enabled: !!selectedGrn,
   });
 
+  const { data: selectedPoItems = [] } = useQuery<any[]>({
+    queryKey: ["po-items", selectedGrn?.poId],
+    queryFn: () => api(`/purchase-orders/${selectedGrn!.poId}/items`),
+    enabled: !!selectedGrn?.poId,
+  });
+
+  const [itemForm, setItemForm] = useState({ poItemId: "", inventoryItemId: "", receivedQty: "", acceptedQty: "", rejectedQty: "0", unitRate: "", batchNumber: "", condition: "good", qcHold: false, remarks: "" });
+
+  const addGrnItem = useMutation({
+    mutationFn: (body: typeof itemForm) => api(`/grns/${selectedGrn!.id}/items`, {
+      method: "POST",
+      body: JSON.stringify({ ...body, receivedQty: parseFloat(body.receivedQty) || 0, acceptedQty: parseFloat(body.acceptedQty) || 0, rejectedQty: parseFloat(body.rejectedQty) || 0, unitRate: parseFloat(body.unitRate) || 0 }),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["grn-detail", selectedGrn?.id] });
+      setItemForm({ poItemId: "", inventoryItemId: "", receivedQty: "", acceptedQty: "", rejectedQty: "0", unitRate: "", batchNumber: "", condition: "good", qcHold: false, remarks: "" });
+      toast({ title: "Item added to GRN" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const createGrn = useMutation({
     mutationFn: (body: typeof form) => api(`/projects/${projectId}/grns`, { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["grns", projectId] }); setOpen(false); toast({ title: "GRN created" }); },
@@ -786,6 +807,44 @@ function GrnTab({ projectId }: { projectId: string }) {
               </tbody>
             </table>
           </CardContent>
+          {selectedGrn.status === "draft" && (
+            <div className="border-t p-4 bg-slate-50/50">
+              <p className="text-xs font-medium text-muted-foreground mb-3">Add Line Item</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {selectedPoItems.length > 0 ? (
+                  <div className="md:col-span-2">
+                    <Label className="text-xs">From PO Line</Label>
+                    <Select value={itemForm.poItemId} onValueChange={v => {
+                      const poi = selectedPoItems.find((p: any) => p.id === v);
+                      if (poi) setItemForm(f => ({ ...f, poItemId: v, inventoryItemId: poi.inventoryItemId ?? "", unitRate: String(poi.unitRate ?? ""), receivedQty: "", acceptedQty: "" }));
+                    }}>
+                      <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue placeholder="Select PO line" /></SelectTrigger>
+                      <SelectContent>{selectedPoItems.map((p: any) => <SelectItem key={p.id} value={p.id} className="text-xs">{p.itemName} ({p.unit})</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+                <div><Label className="text-xs">Received Qty</Label><Input className="mt-1 h-8 text-xs" type="number" value={itemForm.receivedQty} onChange={e => setItemForm(f => ({ ...f, receivedQty: e.target.value, acceptedQty: e.target.value }))} /></div>
+                <div><Label className="text-xs">Accepted Qty</Label><Input className="mt-1 h-8 text-xs" type="number" value={itemForm.acceptedQty} onChange={e => setItemForm(f => ({ ...f, acceptedQty: e.target.value }))} /></div>
+                <div><Label className="text-xs">Unit Rate (₹)</Label><Input className="mt-1 h-8 text-xs" type="number" value={itemForm.unitRate} onChange={e => setItemForm(f => ({ ...f, unitRate: e.target.value }))} /></div>
+                <div><Label className="text-xs">Batch No.</Label><Input className="mt-1 h-8 text-xs" value={itemForm.batchNumber} onChange={e => setItemForm(f => ({ ...f, batchNumber: e.target.value }))} /></div>
+                <div><Label className="text-xs">Condition</Label>
+                  <Select value={itemForm.condition} onValueChange={v => setItemForm(f => ({ ...f, condition: v }))}>
+                    <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>{["good","damaged","short","excess"].map(c => <SelectItem key={c} value={c} className="text-xs capitalize">{c}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end pb-1">
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <input type="checkbox" checked={itemForm.qcHold} onChange={e => setItemForm(f => ({ ...f, qcHold: e.target.checked }))} />
+                    QC Hold
+                  </label>
+                </div>
+              </div>
+              <Button size="sm" className="mt-3" disabled={addGrnItem.isPending || (!itemForm.receivedQty && !itemForm.poItemId)} onClick={() => addGrnItem.mutate(itemForm)}>
+                <Plus className="h-3.5 w-3.5 mr-1" />{addGrnItem.isPending ? "Adding…" : "Add Item"}
+              </Button>
+            </div>
+          )}
         </Card>
       )}
     </div>
@@ -899,6 +958,83 @@ function QcTab({ projectId }: { projectId: string }) {
   );
 }
 
+// ─── Issue Create Form (extracted so it can hold its own state cleanly) ────────
+function IssueCreateForm({ projectId, items, onSuccess }: { projectId: string; items: InventoryItem[]; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const [form, setForm] = useState({ issueNumber: "", issuedToName: "", issuedToContractor: "", notes: "" });
+  const [lineItems, setLineItems] = useState<{ inventoryItemId: string; issuedQty: string }[]>([{ inventoryItemId: "", issuedQty: "" }]);
+
+  const createIssue = useMutation({
+    mutationFn: () => {
+      const validLines = lineItems.filter(l => l.inventoryItemId && parseFloat(l.issuedQty) > 0);
+      if (!form.issueNumber) throw new Error("Issue number required");
+      if (validLines.length === 0) throw new Error("Add at least one item");
+      return api(`/projects/${projectId}/stock-issues`, {
+        method: "POST",
+        body: JSON.stringify({ ...form, items: validLines.map(l => ({ inventoryItemId: l.inventoryItemId, issuedQty: parseFloat(l.issuedQty) })) }),
+      });
+    },
+    onSuccess: () => {
+      setForm({ issueNumber: "", issuedToName: "", issuedToContractor: "", notes: "" });
+      setLineItems([{ inventoryItemId: "", issuedQty: "" }]);
+      toast({ title: "Stock issued successfully" });
+      onSuccess();
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div><Label className="text-xs">Issue Number *</Label><Input className="mt-1" value={form.issueNumber} onChange={e => setForm(f => ({ ...f, issueNumber: e.target.value }))} placeholder="ISS-2025-XXX" /></div>
+        <div><Label className="text-xs">Issued To</Label><Input className="mt-1" value={form.issuedToName} onChange={e => setForm(f => ({ ...f, issuedToName: e.target.value }))} placeholder="Engineer / Gang name" /></div>
+        <div><Label className="text-xs">Contractor</Label><Input className="mt-1" value={form.issuedToContractor} onChange={e => setForm(f => ({ ...f, issuedToContractor: e.target.value }))} /></div>
+        <div><Label className="text-xs">Notes</Label><Input className="mt-1" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
+      </div>
+      <div className="border rounded-lg overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50 border-b text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2 text-left">Material</th>
+              <th className="px-3 py-2 text-left w-32">Issue Qty</th>
+              <th className="px-3 py-2 text-left w-20">Stock</th>
+              <th className="px-3 py-2 w-10"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {lineItems.map((line, idx) => {
+              const inv = items.find(i => i.id === line.inventoryItemId);
+              return (
+                <tr key={idx} className="border-b">
+                  <td className="px-3 py-1.5">
+                    <Select value={line.inventoryItemId} onValueChange={v => setLineItems(ls => ls.map((l, i) => i === idx ? { ...l, inventoryItemId: v } : l))}>
+                      <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Select material" /></SelectTrigger>
+                      <SelectContent>{items.map(i => <SelectItem key={i.id} value={i.id} className="text-xs">{i.itemName} ({i.unit})</SelectItem>)}</SelectContent>
+                    </Select>
+                  </td>
+                  <td className="px-3 py-1.5"><Input className="h-7 text-xs" type="number" value={line.issuedQty} onChange={e => setLineItems(ls => ls.map((l, i) => i === idx ? { ...l, issuedQty: e.target.value } : l))} placeholder="0" /></td>
+                  <td className="px-3 py-1.5 text-muted-foreground">{inv ? `${inv.currentStock} ${inv.unit}` : "—"}</td>
+                  <td className="px-3 py-1.5 text-center">
+                    {lineItems.length > 1 && <button className="text-red-400 hover:text-red-600" onClick={() => setLineItems(ls => ls.filter((_, i) => i !== idx))}>×</button>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <div className="p-2 bg-slate-50/50">
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setLineItems(ls => [...ls, { inventoryItemId: "", issuedQty: "" }])}>
+            <Plus className="h-3 w-3 mr-1" /> Add Material
+          </Button>
+        </div>
+      </div>
+      <Button size="sm" disabled={createIssue.isPending} onClick={() => createIssue.mutate()}>
+        <ClipboardList className="h-4 w-4 mr-1.5" />{createIssue.isPending ? "Issuing…" : "Issue Materials"}
+      </Button>
+    </div>
+  );
+}
+
 // ─── Issues & Wastage Tab ──────────────────────────────────────────────────────
 function IssuesWastageTab({ projectId }: { projectId: string }) {
   const { toast } = useToast();
@@ -940,36 +1076,46 @@ function IssuesWastageTab({ projectId }: { projectId: string }) {
       </div>
 
       {activeSection === "issues" && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Stock Issue Register</CardTitle></CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b bg-slate-50 text-xs text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-2 text-left">Issue No.</th>
-                    <th className="px-4 py-2 text-left">Date</th>
-                    <th className="px-4 py-2 text-left">Issued To</th>
-                    <th className="px-4 py-2 text-left">Contractor</th>
-                    <th className="px-4 py-2 text-left">Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {issues.map(issue => (
-                    <tr key={issue.id} className="border-b hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-blue-700">{issue.issueNumber}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{fmtDate(issue.issueDate)}</td>
-                      <td className="px-4 py-3 text-xs">{issue.issuedToName ?? "—"}</td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{issue.issuedToContractor ?? "—"}</td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{(issue as any).notes ?? "—"}</td>
+        <div className="space-y-4">
+          {/* Create Stock Issue form */}
+          <Card>
+            <CardHeader><CardTitle className="text-sm">New Stock Issue</CardTitle></CardHeader>
+            <CardContent>
+              <IssueCreateForm projectId={projectId} items={items} onSuccess={() => { qc.invalidateQueries({ queryKey: ["stock-issues", projectId] }); qc.invalidateQueries({ queryKey: ["inventory", projectId] }); qc.invalidateQueries({ queryKey: ["inventory-summary", projectId] }); }} />
+            </CardContent>
+          </Card>
+          {/* Issue Register */}
+          <Card>
+            <CardHeader><CardTitle className="text-base">Stock Issue Register</CardTitle></CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b bg-slate-50 text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Issue No.</th>
+                      <th className="px-4 py-2 text-left">Date</th>
+                      <th className="px-4 py-2 text-left">Issued To</th>
+                      <th className="px-4 py-2 text-left">Contractor</th>
+                      <th className="px-4 py-2 text-left">Notes</th>
                     </tr>
-                  ))}
-                  {issues.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">No issues yet.</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                  </thead>
+                  <tbody>
+                    {issues.map(issue => (
+                      <tr key={issue.id} className="border-b hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3 font-medium text-blue-700">{issue.issueNumber}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{fmtDate(issue.issueDate)}</td>
+                        <td className="px-4 py-3 text-xs">{issue.issuedToName ?? "—"}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{issue.issuedToContractor ?? "—"}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{(issue as any).notes ?? "—"}</td>
+                      </tr>
+                    ))}
+                    {issues.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">No issues yet.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {activeSection === "wastage" && (
@@ -1068,10 +1214,26 @@ function RfqTab({ projectId }: { projectId: string }) {
     queryFn: () => api("/vendors"),
   });
 
+  const [awardOpen, setAwardOpen] = useState(false);
+  const [awardVendorId, setAwardVendorId] = useState("");
+  const [overrideVendorCount, setOverrideVendorCount] = useState(false);
+
   const createRfq = useMutation({
     mutationFn: (body: typeof form) => api(`/projects/${projectId}/rfqs`, { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["rfqs", projectId] }); setOpen(false); toast({ title: "RFQ created" }); },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const awardRfq = useMutation({
+    mutationFn: ({ rfqId, vendorId, override }: { rfqId: string; vendorId: string; override: boolean }) =>
+      api(`/rfqs/${rfqId}/award`, { method: "POST", body: JSON.stringify({ vendorId, overrideVendorCount: override }) }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["rfqs", projectId] });
+      qc.invalidateQueries({ queryKey: ["rfq-detail", selectedRfq?.id] });
+      setAwardOpen(false); setAwardVendorId(""); setOverrideVendorCount(false);
+      toast({ title: `RFQ awarded to ${vendorMap[data.awardedVendorId] ?? "vendor"}` });
+    },
+    onError: (e: any) => toast({ title: "Award failed", description: e.message, variant: "destructive" }),
   });
 
   const vendorMap = Object.fromEntries(vendors.map(v => [v.id, v.name]));
@@ -1130,25 +1292,69 @@ function RfqTab({ projectId }: { projectId: string }) {
         </CardContent>
       </Card>
 
-      {/* Comparative Statement */}
+      {/* Comparative Statement + Award */}
       {selectedRfq && rfqComparison && (
         <Card>
-          <CardHeader><CardTitle className="text-sm">Comparative Statement — {selectedRfq.rfqNumber}</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <CardTitle className="text-sm">Comparative Statement — {selectedRfq.rfqNumber}</CardTitle>
+            {selectedRfq.status !== "awarded" && (
+              <Dialog open={awardOpen} onOpenChange={o => { setAwardOpen(o); if (!o) { setAwardVendorId(""); setOverrideVendorCount(false); } }}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">Award PO</Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader><DialogTitle>Award RFQ — {selectedRfq.rfqNumber}</DialogTitle></DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="text-xs">Award to Vendor *</Label>
+                      <Select value={awardVendorId} onValueChange={setAwardVendorId}>
+                        <SelectTrigger className="mt-1"><SelectValue placeholder="Select vendor (L1 recommended)" /></SelectTrigger>
+                        <SelectContent>
+                          {vendors.filter(v => v.status === "active").map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <span>Minimum 3 vendor responses required. Check override below if fewer.</span>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs cursor-pointer">
+                      <input type="checkbox" checked={overrideVendorCount} onChange={e => setOverrideVendorCount(e.target.checked)} className="rounded" />
+                      Override vendor count requirement (record reason in PO notes)
+                    </label>
+                    <Button className="w-full bg-emerald-600 hover:bg-emerald-700"
+                      disabled={!awardVendorId || awardRfq.isPending}
+                      onClick={() => awardRfq.mutate({ rfqId: selectedRfq.id, vendorId: awardVendorId, override: overrideVendorCount })}>
+                      {awardRfq.isPending ? "Awarding…" : "Confirm Award"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+            {selectedRfq.status === "awarded" && (
+              <Badge className="bg-emerald-100 text-emerald-700">Awarded to {vendorMap[selectedRfq.awardedVendorId!] ?? "vendor"}</Badge>
+            )}
+          </CardHeader>
           <CardContent className="p-0">
             {(rfqComparison.comparisonTable ?? []).map((row: any) => (
               <div key={row.itemId} className="p-4 border-b">
                 <p className="text-sm font-medium mb-2">{row.itemName} ({row.unit}) — {fmt(row.requiredQty)} reqd.</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                  {row.responses.map((resp: any, idx: number) => (
+                  {row.responses.map((resp: any) => (
                     <div key={resp.vendorId} className={`rounded-lg border p-3 ${resp.isL1 ? "border-emerald-300 bg-emerald-50" : ""}`}>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs font-medium">{vendorMap[resp.vendorId] ?? resp.vendorId}</span>
-                        {resp.isL1 && <Badge className="text-xs bg-emerald-100 text-emerald-700">L1</Badge>}
-                        {!resp.isL1 && <span className="text-xs text-muted-foreground">L{resp.rank}</span>}
+                        {resp.isL1 ? <Badge className="text-xs bg-emerald-100 text-emerald-700">L1</Badge> : <span className="text-xs text-muted-foreground">L{resp.rank}</span>}
                       </div>
                       <p className="text-lg font-bold">₹{fmt(resp.unitRate)}</p>
                       <p className="text-xs text-muted-foreground">+{resp.gstRate}% GST = ₹{resp.totalRate.toFixed(2)} total</p>
                       {resp.leadTimeDays && <p className="text-xs text-muted-foreground mt-1">{resp.leadTimeDays} days lead time</p>}
+                      {selectedRfq.status !== "awarded" && resp.isL1 && (
+                        <Button size="sm" variant="outline" className="mt-2 h-6 text-xs w-full border-emerald-300 text-emerald-700"
+                          onClick={() => { setAwardVendorId(resp.vendorId); setAwardOpen(true); }}>
+                          Select L1 &amp; Award
+                        </Button>
+                      )}
                     </div>
                   ))}
                   {row.responses.length === 0 && <p className="text-xs text-muted-foreground">No responses received yet</p>}

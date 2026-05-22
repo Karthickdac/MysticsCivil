@@ -9,7 +9,7 @@ import {
   grnsTable, grnItemsTable,
   materialTestsTable, stockIssuesTable, issueItemsTable,
   wastageLogsTable, rateContractsTable,
-  projectsTable,
+  projectsTable, userProfilesTable,
 } from "@workspace/db";
 import { eq, and, desc, asc, sql, gte, lte } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
@@ -164,6 +164,33 @@ const sRc = (r: any) => ({
   maxQty: r.maxQty ? n(r.maxQty) : null, usedQty: n(r.usedQty),
   isActive: r.isActive, notes: r.notes ?? null, createdAt: dReq(r.createdAt),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROJECT ACCESS GUARD — prevents cross-tenant IDOR on entity-by-id routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Returns 403 and true if the user cannot access the entity's project. */
+async function denyIfNoProjectAccess(
+  req: Request, res: Response, entityProjectId: string,
+): Promise<boolean> {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ error: "Unauthenticated" }); return true; }
+  // Admins bypass tenant check
+  const userRole = req.userRole ?? null;
+  if (userRole === "admin") return false;
+  // Resolve user's org
+  const [profile] = await db.select({ organisationId: userProfilesTable.organisationId })
+    .from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
+  if (!profile?.organisationId) { res.status(403).json({ error: "Forbidden" }); return true; }
+  // Resolve project's org
+  const [project] = await db.select({ organisationId: projectsTable.organisationId })
+    .from(projectsTable).where(eq(projectsTable.id, entityProjectId));
+  if (!project) { res.status(404).json({ error: "Project not found" }); return true; }
+  if (project.organisationId !== profile.organisationId) {
+    res.status(403).json({ error: "Forbidden" }); return true;
+  }
+  return false;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VENDORS
@@ -348,6 +375,7 @@ router.post("/projects/:projectId/material-indents", requireAuth, async (req: Re
 router.get("/material-indents/:indentId", requireAuth, async (req: Request, res: Response) => {
   const [indent] = await db.select().from(materialIndentsTable).where(eq(materialIndentsTable.id, req.params.indentId));
   if (!indent) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, indent.projectId)) return;
   res.json(sIndent(indent));
 });
 
@@ -440,6 +468,7 @@ router.post("/projects/:projectId/rfqs", requireAuth, requireRole(...ROLE_GROUPS
 router.get("/rfqs/:rfqId", requireAuth, async (req: Request, res: Response) => {
   const [rfq] = await db.select().from(rfqsTable).where(eq(rfqsTable.id, req.params.rfqId));
   if (!rfq) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, rfq.projectId)) return;
   const [items, vendors, responses] = await Promise.all([
     db.select().from(rfqItemsTable).where(eq(rfqItemsTable.rfqId, rfq.id)),
     db.select().from(rfqVendorsTable).where(eq(rfqVendorsTable.rfqId, rfq.id)),
@@ -519,6 +548,17 @@ router.post("/rfqs/:rfqId/award", requireAuth, requireRole(...ROLE_GROUPS.OWNER_
   if (!b.vendorId) { res.status(400).json({ error: "vendorId required" }); return; }
   const [rfq] = await db.select().from(rfqsTable).where(eq(rfqsTable.id, req.params.rfqId));
   if (!rfq) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, rfq.projectId)) return;
+  // Enforce minimum 3 vendor responses (Indian procurement best practice)
+  const responses = await db.select({ vendorId: rfqResponsesTable.vendorId })
+    .from(rfqResponsesTable).where(eq(rfqResponsesTable.rfqId, rfq.id));
+  const uniqueVendorCount = new Set(responses.map(r => r.vendorId)).size;
+  if (uniqueVendorCount < 3 && !b.overrideVendorCount) {
+    res.status(400).json({
+      error: `Only ${uniqueVendorCount} vendor response(s) received — minimum 3 required per procurement policy. Pass overrideVendorCount:true to award anyway.`,
+      vendorCount: uniqueVendorCount,
+    }); return;
+  }
   const [updated] = await db.update(rfqsTable).set({
     status: "awarded", awardedVendorId: b.vendorId, awardedAt: new Date(),
   }).where(eq(rfqsTable.id, rfq.id)).returning();
@@ -559,6 +599,11 @@ router.get("/purchase-orders/:poId", requireAuth, async (req: Request, res: Resp
   res.json({ ...sPo(po), items: items.map(sPoItem) });
 });
 
+router.get("/purchase-orders/:poId/items", requireAuth, async (req: Request, res: Response) => {
+  const items = await db.select().from(poItemsTable).where(eq(poItemsTable.poId, req.params.poId));
+  res.json(items.map(sPoItem));
+});
+
 router.post("/purchase-orders/:poId/items", requireAuth, async (req: Request, res: Response) => {
   const b = req.body ?? {};
   if (!b.itemName || b.orderedQty === undefined || b.unitRate === undefined) {
@@ -590,6 +635,7 @@ router.post("/purchase-orders/:poId/items", requireAuth, async (req: Request, re
 router.post("/purchase-orders/:poId/approve", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
   const [po] = await db.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.poId));
   if (!po) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, po.projectId)) return;
   const [updated] = await db.update(purchaseOrdersTable).set({
     status: "approved", approvedById: req.user?.id ?? null, approvedAt: new Date(),
   }).where(eq(purchaseOrdersTable.id, po.id)).returning();
@@ -604,6 +650,7 @@ router.patch("/purchase-orders/:poId", requireAuth, requireRole(...ROLE_GROUPS.O
   const b = req.body ?? {};
   const [po] = await db.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.poId));
   if (!po) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, po.projectId)) return;
   const patch: Record<string, any> = {};
   if (b.status !== undefined) patch.status = b.status;
   if (b.amendmentReason !== undefined) { patch.amendmentReason = b.amendmentReason; patch.version = po.version + 1; }
@@ -669,6 +716,7 @@ router.post("/grns/:grnId/items", requireAuth, async (req: Request, res: Respons
 router.post("/grns/:grnId/submit", requireAuth, async (req: Request, res: Response) => {
   const [grn] = await db.select().from(grnsTable).where(eq(grnsTable.id, req.params.grnId));
   if (!grn || grn.status !== "draft") { res.status(409).json({ error: "Only draft GRNs can be submitted" }); return; }
+  if (await denyIfNoProjectAccess(req, res, grn.projectId)) return;
 
   const grnItems = await db.select().from(grnItemsTable).where(eq(grnItemsTable.grnId, grn.id));
   const qcHoldCount = grnItems.filter(i => i.qcHold).length;
@@ -728,6 +776,19 @@ router.post("/grns/:grnId/submit", requireAuth, async (req: Request, res: Respon
       narration: `GRN ${grn.grnNumber} — ${gi.itemName}`,
       createdById: req.user?.id ?? null,
     });
+  }
+
+  // Invoice 3-way match: compare invoice amount vs computed GRN value (leg 3)
+  if (grn.invoiceAmount && n(grn.invoiceAmount) > 0) {
+    const grnValue = grnItems.filter(i => !i.qcHold)
+      .reduce((s, gi) => s + n(gi.acceptedQty) * n(gi.unitRate), 0);
+    const invoiceAmt = n(grn.invoiceAmount);
+    const invoiceDiff = Math.abs(invoiceAmt - grnValue);
+    // Allow 2% tolerance for GST rounding / freight charges
+    if (invoiceDiff > grnValue * 0.02 && matchStatus === "matched") {
+      matchStatus = "rate_mismatch";
+      matchNotes.push(`Invoice ₹${invoiceAmt.toFixed(0)} vs GRN value ₹${grnValue.toFixed(0)} — diff ₹${invoiceDiff.toFixed(0)}`);
+    }
   }
 
   const newStatus = qcHoldCount > 0 ? "qc_pending" : "accepted";
@@ -858,6 +919,7 @@ router.patch("/material-tests/:testId", requireAuth, async (req: Request, res: R
   const b = req.body ?? {};
   const [test] = await db.select().from(materialTestsTable).where(eq(materialTestsTable.id, req.params.testId));
   if (!test) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, test.projectId)) return;
   if (test.testResult !== "pending" && b.testResult && b.testResult !== test.testResult) {
     res.status(409).json({ error: "Test result already finalised" }); return;
   }
@@ -925,10 +987,24 @@ router.post("/projects/:projectId/stock-issues", requireAuth, async (req: Reques
         narration: `Issue ${b.issueNumber} — ${inv.itemName}`, createdById: req.user?.id ?? null,
       });
     }
-    // Mark indent as fulfilled if all items issued
+    // Mark indent as fulfilled only if all approved items have been fully issued
     if (b.indentId) {
-      await db.update(materialIndentsTable).set({ status: "fulfilled" })
+      const [indentRow] = await db.select().from(materialIndentsTable)
         .where(eq(materialIndentsTable.id, b.indentId));
+      if (indentRow?.status === "approved") {
+        const indentItems = await db.select().from(indentItemsTable)
+          .where(eq(indentItemsTable.indentId, b.indentId));
+        const isFullyFulfilled = indentItems.every(ii => {
+          const approvedQty = n(ii.approvedQty ?? ii.requiredQty);
+          const issuedForItem = b.items?.find((it: any) => it.indentItemId === ii.id);
+          const issuedQtyForItem = n(issuedForItem?.issuedQty ?? 0);
+          return issuedQtyForItem >= approvedQty - 0.01;
+        });
+        if (isFullyFulfilled) {
+          await db.update(materialIndentsTable).set({ status: "fulfilled" })
+            .where(eq(materialIndentsTable.id, b.indentId));
+        }
+      }
     }
   }
   res.status(201).json(sIssue(row));
