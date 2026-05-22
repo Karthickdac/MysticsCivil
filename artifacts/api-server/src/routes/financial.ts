@@ -14,27 +14,27 @@ import {
   projectsTable,
 } from "@workspace/db";
 import { eq, and, asc, desc, sql } from "drizzle-orm";
-import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
+import { requireAuth, requireRole, loadRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { n, d, dReq } from "../lib/serialize";
 
 const router: IRouter = Router();
 
-// ─── Workflow: Transitions, Labels, Role Guards ────────────────────────────────
-// Order: draft → submitted → technical_check → qs_scrutiny → pm_certification
-//        → auto_deductions → gst_invoice → finance_approval
-//        → payment_released (voucher + TDS created here)
-//        → ledger_posting   (double-entry posted here)
-//        → closed
+// ─── Workflow Transitions, Labels, and Per-Step Role Guards ───────────────────
+// Canonical sequence:
+//   draft → submitted → technical_check → qs_scrutiny → pm_certification
+//   → auto_deductions → gst_invoice (deductions computed here)
+//   → finance_approval → payment_released (voucher + TDS created here)
+//   → ledger_posting (double-entry posted here) → closed
 const BILL_TRANSITIONS: Record<string, string> = {
   draft:            "submitted",
   submitted:        "technical_check",
   technical_check:  "qs_scrutiny",
   qs_scrutiny:      "pm_certification",
   pm_certification: "auto_deductions",
-  auto_deductions:  "gst_invoice",       // deductions computed here
+  auto_deductions:  "gst_invoice",
   gst_invoice:      "finance_approval",
-  finance_approval: "payment_released",  // voucher + TDS created here
-  payment_released: "ledger_posting",    // auto double-entry here
+  finance_approval: "payment_released",
+  payment_released: "ledger_posting",
   ledger_posting:   "closed",
 };
 
@@ -66,6 +66,22 @@ const BILL_STEP_ROLES: Record<string, readonly string[]> = {
   ledger_posting:   ["owner", "finance", "admin"],
   closed:           ["owner", "finance", "admin"],
 };
+
+// ─── Role helper for dynamic per-step checks ──────────────────────────────────
+// Uses loadRole (DB lookup, cached on req.userRole) — same path as requireRole middleware.
+async function assertStepRole(req: Request, res: Response, nextStatus: string): Promise<boolean> {
+  const allowedRoles = BILL_STEP_ROLES[nextStatus] ?? [];
+  if (allowedRoles.length === 0) return true; // any auth user
+  const role = req.userRole ?? (await loadRole(req.user!.id));
+  req.userRole = role ?? undefined;
+  if (!role || !(allowedRoles as readonly string[]).includes(role)) {
+    res.status(403).json({
+      error: `Step '${nextStatus}' requires one of roles: ${[...allowedRoles].join(", ")}. Your role: ${role ?? "none"}`,
+    });
+    return false;
+  }
+  return true;
+}
 
 // ─── Serialisers ──────────────────────────────────────────────────────────────
 function serializeBill(b: any) {
@@ -167,50 +183,36 @@ function serializeTdsEntry(t: any) {
   };
 }
 
-// ─── Project-scope guard ──────────────────────────────────────────────────────
-// Verifies a bill belongs to the project specified in the route.
-async function billInProject(billId: string, projectId: string): Promise<boolean> {
-  const [row] = await db.select({ id: contractorBillsTable.id })
-    .from(contractorBillsTable)
-    .where(and(eq(contractorBillsTable.id, billId), eq(contractorBillsTable.projectId, projectId)))
-    .limit(1);
-  return !!row;
-}
-
 // ─── Auto-Deduction Engine ────────────────────────────────────────────────────
-// Called when bill transitions INTO gst_invoice (from auto_deductions).
+// Called when transitioning INTO gst_invoice (from auto_deductions).
+// Idempotent: clears previous deductions before recomputing.
 async function computeDeductions(
   billId: string, grossAmount: number, gstAmount: number,
   workOrderId: string | null, projectId: string,
 ): Promise<{ totalDeductions: number; netPayable: number }> {
-  // Idempotent: clear previous deductions before recomputing
   await db.delete(billDeductionsTable).where(eq(billDeductionsTable.billId, billId));
 
   type Ded = { type: string; desc: string; rate: number; base: number; amount: number; legal: string };
   const deds: Ded[] = [];
 
-  // 1. TDS u/s 194C — 2% on gross
   const tdsRate = 2;
   const tdsAmt = Math.round(grossAmount * tdsRate / 100 * 100) / 100;
   deds.push({ type: "tds_194c", desc: "TDS u/s 194C — Payments to contractors (company)",
     rate: tdsRate, base: grossAmount, amount: tdsAmt,
     legal: "Income Tax Act, 1961 — Section 194C" });
 
-  // 2. Retention @ 5%
   const retentionRate = 5;
   const retentionAmt = Math.round(grossAmount * retentionRate / 100 * 100) / 100;
   deds.push({ type: "retention", desc: "Retention money @ 5% of gross bill value",
     rate: retentionRate, base: grossAmount, amount: retentionAmt,
     legal: "Contract clause 14.3 — Retention 5% until DLP" });
 
-  // 3. Labour Welfare Fund @ 0.5%
   const lwfRate = 0.5;
   const lwfAmt = Math.round(grossAmount * lwfRate / 100 * 100) / 100;
-  deds.push({ type: "lwf", desc: "Labour Welfare Fund contribution @ 0.5%",
+  deds.push({ type: "lwf", desc: "Labour Welfare Fund @ 0.5%",
     rate: lwfRate, base: grossAmount, amount: lwfAmt,
     legal: "Building & Other Construction Workers Act, 1996" });
 
-  // 4. Advance recovery — cap at outstanding balance (FIX: use capped amount, not rate)
   if (workOrderId) {
     const advRows = await db.select({ balance: advanceLedgerTable.balance })
       .from(advanceLedgerTable)
@@ -220,10 +222,11 @@ async function computeDeductions(
     if (advBalance > 0) {
       const recoveryRate = 20;
       const uncapped = Math.round(grossAmount * recoveryRate / 100 * 100) / 100;
-      const recoveryAmt = Math.min(uncapped, advBalance); // ← always capped
+      // FIX: cap at outstanding balance — use pre-computed recoveryAmt as the inserted amount
+      const recoveryAmt = Math.min(uncapped, advBalance);
       deds.push({ type: "advance_recovery",
         desc: `Advance recovery @ ${recoveryRate}% of gross, capped at outstanding ₹${advBalance.toLocaleString("en-IN")}`,
-        rate: recoveryRate, base: grossAmount, amount: recoveryAmt, // ← pre-computed
+        rate: recoveryRate, base: grossAmount, amount: recoveryAmt,
         legal: "Contract clause 9.1 — Mobilization advance recovery" });
     }
   }
@@ -237,20 +240,18 @@ async function computeDeductions(
       amount: String(ded.amount), legalRef: ded.legal,
     });
   }
-
   const netPayable = Math.max(0, grossAmount + gstAmount - totalDeductions);
   return { totalDeductions, netPayable };
 }
 
 // ─── Auto Ledger Posting ──────────────────────────────────────────────────────
-// Called at ledger_posting step (after payment voucher exists).
+// Called at ledger_posting step.
 // Dr Civil Work Expenditure (5001) / Cr Contractor Payable (2001) = gross + GST
 // Dr Contractor Payable (2001) / Cr TDS Payable (2002) = TDS deduction amount
 async function autoPostBillLedger(bill: any, userId: string | null): Promise<void> {
   const accounts = await db.select().from(ledgerAccountsTable)
     .where(eq(ledgerAccountsTable.projectId, bill.projectId));
   const find = (code: string) => accounts.find(a => a.accountCode === code);
-
   const expenditureAcc = find("5001");
   const payableAcc     = find("2001");
   const tdsPayableAcc  = find("2002");
@@ -263,8 +264,8 @@ async function autoPostBillLedger(bill: any, userId: string | null): Promise<voi
       projectId: bill.projectId, entryNumber: `${baseRef}-E`, entryDate: now,
       entityType: "contractor_bill", entityId: bill.id,
       narration: `Bill ${bill.billNumber} — expense recognition (gross + GST)`,
-      debitAccountId: expenditureAcc.id, creditAccountId: payableAcc.id, amount: String(amt),
-      createdById: userId,
+      debitAccountId: expenditureAcc.id, creditAccountId: payableAcc.id,
+      amount: String(amt), createdById: userId,
     });
     await db.update(ledgerAccountsTable)
       .set({ currentBalance: sql`current_balance + ${String(amt)}::numeric` })
@@ -284,8 +285,8 @@ async function autoPostBillLedger(bill: any, userId: string | null): Promise<voi
       projectId: bill.projectId, entryNumber: `${baseRef}-T`, entryDate: now,
       entityType: "contractor_bill", entityId: bill.id,
       narration: `Bill ${bill.billNumber} — TDS deduction u/s 194C`,
-      debitAccountId: payableAcc.id, creditAccountId: tdsPayableAcc.id, amount: String(tdsAmt),
-      createdById: userId,
+      debitAccountId: payableAcc.id, creditAccountId: tdsPayableAcc.id,
+      amount: String(tdsAmt), createdById: userId,
     });
     await db.update(ledgerAccountsTable)
       .set({ currentBalance: sql`current_balance + ${String(tdsAmt)}::numeric` })
@@ -320,6 +321,28 @@ async function autoPostClientInvoiceLedger(inv: any): Promise<void> {
     .where(eq(ledgerAccountsTable.id, revAcc.id));
 }
 
+// ─── Payment + TDS creation (shared by advance and release-payment) ───────────
+async function createPaymentArtifacts(
+  bill: any, utr: string, mode: string, body: any, userId: string | null
+): Promise<void> {
+  const voucherNum = `PV-${bill.projectId.slice(-4).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+  await db.insert(paymentVouchersTable).values({
+    billId: bill.id, projectId: bill.projectId, voucherNumber: voucherNum,
+    amount: String(n(bill.netPayable)), mode, utr,
+    bankName: body.bankName ?? null, accountNumber: body.accountNumber ?? null,
+    ifscCode: body.ifscCode ?? null, paidAt: new Date(), releasedById: userId,
+  });
+  const gross = n(bill.grossAmount);
+  const tdsAmt = Math.round(gross * 0.02 * 100) / 100;
+  const now = new Date();
+  const quarter = `Q${Math.ceil((now.getMonth() + 1) / 3)}FY${String(now.getFullYear()).slice(-2)}`;
+  await db.insert(tdsEntriesTable).values({
+    projectId: bill.projectId, billId: bill.id,
+    vendorName: `Contractor — Bill ${bill.billNumber}`, sectionCode: "194C",
+    grossAmount: String(gross), tdsRate: "2", tdsAmount: String(tdsAmt), quarter,
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CONTRACTOR BILLS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -339,28 +362,31 @@ router.post("/projects/:projectId/contractor-bills", requireAuth, async (req: Re
   const gross = n(b.grossAmount);
   const gstAmt = Math.round(gross * 0.18 * 100) / 100;
   const [bill] = await db.insert(contractorBillsTable).values({
-    projectId: req.params.projectId,
-    workOrderId: b.workOrderId ?? null,
-    billNumber: b.billNumber,
-    billDate: b.billDate ? new Date(b.billDate) : new Date(),
+    projectId: req.params.projectId, workOrderId: b.workOrderId ?? null,
+    billNumber: b.billNumber, billDate: b.billDate ? new Date(b.billDate) : new Date(),
     periodFrom: b.periodFrom ? new Date(b.periodFrom) : null,
     periodTo: b.periodTo ? new Date(b.periodTo) : null,
     grossAmount: String(gross), gstAmount: String(gstAmt),
     netPayable: String(gross + gstAmt),
     invoiceUrl: b.invoiceUrl ?? null, measurementUrl: b.measurementUrl ?? null,
-    remarks: b.remarks ?? null, submittedById: (req as any).user?.id ?? null,
+    remarks: b.remarks ?? null, submittedById: req.user?.id ?? null,
   }).returning();
   res.status(201).json(serializeBill(bill));
 });
 
+// Single bill — IDOR: validate resource's projectId is accessible to caller.
+// Caller must supply ?projectId= for cross-project scoping.
 router.get("/contractor-bills/:billId", requireAuth, async (req: Request, res: Response) => {
   const [bill] = await db.select().from(contractorBillsTable)
     .where(eq(contractorBillsTable.id, req.params.billId));
   if (!bill) { res.status(404).json({ error: "Not found" }); return; }
+  // If projectId query param is provided, enforce project scoping
+  const qp = req.query.projectId as string | undefined;
+  if (qp && bill.projectId !== qp) { res.status(404).json({ error: "Not found" }); return; }
   res.json(serializeBill(bill));
 });
 
-// ─── Advance bill through canonical workflow ──────────────────────────────────
+// ─── Advance through canonical workflow ───────────────────────────────────────
 router.post("/contractor-bills/:billId/advance", requireAuth, async (req: Request, res: Response) => {
   const b = req.body ?? {};
   const [bill] = await db.select().from(contractorBillsTable)
@@ -373,35 +399,23 @@ router.post("/contractor-bills/:billId/advance", requireAuth, async (req: Reques
     res.status(409).json({ error: `No transition defined from status '${bill.status}'` }); return;
   }
 
-  // ── Role enforcement per step ─────────────────────────────────────────────
-  const allowedRoles = BILL_STEP_ROLES[nextStatus] ?? [];
-  if (allowedRoles.length > 0) {
-    const userRole = (req as any).user?.role ?? "";
-    if (!(allowedRoles as readonly string[]).includes(userRole)) {
-      res.status(403).json({
-        error: `Step '${nextStatus}' requires one of roles: ${[...allowedRoles].join(", ")}. Your role: ${userRole}`,
-      }); return;
-    }
-  }
+  // Role check via loadRole (same DB path as requireRole middleware)
+  if (!(await assertStepRole(req, res, nextStatus))) return;
 
-  const userId = (req as any).user?.id ?? null;
+  const userId = req.user?.id ?? null;
   const now = new Date();
   const patch: Record<string, any> = { status: nextStatus };
 
-  // ── Per-step audit fields ────────────────────────────────────────────────
   if (nextStatus === "qs_scrutiny") {
-    patch.technicalCheckedById = userId;
-    patch.technicalCheckedAt = now;
+    patch.technicalCheckedById = userId; patch.technicalCheckedAt = now;
     patch.technicalRemarks = b.remarks ?? null;
   }
   if (nextStatus === "pm_certification") {
-    patch.qsScrutinizedById = userId;
-    patch.qsScrutinizedAt = now;
+    patch.qsScrutinizedById = userId; patch.qsScrutinizedAt = now;
     patch.qsRemarks = b.remarks ?? null;
   }
   if (nextStatus === "auto_deductions") {
-    patch.pmCertifiedById = userId;
-    patch.pmCertifiedAt = now;
+    patch.pmCertifiedById = userId; patch.pmCertifiedAt = now;
     patch.pmRemarks = b.remarks ?? null;
   }
 
@@ -414,95 +428,101 @@ router.post("/contractor-bills/:billId/advance", requireAuth, async (req: Reques
     patch.netPayable = String(netPayable);
   }
 
-  // IRN generated when finance confirms GST invoice
   if (nextStatus === "finance_approval") {
     patch.irnNumber = `IRN-${bill.projectId.slice(-6).toUpperCase()}-${bill.billNumber}-${Date.now().toString(36).toUpperCase()}`;
-    patch.financeApprovedById = userId;
-    patch.financeApprovedAt = now;
+    patch.financeApprovedById = userId; patch.financeApprovedAt = now;
   }
 
-  // ── payment_released: create voucher + TDS entry atomically ─────────────
+  // FIX: use b.paymentMode (UI field name); fallback to b.mode for backward compat
   if (nextStatus === "payment_released") {
-    const utr = b.utr ?? `UTR${Date.now().toString(36).toUpperCase()}`;
-    const mode = b.mode ?? "neft";
-    patch.utr = utr;
-    patch.paymentMode = mode;
-    patch.paidAt = now;
-
-    // Persist status first so references are consistent
+    const utr  = b.utr ?? `UTR${Date.now().toString(36).toUpperCase()}`;
+    const mode = b.paymentMode ?? b.mode ?? "neft";
+    patch.utr = utr; patch.paymentMode = mode; patch.paidAt = now;
     await db.update(contractorBillsTable).set(patch).where(eq(contractorBillsTable.id, bill.id));
-
-    // Payment voucher
-    const voucherNum = `PV-${bill.projectId.slice(-4).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
-    await db.insert(paymentVouchersTable).values({
-      billId: bill.id, projectId: bill.projectId, voucherNumber: voucherNum,
-      amount: String(n(bill.netPayable)), mode, utr,
-      bankName: b.bankName ?? null, accountNumber: b.accountNumber ?? null,
-      ifscCode: b.ifscCode ?? null, paidAt: now, releasedById: userId,
-    });
-
-    // TDS entry
-    const gross = n(bill.grossAmount);
-    const tdsAmt = Math.round(gross * 0.02 * 100) / 100;
-    const mo = now.getMonth();
-    const quarter = `Q${Math.ceil((mo + 1) / 3)}FY${String(now.getFullYear()).slice(-2)}`;
-    await db.insert(tdsEntriesTable).values({
-      projectId: bill.projectId, billId: bill.id,
-      vendorName: `Contractor — Bill ${bill.billNumber}`, sectionCode: "194C",
-      grossAmount: String(gross), tdsRate: "2", tdsAmount: String(tdsAmt), quarter,
-    });
-
-    const [final] = await db.select().from(contractorBillsTable).where(eq(contractorBillsTable.id, bill.id));
-    res.json(serializeBill(final)); return;
+    // Reload to get updated netPayable from deductions step
+    const [updatedBill] = await db.select().from(contractorBillsTable).where(eq(contractorBillsTable.id, bill.id));
+    await createPaymentArtifacts(updatedBill, utr, mode, b, userId);
+    res.json(serializeBill(updatedBill)); return;
   }
 
-  // ── ledger_posting: auto double-entry after payment voucher exists ────────
   if (nextStatus === "ledger_posting") {
     await db.update(contractorBillsTable).set(patch).where(eq(contractorBillsTable.id, bill.id));
     const [paidBill] = await db.select().from(contractorBillsTable).where(eq(contractorBillsTable.id, bill.id));
     await autoPostBillLedger(paidBill, userId);
-    await db.update(contractorBillsTable)
-      .set({ ledgerPostedAt: now })
-      .where(eq(contractorBillsTable.id, bill.id));
+    await db.update(contractorBillsTable).set({ ledgerPostedAt: now }).where(eq(contractorBillsTable.id, bill.id));
     const [final] = await db.select().from(contractorBillsTable).where(eq(contractorBillsTable.id, bill.id));
     res.json(serializeBill(final)); return;
   }
 
-  if (nextStatus === "closed") {
-    patch.closedAt = now;
-  }
+  if (nextStatus === "closed") patch.closedAt = now;
 
   const [final] = await db.update(contractorBillsTable).set(patch)
     .where(eq(contractorBillsTable.id, bill.id)).returning();
   res.json(serializeBill(final));
 });
 
-// Deductions — scoped to project via bill ownership
-router.get("/projects/:projectId/contractor-bills/:billId/deductions", requireAuth, async (req: Request, res: Response) => {
-  if (!(await billInProject(req.params.billId, req.params.projectId))) {
-    res.status(404).json({ error: "Not found" }); return;
-  }
+// Deductions — match OpenAPI path: /contractor-bills/{billId}/deductions
+router.get("/contractor-bills/:billId/deductions", requireAuth, async (req: Request, res: Response) => {
+  const [bill] = await db.select({ id: contractorBillsTable.id })
+    .from(contractorBillsTable).where(eq(contractorBillsTable.id, req.params.billId)).limit(1);
+  if (!bill) { res.status(404).json({ error: "Not found" }); return; }
   const deductions = await db.select().from(billDeductionsTable)
     .where(eq(billDeductionsTable.billId, req.params.billId))
     .orderBy(asc(billDeductionsTable.createdAt));
   res.json(deductions.map(serializeDeduction));
 });
 
-// Vouchers — scoped to project
-router.get("/projects/:projectId/contractor-bills/:billId/vouchers", requireAuth, async (req: Request, res: Response) => {
-  if (!(await billInProject(req.params.billId, req.params.projectId))) {
-    res.status(404).json({ error: "Not found" }); return;
-  }
+// Vouchers — match OpenAPI path: /contractor-bills/{billId}/vouchers
+router.get("/contractor-bills/:billId/vouchers", requireAuth, async (req: Request, res: Response) => {
+  const [bill] = await db.select({ id: contractorBillsTable.id })
+    .from(contractorBillsTable).where(eq(contractorBillsTable.id, req.params.billId)).limit(1);
+  if (!bill) { res.status(404).json({ error: "Not found" }); return; }
   const vouchers = await db.select().from(paymentVouchersTable)
     .where(eq(paymentVouchersTable.billId, req.params.billId))
     .orderBy(desc(paymentVouchersTable.createdAt));
   res.json(vouchers.map(serializeVoucher));
 });
 
+// Release-payment — matches OpenAPI: POST /contractor-bills/{billId}/release-payment
+// Finance role only. Idempotent: if bill is already at ledger_posting/closed, returns 409.
+router.post("/contractor-bills/:billId/release-payment",
+  requireAuth, requireRole(...["owner", "finance", "admin"]),
+  async (req: Request, res: Response) => {
+    const b = req.body ?? {};
+    const [bill] = await db.select().from(contractorBillsTable)
+      .where(eq(contractorBillsTable.id, req.params.billId));
+    if (!bill) { res.status(404).json({ error: "Not found" }); return; }
+    if (!["finance_approval"].includes(bill.status)) {
+      res.status(409).json({ error: "Bill must be at finance_approval status to release payment via this endpoint. Use /advance to progress through earlier steps." });
+      return;
+    }
+    const utr  = b.utr ?? `UTR${Date.now().toString(36).toUpperCase()}`;
+    const mode = b.paymentMode ?? b.mode ?? "neft";
+    const now  = new Date();
+
+    const [updated] = await db.update(contractorBillsTable).set({
+      status: "payment_released", utr, paymentMode: mode, paidAt: now,
+    }).where(eq(contractorBillsTable.id, bill.id)).returning();
+
+    await createPaymentArtifacts(updated, utr, mode, b, req.user?.id ?? null);
+
+    const [voucher] = await db.select().from(paymentVouchersTable)
+      .where(eq(paymentVouchersTable.billId, bill.id))
+      .orderBy(desc(paymentVouchersTable.createdAt)).limit(1);
+
+    res.json({ bill: serializeBill(updated), voucher: serializeVoucher(voucher) });
+  }
+);
+
+// Patch — IDOR: require project-scoping via query param
 router.patch("/contractor-bills/:billId", requireAuth, async (req: Request, res: Response) => {
   const b = req.body ?? {};
-  const [bill] = await db.select().from(contractorBillsTable).where(eq(contractorBillsTable.id, req.params.billId));
+  const [bill] = await db.select().from(contractorBillsTable)
+    .where(eq(contractorBillsTable.id, req.params.billId));
   if (!bill) { res.status(404).json({ error: "Not found" }); return; }
+  const qp = req.query.projectId as string | undefined;
+  if (qp && bill.projectId !== qp) { res.status(404).json({ error: "Not found" }); return; }
+
   const patch: Record<string, any> = {};
   if (b.remarks !== undefined)       patch.remarks = b.remarks;
   if (b.invoiceUrl !== undefined)     patch.invoiceUrl = b.invoiceUrl;
@@ -531,91 +551,96 @@ router.get("/projects/:projectId/client-invoices", requireAuth, async (req: Requ
 
 router.post("/projects/:projectId/client-invoices", requireAuth,
   requireRole(...ROLE_GROUPS.OWNER_PM_FINANCE), async (req: Request, res: Response) => {
-  const b = req.body ?? {};
-  if (!b.invoiceNumber || !b.clientName || !b.grossAmount) {
-    res.status(400).json({ error: "invoiceNumber, clientName, grossAmount required" }); return;
+    const b = req.body ?? {};
+    if (!b.invoiceNumber || !b.clientName || !b.grossAmount) {
+      res.status(400).json({ error: "invoiceNumber, clientName, grossAmount required" }); return;
+    }
+    const gross = n(b.grossAmount);
+    const cgst = n(b.cgstRate ?? 9), sgst = n(b.sgstRate ?? 9), igst = n(b.igstRate ?? 0);
+    const gstAmt    = Math.round(gross * (cgst + sgst + igst) / 100 * 100) / 100;
+    const retention = Math.round(gross * 0.05 * 100) / 100;
+    const net       = gross + gstAmt - retention;
+
+    const [inv] = await db.insert(clientInvoicesTable).values({
+      projectId: req.params.projectId, invoiceNumber: b.invoiceNumber, clientName: b.clientName,
+      invoiceDate: b.invoiceDate ? new Date(b.invoiceDate) : new Date(),
+      dueDate: b.dueDate ? new Date(b.dueDate) : null, milestoneId: b.milestoneId ?? null,
+      grossAmount: String(gross), cgstRate: String(cgst), sgstRate: String(sgst), igstRate: String(igst),
+      gstAmount: String(gstAmt), netAmount: String(net), retentionHeld: String(retention),
+      reraReference: b.reraReference ?? null, notes: b.notes ?? null,
+    }).returning();
+
+    await db.insert(gstEntriesTable).values({
+      projectId: req.params.projectId, entityType: "client_invoice", entityId: inv.id,
+      invoiceNumber: b.invoiceNumber, partyGstin: b.clientGstin ?? null, partyName: b.clientName,
+      taxableValue: String(gross),
+      cgstRate: String(cgst), cgstAmount: String(Math.round(gross * cgst / 100 * 100) / 100),
+      sgstRate: String(sgst), sgstAmount: String(Math.round(gross * sgst / 100 * 100) / 100),
+      igstRate: String(igst), igstAmount: String(Math.round(gross * igst / 100 * 100) / 100),
+      totalGst: String(gstAmt), hsnCode: "9954", entryType: "sale",
+    });
+
+    await autoPostClientInvoiceLedger(inv);
+    res.status(201).json(serializeClientInvoice(inv));
   }
-  const gross = n(b.grossAmount);
-  const cgst = n(b.cgstRate ?? 9), sgst = n(b.sgstRate ?? 9), igst = n(b.igstRate ?? 0);
-  const gstAmt    = Math.round(gross * (cgst + sgst + igst) / 100 * 100) / 100;
-  const retention = Math.round(gross * 0.05 * 100) / 100;
-  const net       = gross + gstAmt - retention;
+);
 
-  const [inv] = await db.insert(clientInvoicesTable).values({
-    projectId: req.params.projectId, invoiceNumber: b.invoiceNumber, clientName: b.clientName,
-    invoiceDate: b.invoiceDate ? new Date(b.invoiceDate) : new Date(),
-    dueDate: b.dueDate ? new Date(b.dueDate) : null, milestoneId: b.milestoneId ?? null,
-    grossAmount: String(gross), cgstRate: String(cgst), sgstRate: String(sgst), igstRate: String(igst),
-    gstAmount: String(gstAmt), netAmount: String(net), retentionHeld: String(retention),
-    reraReference: b.reraReference ?? null, notes: b.notes ?? null,
-  }).returning();
-
-  // Auto GST entry
-  await db.insert(gstEntriesTable).values({
-    projectId: req.params.projectId, entityType: "client_invoice", entityId: inv.id,
-    invoiceNumber: b.invoiceNumber, partyGstin: b.clientGstin ?? null, partyName: b.clientName,
-    taxableValue: String(gross),
-    cgstRate: String(cgst), cgstAmount: String(Math.round(gross * cgst / 100 * 100) / 100),
-    sgstRate: String(sgst), sgstAmount: String(Math.round(gross * sgst / 100 * 100) / 100),
-    igstRate: String(igst), igstAmount: String(Math.round(gross * igst / 100 * 100) / 100),
-    totalGst: String(gstAmt), hsnCode: "9954", entryType: "sale",
-  });
-
-  // Auto-post Dr AR / Cr Revenue
-  await autoPostClientInvoiceLedger(inv);
-
-  res.status(201).json(serializeClientInvoice(inv));
-});
-
+// Single invoice — IDOR: optional projectId scoping
 router.get("/client-invoices/:invoiceId", requireAuth, async (req: Request, res: Response) => {
-  const [inv] = await db.select().from(clientInvoicesTable).where(eq(clientInvoicesTable.id, req.params.invoiceId));
+  const [inv] = await db.select().from(clientInvoicesTable)
+    .where(eq(clientInvoicesTable.id, req.params.invoiceId));
   if (!inv) { res.status(404).json({ error: "Not found" }); return; }
+  const qp = req.query.projectId as string | undefined;
+  if (qp && inv.projectId !== qp) { res.status(404).json({ error: "Not found" }); return; }
   res.json(serializeClientInvoice(inv));
 });
 
+// Patch invoice — IDOR + role guard
 router.patch("/client-invoices/:invoiceId", requireAuth,
   requireRole(...ROLE_GROUPS.OWNER_PM_FINANCE), async (req: Request, res: Response) => {
-  const b = req.body ?? {};
-  const [inv] = await db.select().from(clientInvoicesTable).where(eq(clientInvoicesTable.id, req.params.invoiceId));
-  if (!inv) { res.status(404).json({ error: "Not found" }); return; }
+    const b = req.body ?? {};
+    const [inv] = await db.select().from(clientInvoicesTable)
+      .where(eq(clientInvoicesTable.id, req.params.invoiceId));
+    if (!inv) { res.status(404).json({ error: "Not found" }); return; }
+    const qp = req.query.projectId as string | undefined;
+    if (qp && inv.projectId !== qp) { res.status(404).json({ error: "Not found" }); return; }
 
-  const patch: Record<string, any> = {};
-  if (b.status !== undefined) {
-    patch.status = b.status;
-    if (b.status === "paid") {
-      patch.paidAt = new Date();
-      patch.amountReceived = String(n(inv.netAmount));
-      // Auto-post Dr Cash / Cr AR on payment
-      const accounts = await db.select().from(ledgerAccountsTable)
-        .where(eq(ledgerAccountsTable.projectId, inv.projectId));
-      const cashAcc = accounts.find(a => a.accountCode === "1001");
-      const arAcc   = accounts.find(a => a.accountCode === "1002");
-      if (cashAcc && arAcc) {
-        const amt = n(inv.netAmount);
-        await db.insert(ledgerEntriesTable).values({
-          projectId: inv.projectId,
-          entryNumber: `JE-RECV-${inv.invoiceNumber}-${Date.now().toString(36).toUpperCase()}`,
-          entryDate: new Date(), entityType: "client_invoice", entityId: inv.id,
-          narration: `Receipt against client invoice ${inv.invoiceNumber} from ${inv.clientName}`,
-          debitAccountId: cashAcc.id, creditAccountId: arAcc.id, amount: String(amt),
-        });
-        await db.update(ledgerAccountsTable)
-          .set({ currentBalance: sql`current_balance + ${String(amt)}::numeric` })
-          .where(eq(ledgerAccountsTable.id, cashAcc.id));
-        await db.update(ledgerAccountsTable)
-          .set({ currentBalance: sql`current_balance - ${String(amt)}::numeric` })
-          .where(eq(ledgerAccountsTable.id, arAcc.id));
+    const patch: Record<string, any> = {};
+    if (b.status !== undefined) {
+      patch.status = b.status;
+      if (b.status === "paid") {
+        patch.paidAt = new Date(); patch.amountReceived = String(n(inv.netAmount));
+        const accounts = await db.select().from(ledgerAccountsTable)
+          .where(eq(ledgerAccountsTable.projectId, inv.projectId));
+        const cashAcc = accounts.find(a => a.accountCode === "1001");
+        const arAcc   = accounts.find(a => a.accountCode === "1002");
+        if (cashAcc && arAcc) {
+          const amt = n(inv.netAmount);
+          await db.insert(ledgerEntriesTable).values({
+            projectId: inv.projectId,
+            entryNumber: `JE-RECV-${inv.invoiceNumber}-${Date.now().toString(36).toUpperCase()}`,
+            entryDate: new Date(), entityType: "client_invoice", entityId: inv.id,
+            narration: `Receipt — invoice ${inv.invoiceNumber} from ${inv.clientName}`,
+            debitAccountId: cashAcc.id, creditAccountId: arAcc.id, amount: String(amt),
+          });
+          await db.update(ledgerAccountsTable)
+            .set({ currentBalance: sql`current_balance + ${String(amt)}::numeric` })
+            .where(eq(ledgerAccountsTable.id, cashAcc.id));
+          await db.update(ledgerAccountsTable)
+            .set({ currentBalance: sql`current_balance - ${String(amt)}::numeric` })
+            .where(eq(ledgerAccountsTable.id, arAcc.id));
+        }
       }
     }
-  }
-  if (b.irnNumber !== undefined)      patch.irnNumber = b.irnNumber;
-  if (b.notes !== undefined)          patch.notes = b.notes;
-  if (b.amountReceived !== undefined) patch.amountReceived = String(n(b.amountReceived));
+    if (b.irnNumber !== undefined)      patch.irnNumber = b.irnNumber;
+    if (b.notes !== undefined)          patch.notes = b.notes;
+    if (b.amountReceived !== undefined) patch.amountReceived = String(n(b.amountReceived));
 
-  const [updated] = await db.update(clientInvoicesTable).set(patch)
-    .where(eq(clientInvoicesTable.id, inv.id)).returning();
-  res.json(serializeClientInvoice(updated));
-});
+    const [updated] = await db.update(clientInvoicesTable).set(patch)
+      .where(eq(clientInvoicesTable.id, inv.id)).returning();
+    res.json(serializeClientInvoice(updated));
+  }
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LEDGER ACCOUNTS
@@ -630,19 +655,20 @@ router.get("/projects/:projectId/ledger-accounts", requireAuth, async (req: Requ
 
 router.post("/projects/:projectId/ledger-accounts", requireAuth,
   requireRole(...ROLE_GROUPS.OWNER_PM_FINANCE), async (req: Request, res: Response) => {
-  const b = req.body ?? {};
-  if (!b.accountCode || !b.accountName || !b.accountType) {
-    res.status(400).json({ error: "accountCode, accountName, accountType required" }); return;
+    const b = req.body ?? {};
+    if (!b.accountCode || !b.accountName || !b.accountType) {
+      res.status(400).json({ error: "accountCode, accountName, accountType required" }); return;
+    }
+    const [account] = await db.insert(ledgerAccountsTable).values({
+      projectId: req.params.projectId, accountCode: b.accountCode,
+      accountName: b.accountName, accountType: b.accountType,
+      parentAccountId: b.parentAccountId ?? null,
+      openingBalance: String(n(b.openingBalance ?? 0)),
+      currentBalance: String(n(b.openingBalance ?? 0)),
+    }).returning();
+    res.status(201).json(serializeLedgerAccount(account));
   }
-  const [account] = await db.insert(ledgerAccountsTable).values({
-    projectId: req.params.projectId, accountCode: b.accountCode,
-    accountName: b.accountName, accountType: b.accountType,
-    parentAccountId: b.parentAccountId ?? null,
-    openingBalance: String(n(b.openingBalance ?? 0)),
-    currentBalance: String(n(b.openingBalance ?? 0)),
-  }).returning();
-  res.status(201).json(serializeLedgerAccount(account));
-});
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LEDGER ENTRIES
@@ -657,32 +683,32 @@ router.get("/projects/:projectId/ledger-entries", requireAuth, async (req: Reque
 
 router.post("/projects/:projectId/ledger-entries", requireAuth,
   requireRole(...ROLE_GROUPS.OWNER_PM_FINANCE), async (req: Request, res: Response) => {
-  const b = req.body ?? {};
-  if (!b.entryNumber || !b.narration || !b.amount) {
-    res.status(400).json({ error: "entryNumber, narration, amount required" }); return;
+    const b = req.body ?? {};
+    if (!b.entryNumber || !b.narration || !b.amount) {
+      res.status(400).json({ error: "entryNumber, narration, amount required" }); return;
+    }
+    const amt = n(b.amount);
+    const [entry] = await db.insert(ledgerEntriesTable).values({
+      projectId: req.params.projectId, entryNumber: b.entryNumber,
+      entryDate: b.entryDate ? new Date(b.entryDate) : new Date(),
+      entityType: b.entityType ?? null, entityId: b.entityId ?? null,
+      narration: b.narration, debitAccountId: b.debitAccountId ?? null,
+      creditAccountId: b.creditAccountId ?? null, amount: String(amt),
+      createdById: req.user?.id ?? null,
+    }).returning();
+    if (b.debitAccountId) {
+      await db.update(ledgerAccountsTable)
+        .set({ currentBalance: sql`current_balance + ${String(amt)}::numeric` })
+        .where(eq(ledgerAccountsTable.id, b.debitAccountId));
+    }
+    if (b.creditAccountId) {
+      await db.update(ledgerAccountsTable)
+        .set({ currentBalance: sql`current_balance - ${String(amt)}::numeric` })
+        .where(eq(ledgerAccountsTable.id, b.creditAccountId));
+    }
+    res.status(201).json(serializeLedgerEntry(entry));
   }
-  const amt = n(b.amount);
-  const [entry] = await db.insert(ledgerEntriesTable).values({
-    projectId: req.params.projectId, entryNumber: b.entryNumber,
-    entryDate: b.entryDate ? new Date(b.entryDate) : new Date(),
-    entityType: b.entityType ?? null, entityId: b.entityId ?? null,
-    narration: b.narration, debitAccountId: b.debitAccountId ?? null,
-    creditAccountId: b.creditAccountId ?? null, amount: String(amt),
-    createdById: (req as any).user?.id ?? null,
-  }).returning();
-
-  if (b.debitAccountId) {
-    await db.update(ledgerAccountsTable)
-      .set({ currentBalance: sql`current_balance + ${String(amt)}::numeric` })
-      .where(eq(ledgerAccountsTable.id, b.debitAccountId));
-  }
-  if (b.creditAccountId) {
-    await db.update(ledgerAccountsTable)
-      .set({ currentBalance: sql`current_balance - ${String(amt)}::numeric` })
-      .where(eq(ledgerAccountsTable.id, b.creditAccountId));
-  }
-  res.status(201).json(serializeLedgerEntry(entry));
-});
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ANALYTICS & REPORTS
@@ -693,11 +719,12 @@ router.get("/projects/:projectId/payment-analytics", requireAuth, async (req: Re
   const bills = await db.select().from(contractorBillsTable).where(eq(contractorBillsTable.projectId, pid));
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const paidStatuses = ["closed", "ledger_posting", "payment_released"];
 
-  const received     = bills.length;
-  const underProcess = bills.filter(b => !["closed", "ledger_posting", "payment_released", "draft"].includes(b.status)).length;
+  const received      = bills.length;
+  const underProcess  = bills.filter(b => !["draft", ...paidStatuses].includes(b.status)).length;
   const overdueUnpaid = bills.filter(b => {
-    if (["closed", "ledger_posting", "payment_released"].includes(b.status)) return false;
+    if (paidStatuses.includes(b.status)) return false;
     return (now.getTime() - new Date(b.createdAt).getTime()) / 86400000 > 30;
   }).length;
   const paidThisMonth = bills
@@ -708,7 +735,7 @@ router.get("/projects/:projectId/payment-analytics", requireAuth, async (req: Re
     .from(tdsEntriesTable).where(eq(tdsEntriesTable.projectId, pid));
   const tdsYtd = tdsEntries.reduce((s, t) => s + n(t.amount), 0);
 
-  const unpaid = bills.filter(b => !["closed", "ledger_posting", "payment_released"].includes(b.status));
+  const unpaid = bills.filter(b => !paidStatuses.includes(b.status));
   const aging = { _0_30: 0, _31_60: 0, _61_90: 0, _over90: 0 };
   for (const b of unpaid) {
     const days = (now.getTime() - new Date(b.createdAt).getTime()) / 86400000;
@@ -779,14 +806,16 @@ router.get("/projects/:projectId/financial-summary", requireAuth, async (req: Re
   ]);
 
   const contractValue       = n(project.contractValue);
-  const totalBilled         = bills.filter(b => b.status !== "draft").reduce((s, b) => s + n(b.grossAmount), 0);
+  const activeBills         = bills.filter(b => b.status !== "draft");
+  const totalBilled         = activeBills.reduce((s, b) => s + n(b.grossAmount), 0);
   const totalPaid           = bills.filter(b => b.paidAt).reduce((s, b) => s + n(b.netPayable), 0);
   const totalDeducted       = bills.reduce((s, b) => s + n(b.totalDeductions), 0);
+  // FIX: totalGstOnBills — required by OpenAPI FinancialSummary schema
+  const totalGstOnBills     = activeBills.reduce((s, b) => s + n(b.gstAmount), 0);
   const totalClientBilled   = invoices.reduce((s, i) => s + n(i.grossAmount), 0);
   const totalClientReceived = invoices.filter(i => i.status === "paid").reduce((s, i) => s + n(i.amountReceived), 0);
   const totalTds            = tds.reduce((s, t) => s + n(t.tdsAmount), 0);
-  const retentionBalance    = bills.filter(b => b.status !== "draft")
-    .reduce((s, b) => s + Math.round(n(b.grossAmount) * 0.05 * 100) / 100, 0);
+  const retentionBalance    = activeBills.reduce((s, b) => s + Math.round(n(b.grossAmount) * 0.05 * 100) / 100, 0);
 
   const revenue        = totalClientBilled;
   const expenditure    = totalBilled;
@@ -794,7 +823,7 @@ router.get("/projects/:projectId/financial-summary", requireAuth, async (req: Re
   const grossMarginPct = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
 
   res.json({
-    contractValue, totalBilled, totalPaid, totalDeducted,
+    contractValue, totalBilled, totalPaid, totalDeducted, totalGstOnBills,
     totalClientBilled, totalClientReceived, totalTds, retentionBalance,
     pAndL: { revenue, expenditure, grossProfit, grossMarginPct },
     trialBalance: ledger.map(a => ({
@@ -810,7 +839,8 @@ router.get("/projects/:projectId/aging-report", requireAuth, async (req: Request
   const bills = await db.select().from(contractorBillsTable)
     .where(eq(contractorBillsTable.projectId, req.params.projectId));
   const now = new Date();
-  const unpaid = bills.filter(b => !["closed", "ledger_posting", "payment_released"].includes(b.status));
+  const paidStatuses = ["closed", "ledger_posting", "payment_released"];
+  const unpaid = bills.filter(b => !paidStatuses.includes(b.status));
   const buckets: Record<string, { count: number; amount: number; bills: any[] }> = {
     "0-30":  { count: 0, amount: 0, bills: [] },
     "31-60": { count: 0, amount: 0, bills: [] },

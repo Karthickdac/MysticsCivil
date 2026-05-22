@@ -19,7 +19,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   next();
 }
 
-async function loadRole(userId: string): Promise<string | null> {
+export async function loadRole(userId: string): Promise<string | null> {
   const [row] = await db
     .select({ role: userProfilesTable.role })
     .from(userProfilesTable)
