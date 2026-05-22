@@ -1257,8 +1257,19 @@ type JsaStep = { seq: number; step: string; hazards: string; controls: string; p
 function JsaTab({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const search = useSearch();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<any>(null);
+  const urlStatus = (() => {
+    const s = new URLSearchParams(search).get("status");
+    return s && ["draft","approved"].includes(s) ? s : "all";
+  })();
+  const [statusFilter, setStatusFilter] = useState<string>(urlStatus);
+  useEffect(() => {
+    const s = new URLSearchParams(search).get("status");
+    const next = s && ["draft","approved"].includes(s) ? s : "all";
+    setStatusFilter(next);
+  }, [search]);
   const blankStep = (seq: number): JsaStep => ({ seq, step: "", hazards: "", controls: "", ppe: "" });
   const [form, setForm] = useState<{ activity: string; wbsActivityId: string; jsaDate: string; workersPresent: string; supervisorSignature: string; steps: JsaStep[] }>({
     activity: "", wbsActivityId: "", jsaDate: new Date().toISOString().slice(0,10),
@@ -1301,6 +1312,7 @@ function JsaTab({ projectId }: { projectId: string }) {
   const draftCount = (jsa as any[]).filter(j => j.status === "draft").length;
   const approvedCount = (jsa as any[]).filter(j => j.status === "approved").length;
   const activityMap = Object.fromEntries((activities ?? []).map((a: any) => [a.id, `${a.code ?? ""} ${a.description ?? a.name ?? ""}`.trim()]));
+  const visibleJsa = statusFilter === "all" ? (jsa as any[]) : (jsa as any[]).filter((j: any) => j.status === statusFilter);
 
   return (
     <div className="space-y-4">
@@ -1315,7 +1327,15 @@ function JsaTab({ projectId }: { projectId: string }) {
           <h3 className="font-semibold">Daily Job Safety Analysis</h3>
           <p className="text-xs text-muted-foreground">Step-by-step hazard breakdown · supervisor signs before work starts · approved JSAs auto-email PDF to safety officers</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="draft">Drafts only</SelectItem>
+            <SelectItem value="approved">Approved only</SelectItem>
+          </SelectContent>
+        </Select>
         <NotificationRecipientsDialog projectId={projectId} kind="safety" />
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" />New JSA</Button></DialogTrigger>
@@ -1385,7 +1405,7 @@ function JsaTab({ projectId }: { projectId: string }) {
 
       {isLoading ? <div className="text-sm text-muted-foreground">Loading…</div> :
       <div className="grid md:grid-cols-2 gap-3">
-        {(jsa as any[]).map((j: any) => {
+        {visibleJsa.map((j: any) => {
           const steps: JsaStep[] = Array.isArray(j.steps) ? j.steps : [];
           return (
             <Card key={j.id}>
@@ -1425,7 +1445,7 @@ function JsaTab({ projectId }: { projectId: string }) {
             </Card>
           );
         })}
-        {(jsa as any[]).length === 0 && <div className="text-sm text-muted-foreground">No JSA entries yet</div>}
+        {visibleJsa.length === 0 && <div className="text-sm text-muted-foreground">{(jsa as any[]).length === 0 ? "No JSA entries yet" : `No JSAs match status: ${statusFilter}`}</div>}
       </div>}
 
       <Dialog open={!!selected} onOpenChange={(v) => !v && setSelected(null)}>
