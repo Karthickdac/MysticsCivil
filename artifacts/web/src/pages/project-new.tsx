@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -6,8 +6,11 @@ import { useLocation, Link } from "wouter";
 import {
   useCreateProject,
   useListOrganisations,
+  useGetMyProfile,
+  useReverseGeocode,
   getListProjectsQueryKey,
 } from "@workspace/api-client-react";
+import { useUpload } from "@workspace/object-storage-web";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
@@ -19,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, MapPin, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, MapPin, Plus, Trash2, Upload, X, Loader2, Building } from "lucide-react";
 
 const milestoneSchema = z.object({
   name: z.string().min(1, "Required"),
@@ -40,7 +43,7 @@ const projectSchema = z.object({
   contractValue: z.coerce.number().min(0).optional(),
   startDate: z.string().optional(),
   targetEndDate: z.string().optional(),
-  coverImageUrl: z.string().url("Must be a valid URL").optional().or(z.literal("")),
+  coverImageUrl: z.string().optional(),
   milestones: z.array(milestoneSchema).default([]),
 });
 
@@ -53,6 +56,8 @@ export default function NewProject() {
   const [gpsBusy, setGpsBusy] = useState(false);
 
   const { data: orgs } = useListOrganisations();
+  const { data: profile } = useGetMyProfile();
+  const isAdmin = profile?.role === "admin";
   const createProject = useCreateProject();
 
   const form = useForm<ProjectFormValues>({
@@ -84,6 +89,67 @@ export default function NewProject() {
       { enableHighAccuracy: true, timeout: 8000 },
     );
   };
+
+  // ── Reverse geocode (debounced) ──────────────────────────────────────────
+  const latStr = form.watch("latitude");
+  const lonStr = form.watch("longitude");
+  const geocode = useReverseGeocode();
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [geocodeState, setGeocodeState] = useState<"idle" | "loading" | "error" | "done">("idle");
+  const lastReqKey = useRef<string>("");
+
+  useEffect(() => {
+    const lat = parseFloat(latStr || "");
+    const lon = parseFloat(lonStr || "");
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      setSuggestion(null);
+      setGeocodeState("idle");
+      return;
+    }
+    const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+    if (key === lastReqKey.current) return;
+    lastReqKey.current = key;
+    const handle = setTimeout(() => {
+      setGeocodeState("loading");
+      geocode.mutate(
+        { data: { lat, lon } },
+        {
+          onSuccess: (resp) => {
+            if (resp.address) {
+              setSuggestion(resp.address);
+              setGeocodeState("done");
+            } else {
+              setSuggestion(null);
+              setGeocodeState("error");
+            }
+          },
+          onError: () => { setSuggestion(null); setGeocodeState("error"); },
+        },
+      );
+    }, 600);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latStr, lonStr]);
+
+  // ── Cover image upload ───────────────────────────────────────────────────
+  const upload = useUpload();
+  const coverFileRef = useRef<HTMLInputElement>(null);
+  const coverImageUrl = form.watch("coverImageUrl");
+  const onCoverPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    const uploaded = await upload.uploadFile(f);
+    if (!uploaded) {
+      toast({ title: "Upload failed", description: upload.error?.message ?? "Could not upload cover image", variant: "destructive" });
+      return;
+    }
+    form.setValue("coverImageUrl", `/api/storage${uploaded.objectPath}`, { shouldDirty: true, shouldValidate: true });
+  };
+
+  // ── Org selection details ────────────────────────────────────────────────
+  const selectedOrgId = form.watch("organisationId");
+  const selectedOrg = orgs?.find((o) => o.id === selectedOrgId);
 
   function onSubmit(data: ProjectFormValues) {
     const payload: any = { ...data };
@@ -123,13 +189,47 @@ export default function NewProject() {
             <CardHeader><CardTitle className="text-base">Identity & Org Hierarchy</CardTitle></CardHeader>
             <CardContent className="grid md:grid-cols-2 gap-4">
               <FormField control={form.control} name="organisationId" render={({ field }) => (
-                <FormItem>
+                <FormItem className="md:col-span-2">
                   <FormLabel>Organisation</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select an organisation" /></SelectTrigger></FormControl>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl><SelectTrigger data-testid="org-select"><SelectValue placeholder="Select an organisation" /></SelectTrigger></FormControl>
                     <SelectContent>{orgs?.map((o) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground mt-1">This project rolls up under the chosen company for billing & reporting.</p>
+                  {orgs && orgs.length === 0 ? (
+                    <p className="text-xs text-amber-700 mt-1" data-testid="org-empty-cta">
+                      No organisations yet —{" "}
+                      <Link href="/organisations" className="font-semibold underline hover:text-amber-900">
+                        create one
+                      </Link>{" "}
+                      to continue.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mt-1">This project rolls up under the chosen company for billing & reporting.</p>
+                  )}
+                  {selectedOrg && (
+                    <div className="mt-3 rounded-lg border bg-muted/40 p-3 text-xs" data-testid="org-details-panel">
+                      <div className="flex items-start gap-2">
+                        <Building className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-sm">{selectedOrg.name}</div>
+                          {(selectedOrg.city || selectedOrg.state) && (
+                            <div className="text-muted-foreground">
+                              {[selectedOrg.city, selectedOrg.state].filter(Boolean).join(", ")}
+                            </div>
+                          )}
+                          {isAdmin && (
+                            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1">
+                              {selectedOrg.legalName && (<><dt className="text-muted-foreground">Legal name</dt><dd>{selectedOrg.legalName}</dd></>)}
+                              {selectedOrg.gstin && (<><dt className="text-muted-foreground">GSTIN</dt><dd className="font-mono">{selectedOrg.gstin}</dd></>)}
+                              {selectedOrg.pan && (<><dt className="text-muted-foreground">PAN</dt><dd className="font-mono">{selectedOrg.pan}</dd></>)}
+                              {selectedOrg.pincode && (<><dt className="text-muted-foreground">Pincode</dt><dd>{selectedOrg.pincode}</dd></>)}
+                              {selectedOrg.address && (<><dt className="text-muted-foreground col-span-2">Address</dt><dd className="col-span-2 whitespace-pre-wrap">{selectedOrg.address}</dd></>)}
+                            </dl>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <FormMessage />
                 </FormItem>
               )} />
@@ -137,7 +237,7 @@ export default function NewProject() {
                 <FormItem><FormLabel>Project Code</FormLabel><FormControl><Input placeholder="e.g. DLF-OAK" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="name" render={({ field }) => (
-                <FormItem className="md:col-span-2"><FormLabel>Project Name</FormLabel><FormControl><Input placeholder="Enter project name" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Project Name</FormLabel><FormControl><Input placeholder="Enter project name" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="clientName" render={({ field }) => (
                 <FormItem><FormLabel>Client Name</FormLabel><FormControl><Input placeholder="e.g. DLF Home Developers" {...field} /></FormControl><FormMessage /></FormItem>
@@ -151,9 +251,49 @@ export default function NewProject() {
           <Card>
             <CardHeader><CardTitle className="text-base">Location & GPS</CardTitle></CardHeader>
             <CardContent className="grid md:grid-cols-2 gap-4">
-              <FormField control={form.control} name="location" render={({ field }) => (
-                <FormItem className="md:col-span-2"><FormLabel>Site Address</FormLabel><FormControl><Input placeholder="Sector, City, State" {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
+              <div className="md:col-span-2 space-y-2">
+                {geocodeState !== "idle" && (
+                  <div
+                    className={`rounded-lg border px-3 py-2 text-xs flex items-start gap-2 ${
+                      geocodeState === "done"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                        : geocodeState === "loading"
+                          ? "border-border bg-muted/40 text-muted-foreground"
+                          : "border-border bg-muted/40 text-muted-foreground"
+                    }`}
+                    data-testid="address-suggestion"
+                  >
+                    <MapPin className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      {geocodeState === "loading" && (
+                        <span className="inline-flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" /> Looking up address from coordinates…
+                        </span>
+                      )}
+                      {geocodeState === "done" && suggestion && (
+                        <>
+                          <span className="font-medium">Suggested:</span>{" "}
+                          <span className="break-words">{suggestion}</span>
+                        </>
+                      )}
+                      {geocodeState === "error" && <span>Could not resolve address from these coordinates.</span>}
+                    </div>
+                    {geocodeState === "done" && suggestion && (
+                      <button
+                        type="button"
+                        className="text-emerald-700 hover:text-emerald-900 font-semibold underline whitespace-nowrap"
+                        onClick={() => form.setValue("location", suggestion, { shouldDirty: true, shouldValidate: true })}
+                        data-testid="address-use-suggestion"
+                      >
+                        Use this
+                      </button>
+                    )}
+                  </div>
+                )}
+                <FormField control={form.control} name="location" render={({ field }) => (
+                  <FormItem><FormLabel>Site Address</FormLabel><FormControl><Input placeholder="Sector, City, State" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+              </div>
               <FormField control={form.control} name="latitude" render={({ field }) => (
                 <FormItem><FormLabel>Latitude</FormLabel><FormControl><Input placeholder="28.4089" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
@@ -231,9 +371,48 @@ export default function NewProject() {
               <FormField control={form.control} name="description" render={({ field }) => (
                 <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea rows={3} className="resize-none" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
-              <FormField control={form.control} name="coverImageUrl" render={({ field }) => (
-                <FormItem><FormLabel>Cover Image URL</FormLabel><FormControl><Input placeholder="https://…" {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
+              <div>
+                <FormLabel>Cover Image</FormLabel>
+                <input
+                  ref={coverFileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={onCoverPick}
+                  data-testid="cover-file-input"
+                />
+                {coverImageUrl ? (
+                  <div className="mt-2 relative inline-block rounded-lg overflow-hidden border bg-muted">
+                    <img src={coverImageUrl} alt="Cover preview" className="h-40 w-auto object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => form.setValue("coverImageUrl", "", { shouldDirty: true })}
+                      className="absolute top-1.5 right-1.5 h-7 w-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+                      aria-label="Remove cover image"
+                      data-testid="cover-remove"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => coverFileRef.current?.click()}
+                      disabled={upload.isUploading}
+                      data-testid="cover-upload-btn"
+                    >
+                      {upload.isUploading ? (
+                        <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Uploading…</>
+                      ) : (
+                        <><Upload className="h-4 w-4 mr-1" /> Upload cover image</>
+                      )}
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 10 MB.</p>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 

@@ -19,6 +19,7 @@ import financialRouter from "./financial";
 import supplyChainRouter from "./supply-chain";
 import workforceRouter from "./workforce";
 import storageRouter from "./storage";
+import geocodeRouter from "./geocode";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(financialRouter);
 router.use(supplyChainRouter);
 router.use(workforceRouter);
 router.use(storageRouter);
+router.use(geocodeRouter);
 
 export default router;

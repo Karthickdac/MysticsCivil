@@ -191,6 +191,7 @@ import type {
   MyProfileUpdate,
   Organisation,
   OrganisationInput,
+  OrganisationUpdate,
   PaymentAnalytics,
   PaymentVoucher,
   PayrollPeriod,
@@ -212,6 +213,8 @@ import type {
   ReleaseContractorPayment200,
   ReleaseContractorPaymentBody,
   RetentionLedgerEntry,
+  ReverseGeocodeRequest,
+  ReverseGeocodeResponse,
   SafetyDashboard,
   SafetyTrendsDashboard,
   SitePhoto,
@@ -1127,6 +1130,214 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getCreateOrganisationMutationOptions(options));
+    }
+
+export const getGetOrganisationUrl = (organisationId: string,) => {
+
+
+
+
+  return `/api/organisations/${organisationId}`
+}
+
+export const getOrganisation = async (organisationId: string, options?: RequestInit): Promise<Organisation> => {
+
+  return customFetch<Organisation>(getGetOrganisationUrl(organisationId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOrganisationQueryKey = (organisationId: string,) => {
+    return [
+    `/api/organisations/${organisationId}`
+    ] as const;
+    }
+
+
+export const getGetOrganisationQueryOptions = <TData = Awaited<ReturnType<typeof getOrganisation>>, TError = ErrorType<ErrorEnvelope>>(organisationId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOrganisation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOrganisationQueryKey(organisationId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOrganisation>>> = ({ signal }) => getOrganisation(organisationId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(organisationId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOrganisation>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetOrganisationQueryResult = NonNullable<Awaited<ReturnType<typeof getOrganisation>>>
+export type GetOrganisationQueryError = ErrorType<ErrorEnvelope>
+
+
+
+export function useGetOrganisation<TData = Awaited<ReturnType<typeof getOrganisation>>, TError = ErrorType<ErrorEnvelope>>(
+ organisationId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOrganisation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetOrganisationQueryOptions(organisationId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateOrganisationUrl = (organisationId: string,) => {
+
+
+
+
+  return `/api/organisations/${organisationId}`
+}
+
+export const updateOrganisation = async (organisationId: string,
+    organisationUpdate: OrganisationUpdate, options?: RequestInit): Promise<Organisation> => {
+
+  return customFetch<Organisation>(getUpdateOrganisationUrl(organisationId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      organisationUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateOrganisationMutationOptions = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOrganisation>>, TError,{organisationId: string;data: BodyType<OrganisationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateOrganisation>>, TError,{organisationId: string;data: BodyType<OrganisationUpdate>}, TContext> => {
+
+const mutationKey = ['updateOrganisation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateOrganisation>>, {organisationId: string;data: BodyType<OrganisationUpdate>}> = (props) => {
+          const {organisationId,data} = props ?? {};
+
+          return  updateOrganisation(organisationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateOrganisationMutationResult = NonNullable<Awaited<ReturnType<typeof updateOrganisation>>>
+    export type UpdateOrganisationMutationBody = BodyType<OrganisationUpdate>
+    export type UpdateOrganisationMutationError = ErrorType<ErrorEnvelope>
+
+    export const useUpdateOrganisation = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOrganisation>>, TError,{organisationId: string;data: BodyType<OrganisationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateOrganisation>>,
+        TError,
+        {organisationId: string;data: BodyType<OrganisationUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateOrganisationMutationOptions(options));
+    }
+
+export const getReverseGeocodeUrl = () => {
+
+
+
+
+  return `/api/geocode/reverse`
+}
+
+/**
+ * @summary Reverse-geocode lat/lon into a human address (OpenStreetMap Nominatim)
+ */
+export const reverseGeocode = async (reverseGeocodeRequest: ReverseGeocodeRequest, options?: RequestInit): Promise<ReverseGeocodeResponse> => {
+
+  return customFetch<ReverseGeocodeResponse>(getReverseGeocodeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      reverseGeocodeRequest,)
+  }
+);}
+
+
+
+
+export const getReverseGeocodeMutationOptions = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reverseGeocode>>, TError,{data: BodyType<ReverseGeocodeRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reverseGeocode>>, TError,{data: BodyType<ReverseGeocodeRequest>}, TContext> => {
+
+const mutationKey = ['reverseGeocode'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reverseGeocode>>, {data: BodyType<ReverseGeocodeRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reverseGeocode(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReverseGeocodeMutationResult = NonNullable<Awaited<ReturnType<typeof reverseGeocode>>>
+    export type ReverseGeocodeMutationBody = BodyType<ReverseGeocodeRequest>
+    export type ReverseGeocodeMutationError = ErrorType<ErrorEnvelope>
+
+    /**
+ * @summary Reverse-geocode lat/lon into a human address (OpenStreetMap Nominatim)
+ */
+export const useReverseGeocode = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reverseGeocode>>, TError,{data: BodyType<ReverseGeocodeRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reverseGeocode>>,
+        TError,
+        {data: BodyType<ReverseGeocodeRequest>},
+        TContext
+      > => {
+      return useMutation(getReverseGeocodeMutationOptions(options));
     }
 
 export const getListProjectsUrl = () => {

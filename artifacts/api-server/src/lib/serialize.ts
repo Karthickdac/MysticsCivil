@@ -68,6 +68,25 @@ export function serializeOrg(o: any) {
   };
 }
 
+// Public view: omits legal/tax/address details. Non-admin callers receive
+// only identity + non-sensitive locality hints (city/state) plus the logo
+// (already public-facing branding).
+export function serializeOrgPublic(o: any) {
+  return {
+    id: o.id,
+    name: o.name,
+    legalName: null,
+    gstin: null,
+    pan: null,
+    address: null,
+    city: o.city ?? null,
+    state: o.state ?? null,
+    pincode: null,
+    logoUrl: o.logoUrl ?? null,
+    createdAt: dReq(o.createdAt),
+  };
+}
+
 export function serializeWbs(a: any) {
   return {
     id: a.id,

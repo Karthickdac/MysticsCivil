@@ -199,6 +199,80 @@ export const CreateOrganisationBody = zod.object({
 })
 
 
+export const GetOrganisationParams = zod.object({
+  "organisationId": zod.coerce.string()
+})
+
+export const GetOrganisationResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "legalName": zod.string().nullable(),
+  "gstin": zod.string().nullable(),
+  "pan": zod.string().nullable(),
+  "address": zod.string().nullable(),
+  "city": zod.string().nullable(),
+  "state": zod.string().nullable(),
+  "pincode": zod.string().nullable(),
+  "logoUrl": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const UpdateOrganisationParams = zod.object({
+  "organisationId": zod.coerce.string()
+})
+
+
+
+
+export const UpdateOrganisationBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "legalName": zod.string().optional(),
+  "gstin": zod.string().optional(),
+  "pan": zod.string().optional(),
+  "address": zod.string().optional(),
+  "city": zod.string().optional(),
+  "state": zod.string().optional(),
+  "pincode": zod.string().optional(),
+  "logoUrl": zod.string().optional()
+})
+
+export const UpdateOrganisationResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "legalName": zod.string().nullable(),
+  "gstin": zod.string().nullable(),
+  "pan": zod.string().nullable(),
+  "address": zod.string().nullable(),
+  "city": zod.string().nullable(),
+  "state": zod.string().nullable(),
+  "pincode": zod.string().nullable(),
+  "logoUrl": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Reverse-geocode lat/lon into a human address (OpenStreetMap Nominatim)
+ */
+export const reverseGeocodeBodyLatMin = -90;
+export const reverseGeocodeBodyLatMax = 90;
+
+export const reverseGeocodeBodyLonMin = -180;
+export const reverseGeocodeBodyLonMax = 180;
+
+
+
+export const ReverseGeocodeBody = zod.object({
+  "lat": zod.number().min(reverseGeocodeBodyLatMin).max(reverseGeocodeBodyLatMax),
+  "lon": zod.number().min(reverseGeocodeBodyLonMin).max(reverseGeocodeBodyLonMax)
+})
+
+export const ReverseGeocodeResponse = zod.object({
+  "address": zod.string().nullable()
+})
+
+
 export const ListProjectsResponseItem = zod.object({
   "id": zod.string(),
   "organisationId": zod.string(),

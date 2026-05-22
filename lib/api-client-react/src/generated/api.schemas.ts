@@ -200,6 +200,37 @@ export interface OrganisationInput {
   logoUrl?: string;
 }
 
+export interface OrganisationUpdate {
+  /** @minLength 1 */
+  name?: string;
+  legalName?: string;
+  gstin?: string;
+  pan?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  logoUrl?: string;
+}
+
+export interface ReverseGeocodeRequest {
+  /**
+     * @minimum -90
+     * @maximum 90
+     */
+  lat: number;
+  /**
+     * @minimum -180
+     * @maximum 180
+     */
+  lon: number;
+}
+
+export interface ReverseGeocodeResponse {
+  /** @nullable */
+  address: string | null;
+}
+
 export interface Project {
   id: string;
   organisationId: string;
