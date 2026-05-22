@@ -693,7 +693,8 @@ function L5Panel({ projectId, estimates }: { projectId: string; estimates: Estim
 
   const { data: woItems = [], isLoading: itemsLoading } = useListWorkOrderItems(selectedWo?.id ?? "");
   const replaceItems = useReplaceWorkOrderItems();
-  const { data: boqItems = [] } = useListBoqItems(selectedWo?.l3EstimateId ?? "");
+  // formBoqItems: keyed on the CREATE form's l3EstimateId — always fresh at create-time
+  const { data: formBoqItems = [] } = useListBoqItems(form.l3EstimateId || "");
 
   const [editRows, setEditRows] = useState<any[] | null>(null);
 
@@ -710,9 +711,9 @@ function L5Panel({ projectId, estimates }: { projectId: string; estimates: Estim
           setShowCreate(false);
           setSelectedWoId(wo.id);
           setForm({ subcontractor: "", workPackage: "", l3EstimateId: "", notes: "" });
-          // Auto-populate items from L3 estimate BOQ
-          if (form.l3EstimateId && boqItems.length) {
-            const rows = boqItems.map(b => ({
+          // Auto-populate items from L3 estimate BOQ (use formBoqItems — fetched by form.l3EstimateId, not selectedWo)
+          if (form.l3EstimateId && formBoqItems.length) {
+            const rows = formBoqItems.map(b => ({
               boqItemId: b.id,
               description: b.description,
               unit: b.unit,
@@ -797,10 +798,13 @@ function L5Panel({ projectId, estimates }: { projectId: string; estimates: Estim
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium mb-1 block">Source L3 Estimate <span className="text-muted-foreground font-normal">(auto-populate BOQ)</span></label>
-                <Select value={form.l3EstimateId} onValueChange={v => setForm(f => ({ ...f, l3EstimateId: v }))}>
+                <Select
+                  value={form.l3EstimateId || "none"}
+                  onValueChange={v => setForm(f => ({ ...f, l3EstimateId: v === "none" ? "" : v }))}
+                >
                   <SelectTrigger className="h-8"><SelectValue placeholder="Select L3 BOQ..." /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {l3Estimates.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
