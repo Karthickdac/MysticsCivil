@@ -1406,6 +1406,42 @@ export const UpdateVariationOrderResponse = zod.object({
 
 
 /**
+ * @summary Import BOQ items from Excel (xlsx)
+ */
+export const ImportBoqItemsXlsxParams = zod.object({
+  "estimateId": zod.coerce.string()
+})
+
+export const ImportBoqItemsXlsxBody = zod.object({
+  "file": zod.instanceof(File)
+})
+
+export const ImportBoqItemsXlsxResponseItem = zod.object({
+  "id": zod.string(),
+  "estimateId": zod.string(),
+  "projectId": zod.string(),
+  "wbsActivityId": zod.string().nullable(),
+  "dsrRateId": zod.string().nullable(),
+  "levelType": zod.string(),
+  "trade": zod.string(),
+  "itemCode": zod.string().nullable(),
+  "description": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "rate": zod.number(),
+  "amount": zod.number(),
+  "actualQuantity": zod.number(),
+  "actualAmount": zod.number(),
+  "hsnCode": zod.string().nullable(),
+  "gstRate": zod.number(),
+  "locked": zod.boolean(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date()
+})
+export const ImportBoqItemsXlsxResponse = zod.array(ImportBoqItemsXlsxResponseItem)
+
+
+/**
  * @summary Export BOQ items as Excel (xlsx)
  */
 export const ExportBoqItemsXlsxParams = zod.object({

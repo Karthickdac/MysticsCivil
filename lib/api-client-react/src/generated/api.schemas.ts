@@ -1018,3 +1018,7 @@ state?: string;
 cityTier?: string;
 };
 
+export type ImportBoqItemsXlsxBody = {
+  file: Blob;
+};
+

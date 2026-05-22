@@ -46,6 +46,7 @@ import type {
   EstimateUpdate,
   HandleBrowserLoginCallbackParams,
   HealthStatus,
+  ImportBoqItemsXlsxBody,
   Issue,
   IssueInput,
   IssueUpdate,
@@ -4255,6 +4256,80 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdateVariationOrderMutationOptions(options));
+    }
+
+export const getImportBoqItemsXlsxUrl = (estimateId: string,) => {
+
+
+
+
+  return `/api/estimates/${estimateId}/boq-items/import`
+}
+
+/**
+ * @summary Import BOQ items from Excel (xlsx)
+ */
+export const importBoqItemsXlsx = async (estimateId: string,
+    importBoqItemsXlsxBody: ImportBoqItemsXlsxBody, options?: RequestInit): Promise<BoqItem[]> => {
+    const formData = new FormData();
+formData.append(`file`, importBoqItemsXlsxBody.file);
+
+  return customFetch<BoqItem[]>(getImportBoqItemsXlsxUrl(estimateId),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body:
+      formData,
+  }
+);}
+
+
+
+
+export const getImportBoqItemsXlsxMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importBoqItemsXlsx>>, TError,{estimateId: string;data: BodyType<ImportBoqItemsXlsxBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importBoqItemsXlsx>>, TError,{estimateId: string;data: BodyType<ImportBoqItemsXlsxBody>}, TContext> => {
+
+const mutationKey = ['importBoqItemsXlsx'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importBoqItemsXlsx>>, {estimateId: string;data: BodyType<ImportBoqItemsXlsxBody>}> = (props) => {
+          const {estimateId,data} = props ?? {};
+
+          return  importBoqItemsXlsx(estimateId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportBoqItemsXlsxMutationResult = NonNullable<Awaited<ReturnType<typeof importBoqItemsXlsx>>>
+    export type ImportBoqItemsXlsxMutationBody = BodyType<ImportBoqItemsXlsxBody>
+    export type ImportBoqItemsXlsxMutationError = ErrorType<void>
+
+    /**
+ * @summary Import BOQ items from Excel (xlsx)
+ */
+export const useImportBoqItemsXlsx = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importBoqItemsXlsx>>, TError,{estimateId: string;data: BodyType<ImportBoqItemsXlsxBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importBoqItemsXlsx>>,
+        TError,
+        {estimateId: string;data: BodyType<ImportBoqItemsXlsxBody>},
+        TContext
+      > => {
+      return useMutation(getImportBoqItemsXlsxMutationOptions(options));
     }
 
 export const getExportBoqItemsXlsxUrl = (estimateId: string,) => {

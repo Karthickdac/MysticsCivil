@@ -8,6 +8,8 @@ import {
   useReplaceEstimateCostHeads,
   useListBoqItems,
   useCreateBoqItem,
+  useUpdateBoqItem,
+  useDeleteBoqItem,
   useListRateAnalysisComponents,
   useReplaceRateAnalysisComponents,
   useListDsrRates,
@@ -33,7 +35,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatINR } from "@/lib/ocms-format";
 import {
   Plus, ChevronRight, FileBarChart, Layers, Calculator,
-  ClipboardList, Wrench, AlertTriangle, Lock, Edit3, Check, X, Download, Upload,
+  ClipboardList, Wrench, AlertTriangle, Lock, Unlock, Edit3, Check, X, Download, Upload, Trash2, Search,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
@@ -71,8 +73,10 @@ const TRADES = ["Earthwork","RCC","Masonry","Plaster","Flooring","Tiling","Water
 const COMP_TYPES = ["material","labour","plant","overhead"];
 const PROJECT_TYPES = ["Residential","Commercial","Institutional","Industrial","Infrastructure","Mixed-Use"];
 const CITY_TIERS = ["T1","T2","T3"];
+const FINISHING_GRADES = ["Standard","Premium","Luxury"] as const;
+const FINISHING_MULTIPLIER: Record<string, number> = { Standard: 1.0, Premium: 1.25, Luxury: 1.60 };
 
-// Benchmark rates per sqm by project type + city tier (INR/sqm)
+// Benchmark base rates per sqm by project type + city tier (INR/sqm) — multiply by FINISHING_MULTIPLIER
 const BENCHMARK_RATES: Record<string, Record<string, number>> = {
   Residential:    { T1: 22000, T2: 18000, T3: 14000 },
   Commercial:     { T1: 28000, T2: 22000, T3: 18000 },
@@ -81,6 +85,45 @@ const BENCHMARK_RATES: Record<string, Record<string, number>> = {
   Infrastructure: { T1: 35000, T2: 28000, T3: 22000 },
   "Mixed-Use":    { T1: 26000, T2: 21000, T3: 17000 },
 };
+
+function LockToggleButton({ estimate }: { estimate: Estimate }) {
+  const updateEstimate = useUpdateEstimate();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const isLocked = estimate.status === "locked";
+  const canLock = ["L2", "L3", "L4"].includes(estimate.level);
+  if (!canLock) return null;
+
+  const toggle = () => {
+    const newStatus = isLocked ? "draft" : "locked";
+    updateEstimate.mutate(
+      { estimateId: estimate.id, data: { status: newStatus } },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListProjectEstimatesQueryKey(estimate.projectId) });
+          toast({ title: isLocked ? "Estimate unlocked — BOQ editable" : "Estimate locked post-award — VO required to modify" });
+        },
+        onError: (e: any) => {
+          const msg = (e?.body?.error ?? e?.message) as string | undefined;
+          toast({ title: isLocked ? "Cannot unlock" : "Cannot lock", description: msg ?? "Unknown error", variant: "destructive" });
+        },
+      },
+    );
+  };
+
+  return (
+    <Button
+      size="sm"
+      variant={isLocked ? "outline" : "secondary"}
+      onClick={toggle}
+      disabled={updateEstimate.isPending}
+      className={isLocked ? "border-rose-300 text-rose-700 hover:bg-rose-50" : ""}
+    >
+      {isLocked ? <Unlock className="h-3.5 w-3.5 mr-1" /> : <Lock className="h-3.5 w-3.5 mr-1" />}
+      {isLocked ? "Unlock" : "Lock Post-Award"}
+    </Button>
+  );
+}
 
 function NewEstimateDialog({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState(false);
@@ -153,14 +196,17 @@ function L0Panel({ estimate }: { estimate: Estimate }) {
   const [form, setForm] = useState({
     projectType: meta.projectType ?? "Residential",
     cityTier: meta.cityTier ?? "T1",
+    finishingGrade: (meta.finishingGrade ?? "Standard") as string,
     builtUpArea: String(meta.builtUpArea ?? ""),
     floors: String(meta.floors ?? ""),
     benchmarkRate: String(meta.benchmarkRate ?? ""),
   });
 
+  const baseRate = BENCHMARK_RATES[form.projectType]?.[form.cityTier] ?? 22000;
+  const finishingMult = FINISHING_MULTIPLIER[form.finishingGrade] ?? 1.0;
   const computedRate = form.benchmarkRate
     ? Number(form.benchmarkRate)
-    : (BENCHMARK_RATES[form.projectType]?.[form.cityTier] ?? 22000);
+    : Math.round(baseRate * finishingMult);
   const bua = Number(form.builtUpArea) || 0;
   const total = bua * computedRate;
 
@@ -173,6 +219,7 @@ function L0Panel({ estimate }: { estimate: Estimate }) {
           metadata: {
             projectType: form.projectType,
             cityTier: form.cityTier,
+            finishingGrade: form.finishingGrade,
             builtUpArea: bua,
             floors: Number(form.floors) || 0,
             benchmarkRate: computedRate,
@@ -233,6 +280,17 @@ function L0Panel({ estimate }: { estimate: Estimate }) {
                 </Select>
               </div>
               <div>
+                <label className="text-xs font-medium mb-1 block">Finishing Grade</label>
+                <Select value={form.finishingGrade} onValueChange={v => setForm(f => ({ ...f, finishingGrade: v, benchmarkRate: "" }))}>
+                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Standard">Standard (1×)</SelectItem>
+                    <SelectItem value="Premium">Premium (1.25×)</SelectItem>
+                    <SelectItem value="Luxury">Luxury (1.6×)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <label className="text-xs font-medium mb-1 block">Built-Up Area (sqm)</label>
                 <Input className="h-8" type="number" placeholder="e.g. 12000" value={form.builtUpArea} onChange={e => setForm(f => ({ ...f, builtUpArea: e.target.value }))} />
               </div>
@@ -243,9 +301,9 @@ function L0Panel({ estimate }: { estimate: Estimate }) {
               <div>
                 <label className="text-xs font-medium mb-1 block">
                   Benchmark Rate (₹/sqm)
-                  <span className="text-muted-foreground font-normal ml-1">— leave blank to use preset: {formatINR(BENCHMARK_RATES[form.projectType]?.[form.cityTier] ?? 22000)}</span>
+                  <span className="text-muted-foreground font-normal ml-1">— leave blank to use preset: {formatINR(Math.round(baseRate * finishingMult))}</span>
                 </label>
-                <Input className="h-8" type="number" placeholder={String(BENCHMARK_RATES[form.projectType]?.[form.cityTier] ?? 22000)} value={form.benchmarkRate} onChange={e => setForm(f => ({ ...f, benchmarkRate: e.target.value }))} />
+                <Input className="h-8" type="number" placeholder={String(Math.round(baseRate * finishingMult))} value={form.benchmarkRate} onChange={e => setForm(f => ({ ...f, benchmarkRate: e.target.value }))} />
               </div>
               <div className="flex flex-col justify-end">
                 <div className="text-xs text-muted-foreground mb-1">Computed Total</div>
@@ -276,6 +334,7 @@ function L0Panel({ estimate }: { estimate: Estimate }) {
             <div className="text-xs text-muted-foreground pt-2 border-t space-y-1">
               {meta.projectType && <div>Type: <span className="font-medium">{meta.projectType}</span></div>}
               {meta.cityTier && <div>City tier: <span className="font-medium">T{meta.cityTier}</span></div>}
+              {meta.finishingGrade && <div>Finishing: <span className="font-medium">{meta.finishingGrade}</span></div>}
               {displayBUA > 0 && <div>BUA: <span className="font-medium">{displayBUA.toLocaleString()} sqm · {formatINR(displayRate)}/sqm</span></div>}
               {meta.floors && <div>Floors: <span className="font-medium">{meta.floors}</span></div>}
             </div>
@@ -394,9 +453,50 @@ function BoqPanel({ estimate }: { estimate: Estimate }) {
   const { data: items = [], isLoading } = useListBoqItems(estimate.id);
   const [newRow, setNewRow] = useState<any>(null);
   const [raItem, setRaItem] = useState<BoqItem | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Record<string, string>>({});
+  const [dsrSearch, setDsrSearch] = useState("");
   const createItem = useCreateBoqItem();
+  const updateItem = useUpdateBoqItem();
+  const deleteItem = useDeleteBoqItem();
   const { toast } = useToast();
   const qc = useQueryClient();
+
+  const { data: dsrResults = [] } = useListDsrRates(
+    { q: dsrSearch, trade: newRow?.trade },
+    { query: { enabled: dsrSearch.length >= 2 } },
+  );
+
+  const startEdit = (item: BoqItem) => {
+    setEditingId(item.id);
+    setEditForm({
+      description: item.description,
+      unit: item.unit,
+      quantity: String(item.quantity),
+      rate: String(item.rate),
+      trade: item.trade,
+    });
+  };
+
+  const saveEdit = (itemId: string) => {
+    updateItem.mutate(
+      { itemId, data: { description: editForm.description, unit: editForm.unit, quantity: Number(editForm.quantity), rate: Number(editForm.rate) } },
+      {
+        onSuccess: () => { qc.invalidateQueries({ queryKey: getListBoqItemsQueryKey(estimate.id) }); setEditingId(null); toast({ title: "Item updated" }); },
+        onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+      },
+    );
+  };
+
+  const confirmDelete = (itemId: string) => {
+    deleteItem.mutate(
+      { itemId },
+      {
+        onSuccess: () => { qc.invalidateQueries({ queryKey: getListBoqItemsQueryKey(estimate.id) }); toast({ title: "Item deleted" }); },
+        onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+      },
+    );
+  };
 
   if (isLoading) return <Skeleton className="h-40 w-full" />;
 
@@ -470,19 +570,39 @@ function BoqPanel({ estimate }: { estimate: Estimate }) {
       </div>
 
       {newRow && (
-        <div className="grid grid-cols-12 gap-2 p-3 border rounded-lg bg-muted/30">
-          <Select value={newRow.trade} onValueChange={v => setNewRow((r: any) => ({ ...r, trade: v }))}>
-            <SelectTrigger className="col-span-2 h-8"><SelectValue /></SelectTrigger>
-            <SelectContent>{TRADES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-          </Select>
-          <Input className="col-span-4 h-8 text-xs" placeholder="Description" value={newRow.description} onChange={e => setNewRow((r: any) => ({ ...r, description: e.target.value }))} />
-          <Input className="col-span-1 h-8 text-xs" placeholder="Unit" value={newRow.unit} onChange={e => setNewRow((r: any) => ({ ...r, unit: e.target.value }))} />
-          <Input className="col-span-1 h-8 text-xs text-right" type="number" placeholder="Qty" value={newRow.quantity} onChange={e => setNewRow((r: any) => ({ ...r, quantity: e.target.value }))} />
-          <Input className="col-span-2 h-8 text-xs text-right" type="number" placeholder="Rate ₹" value={newRow.rate} onChange={e => setNewRow((r: any) => ({ ...r, rate: e.target.value }))} />
-          <div className="col-span-2 flex gap-1">
-            <Button size="sm" className="h-8 flex-1" onClick={addItem}><Check className="h-3 w-3" /></Button>
-            <Button size="sm" variant="outline" className="h-8" onClick={() => setNewRow(null)}><X className="h-3 w-3" /></Button>
+        <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
+          <div className="grid grid-cols-12 gap-2">
+            <Select value={newRow.trade} onValueChange={v => setNewRow((r: any) => ({ ...r, trade: v }))}>
+              <SelectTrigger className="col-span-2 h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>{TRADES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+            </Select>
+            <div className="col-span-4 relative">
+              <Input className="h-8 text-xs pr-6" placeholder="Description or search DSR…" value={newRow.description} onChange={e => { setNewRow((r: any) => ({ ...r, description: e.target.value })); setDsrSearch(e.target.value); }} />
+              <Search className="absolute right-1.5 top-1.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            </div>
+            <Input className="col-span-1 h-8 text-xs" placeholder="Unit" value={newRow.unit} onChange={e => setNewRow((r: any) => ({ ...r, unit: e.target.value }))} />
+            <Input className="col-span-1 h-8 text-xs text-right" type="number" placeholder="Qty" value={newRow.quantity} onChange={e => setNewRow((r: any) => ({ ...r, quantity: e.target.value }))} />
+            <Input className="col-span-2 h-8 text-xs text-right" type="number" placeholder="Rate ₹" value={newRow.rate} onChange={e => setNewRow((r: any) => ({ ...r, rate: e.target.value }))} />
+            <div className="col-span-2 flex gap-1">
+              <Button size="sm" className="h-8 flex-1" onClick={addItem}><Check className="h-3 w-3" /></Button>
+              <Button size="sm" variant="outline" className="h-8" onClick={() => { setNewRow(null); setDsrSearch(""); }}><X className="h-3 w-3" /></Button>
+            </div>
           </div>
+          {dsrResults.length > 0 && (
+            <div className="border rounded bg-background shadow-sm max-h-40 overflow-y-auto">
+              <div className="text-[10px] text-muted-foreground px-2 py-1 border-b font-medium uppercase tracking-wide">DSR/SSR — click to auto-fill</div>
+              {dsrResults.slice(0, 8).map(d => (
+                <button
+                  key={d.id}
+                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted/60 border-b last:border-0 flex items-center justify-between gap-2"
+                  onClick={() => { setNewRow((r: any) => ({ ...r, description: d.description, unit: d.unit, rate: String(d.rate) })); setDsrSearch(""); }}
+                >
+                  <span className="flex-1 truncate">{d.code} — {d.description}</span>
+                  <span className="text-muted-foreground shrink-0">{d.unit} · {formatINR(Number(d.rate))}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -503,28 +623,67 @@ function BoqPanel({ estimate }: { estimate: Estimate }) {
               </tr>
             </thead>
             <tbody>
-              {tradeItems.map((item, idx) => (
-                <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30 group">
-                  <td className="py-1 text-muted-foreground text-xs">{idx + 1}</td>
-                  <td className="py-1">
-                    <div>{item.description}</div>
-                    {item.itemCode && <div className="text-[10px] text-muted-foreground">{item.itemCode} {item.hsnCode && `· HSN ${item.hsnCode}`}</div>}
-                  </td>
-                  <td className="py-1 text-right">{item.unit}</td>
-                  <td className="py-1 text-right tabular-nums">{item.quantity.toLocaleString()}</td>
-                  <td className="py-1 text-right tabular-nums">{formatINR(item.rate)}</td>
-                  <td className="py-1 text-right tabular-nums font-medium">{formatINR(item.amount)}</td>
-                  {estimate.level === "L3" && <td className="py-1 text-right">{item.gstRate}%</td>}
-                  <td className="py-1 text-right">
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                      {item.locked && <Lock className="h-3 w-3 text-rose-500" />}
-                      <button onClick={() => setRaItem(item)} className="text-muted-foreground hover:text-primary" title="Rate Analysis (L4)">
-                        <Calculator className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {tradeItems.map((item, idx) => {
+                const isEditing = editingId === item.id;
+                return isEditing ? (
+                  <tr key={item.id} className="border-b last:border-0 bg-primary/5">
+                    <td className="py-1 text-muted-foreground text-xs">{idx + 1}</td>
+                    <td className="py-1">
+                      <Input className="h-7 text-xs" value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
+                    </td>
+                    <td className="py-1 text-right">
+                      <Input className="h-7 text-xs w-16 text-right" value={editForm.unit} onChange={e => setEditForm(f => ({ ...f, unit: e.target.value }))} />
+                    </td>
+                    <td className="py-1 text-right">
+                      <Input className="h-7 text-xs w-20 text-right" type="number" value={editForm.quantity} onChange={e => setEditForm(f => ({ ...f, quantity: e.target.value }))} />
+                    </td>
+                    <td className="py-1 text-right">
+                      <Input className="h-7 text-xs w-24 text-right" type="number" value={editForm.rate} onChange={e => setEditForm(f => ({ ...f, rate: e.target.value }))} />
+                    </td>
+                    <td className="py-1 text-right tabular-nums font-medium text-xs text-muted-foreground">
+                      {formatINR((Number(editForm.quantity) || 0) * (Number(editForm.rate) || 0))}
+                    </td>
+                    {estimate.level === "L3" && <td className="py-1 text-right">{item.gstRate}%</td>}
+                    <td className="py-1 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => saveEdit(item.id)} className="text-emerald-600 hover:text-emerald-700" title="Save"><Check className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => setEditingId(null)} className="text-muted-foreground hover:text-foreground" title="Cancel"><X className="h-3.5 w-3.5" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30 group">
+                    <td className="py-1 text-muted-foreground text-xs">{idx + 1}</td>
+                    <td className="py-1">
+                      <div>{item.description}</div>
+                      {item.itemCode && <div className="text-[10px] text-muted-foreground">{item.itemCode} {item.hsnCode && `· HSN ${item.hsnCode}`}</div>}
+                    </td>
+                    <td className="py-1 text-right">{item.unit}</td>
+                    <td className="py-1 text-right tabular-nums">{item.quantity.toLocaleString()}</td>
+                    <td className="py-1 text-right tabular-nums">{formatINR(item.rate)}</td>
+                    <td className="py-1 text-right tabular-nums font-medium">{formatINR(item.amount)}</td>
+                    {estimate.level === "L3" && <td className="py-1 text-right">{item.gstRate}%</td>}
+                    <td className="py-1 text-right">
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                        {item.locked && <Lock className="h-3 w-3 text-rose-500" />}
+                        {!locked && (
+                          <button onClick={() => startEdit(item)} className="text-muted-foreground hover:text-primary" title="Edit row">
+                            <Edit3 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <button onClick={() => setRaItem(item)} className="text-muted-foreground hover:text-primary" title="Rate Analysis (L4)">
+                          <Calculator className="h-3.5 w-3.5" />
+                        </button>
+                        {!locked && (
+                          <button onClick={() => confirmDelete(item.id)} className="text-muted-foreground hover:text-rose-600" title="Delete row">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -983,6 +1142,7 @@ export default function EstimationPage({ projectId: propProjectId }: { projectId
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-xs px-2 py-0.5 rounded border ${STATUS_BADGE[activeEst.status] ?? ""}`}>{activeEst.status}</span>
+                  <LockToggleButton estimate={activeEst} />
                   <div className="text-sm font-bold">{formatINR(activeEst.totalAmount)}</div>
                 </div>
               </CardHeader>

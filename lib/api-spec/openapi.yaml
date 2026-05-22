@@ -939,6 +939,38 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/VariationOrder' }
 
+  /estimates/{estimateId}/boq-items/import:
+    parameters:
+      - name: estimateId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Estimation]
+      operationId: importBoqItemsXlsx
+      summary: Import BOQ items from Excel (xlsx)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        '200':
+          description: Imported BOQ items
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BoqItem' }
+        '409':
+          description: Estimate is locked
+
   /estimates/{estimateId}/boq-items/export:
     parameters:
       - name: estimateId
