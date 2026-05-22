@@ -34,7 +34,9 @@ _Describe the high-level user-facing capabilities of this app once they exist._
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- **Auth model**: normal email + password (no Replit-Auth / SSO). User signup/login/logout flows owned by this app.
+- **RBAC**: role on `user_profiles.role`. Roles: `admin`, `owner`, `pm`, `qs`, `finance`, `site_engineer`, `qc`. Use `requireRole(...)` middleware on write endpoints; never trust `req.userRole` from a `requireAuth`-only route — resolve via `loadRole(userId)` or `user_profiles` lookup.
+- **SaaS multi-tenant**: every business record is scoped to an organisation via `user_profiles.organisationId → projects.organisationId`. Non-admins must never see cross-org data; missing `organisationId` → 403, never global fallback. Admins are global.
 
 ## Gotchas
 
