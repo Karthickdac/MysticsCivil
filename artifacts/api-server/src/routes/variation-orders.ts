@@ -5,7 +5,7 @@ import {
   approvalsTable,
   projectsTable,
 } from "@workspace/db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { n, d, dReq } from "../lib/serialize";
 
@@ -117,7 +117,17 @@ router.patch(
           .where(and(eq(approvalsTable.entityId, req.params.voId), eq(approvalsTable.entityType, "variation_order")));
       }
     }
+    const [existing] = await db.select().from(variationOrdersTable).where(eq(variationOrdersTable.id, req.params.voId));
     const [vo] = await db.update(variationOrdersTable).set(update as any).where(eq(variationOrdersTable.id, req.params.voId)).returning();
+    // When VO approved: add costImpact to project contractValue (Revised Contract Value)
+    if (b.status === "approved" && existing && existing.status !== "approved" && vo) {
+      const impact = n(vo.costImpact);
+      if (impact !== 0) {
+        await db.update(projectsTable)
+          .set({ contractValue: sql`contract_value + ${String(impact)}` })
+          .where(eq(projectsTable.id, vo.projectId));
+      }
+    }
     if (!vo) { res.status(404).json({ error: "Not found" }); return; }
     res.json(serializeVo(vo));
   },

@@ -84,3 +84,8 @@ export * from './variationOrderUpdate';
 export * from './wbsActivity';
 export * from './wbsActivityInput';
 export * from './wbsActivityUpdate';
+export * from './workOrderEstimate';
+export * from './workOrderEstimateItem';
+export * from './workOrderInput';
+export * from './workOrderItemInput';
+export * from './workOrderUpdate';

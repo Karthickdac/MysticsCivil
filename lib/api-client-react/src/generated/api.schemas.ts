@@ -850,6 +850,64 @@ export interface VariationOrderUpdate {
   estimateId?: string;
 }
 
+export interface WorkOrderEstimate {
+  id: string;
+  projectId: string;
+  /** @nullable */
+  l3EstimateId: string | null;
+  subcontractor: string;
+  workPackage: string;
+  status: string;
+  totalBoqAmount: number;
+  totalNegotiatedAmount: number;
+  /** @nullable */
+  notes: string | null;
+  /** @nullable */
+  createdById: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkOrderInput {
+  /** @minLength 1 */
+  subcontractor: string;
+  /** @minLength 1 */
+  workPackage: string;
+  l3EstimateId?: string;
+  notes?: string;
+}
+
+export interface WorkOrderUpdate {
+  subcontractor?: string;
+  workPackage?: string;
+  status?: string;
+  notes?: string;
+  l3EstimateId?: string;
+}
+
+export interface WorkOrderEstimateItem {
+  id: string;
+  workOrderEstimateId: string;
+  /** @nullable */
+  boqItemId: string | null;
+  description: string;
+  unit: string;
+  quantity: number;
+  boqRate: number;
+  negotiatedRate: number;
+  negotiatedAmount: number;
+  sortOrder: number;
+}
+
+export interface WorkOrderItemInput {
+  boqItemId?: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  boqRate: number;
+  negotiatedRate: number;
+}
+
 export interface PortfolioKpi {
   totalProjects: number;
   onTrack: number;

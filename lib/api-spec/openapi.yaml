@@ -939,6 +939,118 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/VariationOrder' }
 
+  /estimates/{estimateId}/boq-items/export:
+    parameters:
+      - name: estimateId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Estimation]
+      operationId: exportBoqItemsCsv
+      summary: Export BOQ items as CSV
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema: { type: string }
+
+  /projects/{projectId}/work-orders:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [WorkOrders]
+      operationId: listWorkOrders
+      responses:
+        '200':
+          description: Work order estimates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WorkOrderEstimate' }
+    post:
+      tags: [WorkOrders]
+      operationId: createWorkOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkOrderInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkOrderEstimate' }
+
+  /work-orders/{woId}:
+    parameters:
+      - name: woId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [WorkOrders]
+      operationId: getWorkOrder
+      responses:
+        '200':
+          description: Work order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkOrderEstimate' }
+    patch:
+      tags: [WorkOrders]
+      operationId: updateWorkOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkOrderUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkOrderEstimate' }
+
+  /work-orders/{woId}/items:
+    parameters:
+      - name: woId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [WorkOrders]
+      operationId: listWorkOrderItems
+      responses:
+        '200':
+          description: Work order items
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WorkOrderEstimateItem' }
+    put:
+      tags: [WorkOrders]
+      operationId: replaceWorkOrderItems
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: '#/components/schemas/WorkOrderItemInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WorkOrderEstimateItem' }
+
   /dashboard/portfolio:
     get:
       tags: [Dashboard]
@@ -1705,6 +1817,63 @@ components:
         programmeImpactDays: { type: integer }
         status: { type: string }
         estimateId: { type: string }
+
+    WorkOrderEstimate:
+      type: object
+      required: [id, projectId, l3EstimateId, subcontractor, workPackage, status, totalBoqAmount, totalNegotiatedAmount, notes, createdById, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        l3EstimateId: { type: [string, 'null'] }
+        subcontractor: { type: string }
+        workPackage: { type: string }
+        status: { type: string }
+        totalBoqAmount: { type: number }
+        totalNegotiatedAmount: { type: number }
+        notes: { type: [string, 'null'] }
+        createdById: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    WorkOrderInput:
+      type: object
+      required: [subcontractor, workPackage]
+      properties:
+        subcontractor: { type: string, minLength: 1 }
+        workPackage: { type: string, minLength: 1 }
+        l3EstimateId: { type: string }
+        notes: { type: string }
+    WorkOrderUpdate:
+      type: object
+      properties:
+        subcontractor: { type: string }
+        workPackage: { type: string }
+        status: { type: string }
+        notes: { type: string }
+        l3EstimateId: { type: string }
+    WorkOrderEstimateItem:
+      type: object
+      required: [id, workOrderEstimateId, boqItemId, description, unit, quantity, boqRate, negotiatedRate, negotiatedAmount, sortOrder]
+      properties:
+        id: { type: string }
+        workOrderEstimateId: { type: string }
+        boqItemId: { type: [string, 'null'] }
+        description: { type: string }
+        unit: { type: string }
+        quantity: { type: number }
+        boqRate: { type: number }
+        negotiatedRate: { type: number }
+        negotiatedAmount: { type: number }
+        sortOrder: { type: integer }
+    WorkOrderItemInput:
+      type: object
+      required: [description, unit, quantity, boqRate, negotiatedRate]
+      properties:
+        boqItemId: { type: string }
+        description: { type: string }
+        unit: { type: string }
+        quantity: { type: number }
+        boqRate: { type: number }
+        negotiatedRate: { type: number }
 
     PortfolioKpi:
       type: object

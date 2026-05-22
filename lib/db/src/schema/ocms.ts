@@ -416,6 +416,40 @@ export const rateAnalysisComponentsTable = pgTable("rate_analysis_components", {
 });
 export type RateAnalysisComponent = typeof rateAnalysisComponentsTable.$inferSelect;
 
+export const workOrderEstimatesTable = pgTable("work_order_estimates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id")
+    .notNull()
+    .references(() => projectsTable.id, { onDelete: "cascade" }),
+  l3EstimateId: varchar("l3_estimate_id").references(() => estimatesTable.id, { onDelete: "set null" }),
+  subcontractor: varchar("subcontractor", { length: 256 }).notNull(),
+  workPackage: varchar("work_package", { length: 256 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull().default("draft"),
+  totalBoqAmount: numeric("total_boq_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  totalNegotiatedAmount: numeric("total_negotiated_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  notes: text("notes"),
+  createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+export type WorkOrderEstimate = typeof workOrderEstimatesTable.$inferSelect;
+
+export const workOrderEstimateItemsTable = pgTable("work_order_estimate_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workOrderEstimateId: varchar("work_order_estimate_id")
+    .notNull()
+    .references(() => workOrderEstimatesTable.id, { onDelete: "cascade" }),
+  boqItemId: varchar("boq_item_id").references(() => boqItemsTable.id, { onDelete: "set null" }),
+  description: text("description").notNull(),
+  unit: varchar("unit", { length: 32 }).notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 3 }).notNull().default("0"),
+  boqRate: numeric("boq_rate", { precision: 18, scale: 2 }).notNull().default("0"),
+  negotiatedRate: numeric("negotiated_rate", { precision: 18, scale: 2 }).notNull().default("0"),
+  negotiatedAmount: numeric("negotiated_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+export type WorkOrderEstimateItem = typeof workOrderEstimateItemsTable.$inferSelect;
+
 export const variationOrdersTable = pgTable("variation_orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   projectId: varchar("project_id")

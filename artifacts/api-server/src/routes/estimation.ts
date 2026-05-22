@@ -7,8 +7,10 @@ import {
   rateAnalysisComponentsTable,
   dsrRatesTable,
   wbsActivitiesTable,
+  workOrderEstimatesTable,
+  workOrderEstimateItemsTable,
 } from "@workspace/db";
-import { eq, asc, and } from "drizzle-orm";
+import { eq, asc, and, sql } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { n, nOrNull, d, dReq } from "../lib/serialize";
 
@@ -94,6 +96,38 @@ function serializeRaComponent(c: any) {
     dsrRate: n(c.dsrRate),
     amount: n(c.amount),
     sortOrder: c.sortOrder ?? 0,
+  };
+}
+
+function serializeWorkOrder(w: any) {
+  return {
+    id: w.id,
+    projectId: w.projectId,
+    l3EstimateId: w.l3EstimateId ?? null,
+    subcontractor: w.subcontractor,
+    workPackage: w.workPackage,
+    status: w.status,
+    totalBoqAmount: n(w.totalBoqAmount),
+    totalNegotiatedAmount: n(w.totalNegotiatedAmount),
+    notes: w.notes ?? null,
+    createdById: w.createdById ?? null,
+    createdAt: dReq(w.createdAt),
+    updatedAt: dReq(w.updatedAt),
+  };
+}
+
+function serializeWorkOrderItem(i: any) {
+  return {
+    id: i.id,
+    workOrderEstimateId: i.workOrderEstimateId,
+    boqItemId: i.boqItemId ?? null,
+    description: i.description,
+    unit: i.unit,
+    quantity: n(i.quantity),
+    boqRate: n(i.boqRate),
+    negotiatedRate: n(i.negotiatedRate),
+    negotiatedAmount: n(i.negotiatedAmount),
+    sortOrder: i.sortOrder ?? 0,
   };
 }
 
@@ -266,6 +300,42 @@ router.get(
   },
 );
 
+// BOQ CSV Export ── GET /estimates/:estimateId/boq-items/export
+router.get(
+  "/estimates/:estimateId/boq-items/export",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const [est] = await db.select({ name: estimatesTable.name, level: estimatesTable.level })
+      .from(estimatesTable).where(eq(estimatesTable.id, req.params.estimateId));
+    const items = await db
+      .select()
+      .from(boqItemsTable)
+      .where(eq(boqItemsTable.estimateId, req.params.estimateId))
+      .orderBy(asc(boqItemsTable.trade), asc(boqItemsTable.sortOrder));
+
+    const escape = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const header = ["#", "Trade", "Item Code", "Description", "Unit", "Quantity", "Rate (INR)", "Amount (INR)", "GST %", "HSN Code", "Locked"];
+    const rows = items.map((item, idx) => [
+      idx + 1,
+      escape(item.trade),
+      escape(item.itemCode),
+      escape(item.description),
+      escape(item.unit),
+      n(item.quantity).toFixed(3),
+      n(item.rate).toFixed(2),
+      n(item.amount).toFixed(2),
+      n(item.gstRate).toFixed(0),
+      escape(item.hsnCode),
+      item.locked ? "Yes" : "No",
+    ]);
+    const csv = [header.join(","), ...rows.map(r => r.join(","))].join("\r\n");
+    const filename = `BOQ_${est?.level ?? "L3"}_${req.params.estimateId.slice(0, 8)}.csv`;
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(csv);
+  },
+);
+
 router.post(
   "/estimates/:estimateId/boq-items",
   requireAuth,
@@ -313,27 +383,40 @@ router.patch(
     const b = req.body ?? {};
     const [existing] = await db.select().from(boqItemsTable).where(eq(boqItemsTable.id, req.params.itemId));
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
-    if (existing.locked && !b.unlockRequested) {
-      res.status(409).json({ error: "BOQ item is locked — raise a VO to modify" });
-      return;
+
+    // Locked items: only actual progress fields (actualQuantity / actualAmount) may be updated.
+    // All scope changes (qty, rate, description, trade) require a VO to unlock the estimate first.
+    if (existing.locked) {
+      const scopeFields = ["quantity", "rate", "description", "trade", "unit", "itemCode", "levelType"];
+      const hasScopeChange = scopeFields.some(k => b[k] !== undefined);
+      if (hasScopeChange) {
+        res.status(409).json({
+          error: "BOQ item is locked — raise a Variation Order and lock the estimate back to modify scope fields. Only actualQuantity and actualAmount may be updated on locked items.",
+        });
+        return;
+      }
     }
+
     const update: Record<string, unknown> = {};
+    // Scope fields — only allowed on unlocked items (checked above)
     for (const k of ["description", "unit", "trade", "itemCode", "hsnCode", "levelType", "wbsActivityId", "dsrRateId"]) {
       if (b[k] !== undefined) update[k] = b[k];
     }
-    if (b.quantity !== undefined || b.rate !== undefined) {
+    if ((b.quantity !== undefined || b.rate !== undefined) && !existing.locked) {
       const qty = n(b.quantity ?? existing.quantity);
       const rate = n(b.rate ?? existing.rate);
       update.quantity = String(qty);
       update.rate = String(rate);
       update.amount = String(qty * rate);
     }
+    if (b.gstRate !== undefined && !existing.locked) update.gstRate = String(n(b.gstRate));
+    // Progress fields — always allowed
     if (b.actualQuantity !== undefined || b.actualAmount !== undefined) {
       update.actualQuantity = String(n(b.actualQuantity ?? existing.actualQuantity));
       update.actualAmount = String(n(b.actualAmount ?? existing.actualAmount));
     }
-    if (b.gstRate !== undefined) update.gstRate = String(n(b.gstRate));
     if (b.locked !== undefined) update.locked = b.locked;
+
     const [item] = await db.update(boqItemsTable).set(update as any).where(eq(boqItemsTable.id, req.params.itemId)).returning();
     res.json(serializeBoqItem(item));
   },
@@ -426,6 +509,122 @@ router.put(
       .where(eq(rateAnalysisComponentsTable.boqItemId, req.params.itemId))
       .orderBy(asc(rateAnalysisComponentsTable.sortOrder));
     res.json(result.map(serializeRaComponent));
+  },
+);
+
+// ── Work Order Estimates (L5) ──────────────────────────────────
+
+router.get(
+  "/projects/:projectId/work-orders",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const rows = await db
+      .select()
+      .from(workOrderEstimatesTable)
+      .where(eq(workOrderEstimatesTable.projectId, req.params.projectId))
+      .orderBy(asc(workOrderEstimatesTable.createdAt));
+    res.json(rows.map(serializeWorkOrder));
+  },
+);
+
+router.post(
+  "/projects/:projectId/work-orders",
+  requireAuth,
+  requireRole(...ROLE_GROUPS.OWNER_PM_QS),
+  async (req: Request, res: Response) => {
+    const b = req.body ?? {};
+    if (!b.subcontractor || !b.workPackage) {
+      res.status(400).json({ error: "subcontractor and workPackage required" });
+      return;
+    }
+    const [wo] = await db.insert(workOrderEstimatesTable).values({
+      projectId: req.params.projectId,
+      l3EstimateId: b.l3EstimateId ?? null,
+      subcontractor: b.subcontractor,
+      workPackage: b.workPackage,
+      status: "draft",
+      notes: b.notes ?? null,
+      createdById: req.user!.id,
+    }).returning();
+    res.status(201).json(serializeWorkOrder(wo));
+  },
+);
+
+router.get(
+  "/work-orders/:woId",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const [wo] = await db.select().from(workOrderEstimatesTable).where(eq(workOrderEstimatesTable.id, req.params.woId));
+    if (!wo) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(serializeWorkOrder(wo));
+  },
+);
+
+router.patch(
+  "/work-orders/:woId",
+  requireAuth,
+  requireRole(...ROLE_GROUPS.OWNER_PM_QS),
+  async (req: Request, res: Response) => {
+    const b = req.body ?? {};
+    const update: Record<string, unknown> = {};
+    for (const k of ["subcontractor", "workPackage", "status", "notes", "l3EstimateId"]) {
+      if (b[k] !== undefined) update[k] = b[k];
+    }
+    const [wo] = await db.update(workOrderEstimatesTable).set(update as any).where(eq(workOrderEstimatesTable.id, req.params.woId)).returning();
+    if (!wo) { res.status(404).json({ error: "Not found" }); return; }
+    res.json(serializeWorkOrder(wo));
+  },
+);
+
+router.get(
+  "/work-orders/:woId/items",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const items = await db
+      .select()
+      .from(workOrderEstimateItemsTable)
+      .where(eq(workOrderEstimateItemsTable.workOrderEstimateId, req.params.woId))
+      .orderBy(asc(workOrderEstimateItemsTable.sortOrder));
+    res.json(items.map(serializeWorkOrderItem));
+  },
+);
+
+router.put(
+  "/work-orders/:woId/items",
+  requireAuth,
+  requireRole(...ROLE_GROUPS.OWNER_PM_QS),
+  async (req: Request, res: Response) => {
+    const items: any[] = Array.isArray(req.body) ? req.body : [];
+    await db.transaction(async (tx) => {
+      await tx.delete(workOrderEstimateItemsTable).where(eq(workOrderEstimateItemsTable.workOrderEstimateId, req.params.woId));
+      if (items.length) {
+        await tx.insert(workOrderEstimateItemsTable).values(
+          items.map((item, i) => ({
+            workOrderEstimateId: req.params.woId,
+            boqItemId: item.boqItemId ?? null,
+            description: item.description,
+            unit: item.unit,
+            quantity: String(n(item.quantity)),
+            boqRate: String(n(item.boqRate)),
+            negotiatedRate: String(n(item.negotiatedRate)),
+            negotiatedAmount: String(n(item.quantity) * n(item.negotiatedRate)),
+            sortOrder: i,
+          })),
+        );
+      }
+      const totalBoq = items.reduce((s, i) => s + n(i.quantity) * n(i.boqRate), 0);
+      const totalNeg = items.reduce((s, i) => s + n(i.quantity) * n(i.negotiatedRate), 0);
+      await tx.update(workOrderEstimatesTable).set({
+        totalBoqAmount: String(totalBoq),
+        totalNegotiatedAmount: String(totalNeg),
+      }).where(eq(workOrderEstimatesTable.id, req.params.woId));
+    });
+    const result = await db
+      .select()
+      .from(workOrderEstimateItemsTable)
+      .where(eq(workOrderEstimateItemsTable.workOrderEstimateId, req.params.woId))
+      .orderBy(asc(workOrderEstimateItemsTable.sortOrder));
+    res.json(result.map(serializeWorkOrderItem));
   },
 );
 

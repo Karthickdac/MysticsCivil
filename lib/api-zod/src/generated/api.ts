@@ -1406,6 +1406,147 @@ export const UpdateVariationOrderResponse = zod.object({
 
 
 /**
+ * @summary Export BOQ items as CSV
+ */
+export const ExportBoqItemsCsvParams = zod.object({
+  "estimateId": zod.coerce.string()
+})
+
+
+export const ListWorkOrdersParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListWorkOrdersResponseItem = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "l3EstimateId": zod.string().nullable(),
+  "subcontractor": zod.string(),
+  "workPackage": zod.string(),
+  "status": zod.string(),
+  "totalBoqAmount": zod.number(),
+  "totalNegotiatedAmount": zod.number(),
+  "notes": zod.string().nullable(),
+  "createdById": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListWorkOrdersResponse = zod.array(ListWorkOrdersResponseItem)
+
+
+export const CreateWorkOrderParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+
+
+
+
+export const CreateWorkOrderBody = zod.object({
+  "subcontractor": zod.string().min(1),
+  "workPackage": zod.string().min(1),
+  "l3EstimateId": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+
+export const GetWorkOrderParams = zod.object({
+  "woId": zod.coerce.string()
+})
+
+export const GetWorkOrderResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "l3EstimateId": zod.string().nullable(),
+  "subcontractor": zod.string(),
+  "workPackage": zod.string(),
+  "status": zod.string(),
+  "totalBoqAmount": zod.number(),
+  "totalNegotiatedAmount": zod.number(),
+  "notes": zod.string().nullable(),
+  "createdById": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const UpdateWorkOrderParams = zod.object({
+  "woId": zod.coerce.string()
+})
+
+export const UpdateWorkOrderBody = zod.object({
+  "subcontractor": zod.string().optional(),
+  "workPackage": zod.string().optional(),
+  "status": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "l3EstimateId": zod.string().optional()
+})
+
+export const UpdateWorkOrderResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "l3EstimateId": zod.string().nullable(),
+  "subcontractor": zod.string(),
+  "workPackage": zod.string(),
+  "status": zod.string(),
+  "totalBoqAmount": zod.number(),
+  "totalNegotiatedAmount": zod.number(),
+  "notes": zod.string().nullable(),
+  "createdById": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const ListWorkOrderItemsParams = zod.object({
+  "woId": zod.coerce.string()
+})
+
+export const ListWorkOrderItemsResponseItem = zod.object({
+  "id": zod.string(),
+  "workOrderEstimateId": zod.string(),
+  "boqItemId": zod.string().nullable(),
+  "description": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "boqRate": zod.number(),
+  "negotiatedRate": zod.number(),
+  "negotiatedAmount": zod.number(),
+  "sortOrder": zod.number()
+})
+export const ListWorkOrderItemsResponse = zod.array(ListWorkOrderItemsResponseItem)
+
+
+export const ReplaceWorkOrderItemsParams = zod.object({
+  "woId": zod.coerce.string()
+})
+
+export const ReplaceWorkOrderItemsBodyItem = zod.object({
+  "boqItemId": zod.string().optional(),
+  "description": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "boqRate": zod.number(),
+  "negotiatedRate": zod.number()
+})
+export const ReplaceWorkOrderItemsBody = zod.array(ReplaceWorkOrderItemsBodyItem)
+
+export const ReplaceWorkOrderItemsResponseItem = zod.object({
+  "id": zod.string(),
+  "workOrderEstimateId": zod.string(),
+  "boqItemId": zod.string().nullable(),
+  "description": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "boqRate": zod.number(),
+  "negotiatedRate": zod.number(),
+  "negotiatedAmount": zod.number(),
+  "sortOrder": zod.number()
+})
+export const ReplaceWorkOrderItemsResponse = zod.array(ReplaceWorkOrderItemsResponseItem)
+
+
+/**
  * @summary Portfolio KPI summary + live project status table
  */
 export const GetPortfolioDashboardResponse = zod.object({

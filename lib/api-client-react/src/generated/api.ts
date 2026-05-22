@@ -74,7 +74,12 @@ import type {
   VariationOrderUpdate,
   WbsActivity,
   WbsActivityInput,
-  WbsActivityUpdate
+  WbsActivityUpdate,
+  WorkOrderEstimate,
+  WorkOrderEstimateItem,
+  WorkOrderInput,
+  WorkOrderItemInput,
+  WorkOrderUpdate
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -4250,6 +4255,494 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdateVariationOrderMutationOptions(options));
+    }
+
+export const getExportBoqItemsCsvUrl = (estimateId: string,) => {
+
+
+
+
+  return `/api/estimates/${estimateId}/boq-items/export`
+}
+
+/**
+ * @summary Export BOQ items as CSV
+ */
+export const exportBoqItemsCsv = async (estimateId: string, options?: RequestInit): Promise<string> => {
+
+  return customFetch<string>(getExportBoqItemsCsvUrl(estimateId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportBoqItemsCsvQueryKey = (estimateId: string,) => {
+    return [
+    `/api/estimates/${estimateId}/boq-items/export`
+    ] as const;
+    }
+
+
+export const getExportBoqItemsCsvQueryOptions = <TData = Awaited<ReturnType<typeof exportBoqItemsCsv>>, TError = ErrorType<unknown>>(estimateId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportBoqItemsCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportBoqItemsCsvQueryKey(estimateId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportBoqItemsCsv>>> = ({ signal }) => exportBoqItemsCsv(estimateId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(estimateId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportBoqItemsCsv>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportBoqItemsCsvQueryResult = NonNullable<Awaited<ReturnType<typeof exportBoqItemsCsv>>>
+export type ExportBoqItemsCsvQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Export BOQ items as CSV
+ */
+
+export function useExportBoqItemsCsv<TData = Awaited<ReturnType<typeof exportBoqItemsCsv>>, TError = ErrorType<unknown>>(
+ estimateId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportBoqItemsCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportBoqItemsCsvQueryOptions(estimateId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListWorkOrdersUrl = (projectId: string,) => {
+
+
+
+
+  return `/api/projects/${projectId}/work-orders`
+}
+
+export const listWorkOrders = async (projectId: string, options?: RequestInit): Promise<WorkOrderEstimate[]> => {
+
+  return customFetch<WorkOrderEstimate[]>(getListWorkOrdersUrl(projectId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListWorkOrdersQueryKey = (projectId: string,) => {
+    return [
+    `/api/projects/${projectId}/work-orders`
+    ] as const;
+    }
+
+
+export const getListWorkOrdersQueryOptions = <TData = Awaited<ReturnType<typeof listWorkOrders>>, TError = ErrorType<unknown>>(projectId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listWorkOrders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListWorkOrdersQueryKey(projectId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWorkOrders>>> = ({ signal }) => listWorkOrders(projectId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(projectId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listWorkOrders>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListWorkOrdersQueryResult = NonNullable<Awaited<ReturnType<typeof listWorkOrders>>>
+export type ListWorkOrdersQueryError = ErrorType<unknown>
+
+
+
+export function useListWorkOrders<TData = Awaited<ReturnType<typeof listWorkOrders>>, TError = ErrorType<unknown>>(
+ projectId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listWorkOrders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListWorkOrdersQueryOptions(projectId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateWorkOrderUrl = (projectId: string,) => {
+
+
+
+
+  return `/api/projects/${projectId}/work-orders`
+}
+
+export const createWorkOrder = async (projectId: string,
+    workOrderInput: WorkOrderInput, options?: RequestInit): Promise<WorkOrderEstimate> => {
+
+  return customFetch<WorkOrderEstimate>(getCreateWorkOrderUrl(projectId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      workOrderInput,)
+  }
+);}
+
+
+
+
+export const getCreateWorkOrderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkOrder>>, TError,{projectId: string;data: BodyType<WorkOrderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createWorkOrder>>, TError,{projectId: string;data: BodyType<WorkOrderInput>}, TContext> => {
+
+const mutationKey = ['createWorkOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createWorkOrder>>, {projectId: string;data: BodyType<WorkOrderInput>}> = (props) => {
+          const {projectId,data} = props ?? {};
+
+          return  createWorkOrder(projectId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateWorkOrderMutationResult = NonNullable<Awaited<ReturnType<typeof createWorkOrder>>>
+    export type CreateWorkOrderMutationBody = BodyType<WorkOrderInput>
+    export type CreateWorkOrderMutationError = ErrorType<unknown>
+
+    export const useCreateWorkOrder = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWorkOrder>>, TError,{projectId: string;data: BodyType<WorkOrderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createWorkOrder>>,
+        TError,
+        {projectId: string;data: BodyType<WorkOrderInput>},
+        TContext
+      > => {
+      return useMutation(getCreateWorkOrderMutationOptions(options));
+    }
+
+export const getGetWorkOrderUrl = (woId: string,) => {
+
+
+
+
+  return `/api/work-orders/${woId}`
+}
+
+export const getWorkOrder = async (woId: string, options?: RequestInit): Promise<WorkOrderEstimate> => {
+
+  return customFetch<WorkOrderEstimate>(getGetWorkOrderUrl(woId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWorkOrderQueryKey = (woId: string,) => {
+    return [
+    `/api/work-orders/${woId}`
+    ] as const;
+    }
+
+
+export const getGetWorkOrderQueryOptions = <TData = Awaited<ReturnType<typeof getWorkOrder>>, TError = ErrorType<unknown>>(woId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWorkOrder>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWorkOrderQueryKey(woId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWorkOrder>>> = ({ signal }) => getWorkOrder(woId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(woId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWorkOrder>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetWorkOrderQueryResult = NonNullable<Awaited<ReturnType<typeof getWorkOrder>>>
+export type GetWorkOrderQueryError = ErrorType<unknown>
+
+
+
+export function useGetWorkOrder<TData = Awaited<ReturnType<typeof getWorkOrder>>, TError = ErrorType<unknown>>(
+ woId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWorkOrder>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetWorkOrderQueryOptions(woId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateWorkOrderUrl = (woId: string,) => {
+
+
+
+
+  return `/api/work-orders/${woId}`
+}
+
+export const updateWorkOrder = async (woId: string,
+    workOrderUpdate: WorkOrderUpdate, options?: RequestInit): Promise<WorkOrderEstimate> => {
+
+  return customFetch<WorkOrderEstimate>(getUpdateWorkOrderUrl(woId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      workOrderUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateWorkOrderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateWorkOrder>>, TError,{woId: string;data: BodyType<WorkOrderUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateWorkOrder>>, TError,{woId: string;data: BodyType<WorkOrderUpdate>}, TContext> => {
+
+const mutationKey = ['updateWorkOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateWorkOrder>>, {woId: string;data: BodyType<WorkOrderUpdate>}> = (props) => {
+          const {woId,data} = props ?? {};
+
+          return  updateWorkOrder(woId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateWorkOrderMutationResult = NonNullable<Awaited<ReturnType<typeof updateWorkOrder>>>
+    export type UpdateWorkOrderMutationBody = BodyType<WorkOrderUpdate>
+    export type UpdateWorkOrderMutationError = ErrorType<unknown>
+
+    export const useUpdateWorkOrder = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateWorkOrder>>, TError,{woId: string;data: BodyType<WorkOrderUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateWorkOrder>>,
+        TError,
+        {woId: string;data: BodyType<WorkOrderUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateWorkOrderMutationOptions(options));
+    }
+
+export const getListWorkOrderItemsUrl = (woId: string,) => {
+
+
+
+
+  return `/api/work-orders/${woId}/items`
+}
+
+export const listWorkOrderItems = async (woId: string, options?: RequestInit): Promise<WorkOrderEstimateItem[]> => {
+
+  return customFetch<WorkOrderEstimateItem[]>(getListWorkOrderItemsUrl(woId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListWorkOrderItemsQueryKey = (woId: string,) => {
+    return [
+    `/api/work-orders/${woId}/items`
+    ] as const;
+    }
+
+
+export const getListWorkOrderItemsQueryOptions = <TData = Awaited<ReturnType<typeof listWorkOrderItems>>, TError = ErrorType<unknown>>(woId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listWorkOrderItems>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListWorkOrderItemsQueryKey(woId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWorkOrderItems>>> = ({ signal }) => listWorkOrderItems(woId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(woId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listWorkOrderItems>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListWorkOrderItemsQueryResult = NonNullable<Awaited<ReturnType<typeof listWorkOrderItems>>>
+export type ListWorkOrderItemsQueryError = ErrorType<unknown>
+
+
+
+export function useListWorkOrderItems<TData = Awaited<ReturnType<typeof listWorkOrderItems>>, TError = ErrorType<unknown>>(
+ woId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listWorkOrderItems>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListWorkOrderItemsQueryOptions(woId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getReplaceWorkOrderItemsUrl = (woId: string,) => {
+
+
+
+
+  return `/api/work-orders/${woId}/items`
+}
+
+export const replaceWorkOrderItems = async (woId: string,
+    workOrderItemInput: WorkOrderItemInput[], options?: RequestInit): Promise<WorkOrderEstimateItem[]> => {
+
+  return customFetch<WorkOrderEstimateItem[]>(getReplaceWorkOrderItemsUrl(woId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      workOrderItemInput,)
+  }
+);}
+
+
+
+
+export const getReplaceWorkOrderItemsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceWorkOrderItems>>, TError,{woId: string;data: BodyType<WorkOrderItemInput[]>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof replaceWorkOrderItems>>, TError,{woId: string;data: BodyType<WorkOrderItemInput[]>}, TContext> => {
+
+const mutationKey = ['replaceWorkOrderItems'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof replaceWorkOrderItems>>, {woId: string;data: BodyType<WorkOrderItemInput[]>}> = (props) => {
+          const {woId,data} = props ?? {};
+
+          return  replaceWorkOrderItems(woId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReplaceWorkOrderItemsMutationResult = NonNullable<Awaited<ReturnType<typeof replaceWorkOrderItems>>>
+    export type ReplaceWorkOrderItemsMutationBody = BodyType<WorkOrderItemInput[]>
+    export type ReplaceWorkOrderItemsMutationError = ErrorType<unknown>
+
+    export const useReplaceWorkOrderItems = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceWorkOrderItems>>, TError,{woId: string;data: BodyType<WorkOrderItemInput[]>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof replaceWorkOrderItems>>,
+        TError,
+        {woId: string;data: BodyType<WorkOrderItemInput[]>},
+        TContext
+      > => {
+      return useMutation(getReplaceWorkOrderItemsMutationOptions(options));
     }
 
 export const getGetPortfolioDashboardUrl = () => {
