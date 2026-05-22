@@ -109,6 +109,23 @@ router.get("/projects/:projectId/attendance", requireAuth, async (req: Request, 
   res.json(rows);
 });
 
+// Geofence: server-authoritative. Default radius 200m around project site.
+const GEOFENCE_RADIUS_METRES = 200;
+function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000, toRad = (d: number) => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+async function computeWithinGeofence(projectId: string, gpsLat: any, gpsLng: any): Promise<boolean> {
+  if (gpsLat == null || gpsLng == null) return false;
+  const [proj] = await db.select({ lat: projectsTable.latitude, lng: projectsTable.longitude })
+    .from(projectsTable).where(eq(projectsTable.id, projectId));
+  if (!proj?.lat || !proj?.lng) return false;
+  const dist = haversineMetres(Number(proj.lat), Number(proj.lng), Number(gpsLat), Number(gpsLng));
+  return dist <= GEOFENCE_RADIUS_METRES;
+}
+
 router.post("/projects/:projectId/attendance", requireAuth, async (req: Request, res: Response) => {
   if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
   const b = req.body ?? {};
@@ -122,13 +139,15 @@ router.post("/projects/:projectId/attendance", requireAuth, async (req: Request,
     hoursWorked = Math.min(totalHours, 9);
     overtimeHours = Math.max(0, totalHours - 9);
   }
+  // Server-authoritative geofence; client-supplied withinGeofence is ignored.
+  const withinGeofence = await computeWithinGeofence(req.params.projectId, b.gpsLat, b.gpsLng);
   const [row] = await db.insert(attendanceRecordsTable).values({
     projectId: req.params.projectId, workerId: b.workerId,
     attendanceDate: new Date(b.attendanceDate),
     markInTime: markIn, markOutTime: markOut,
     gpsLat: b.gpsLat ? String(b.gpsLat) : null,
     gpsLng: b.gpsLng ? String(b.gpsLng) : null,
-    withinGeofence: b.withinGeofence ?? true,
+    withinGeofence,
     hoursWorked: String(Math.round(hoursWorked * 100) / 100),
     overtimeHours: String(Math.round(overtimeHours * 100) / 100),
     remarks: b.remarks ?? null,
@@ -164,13 +183,14 @@ router.post("/projects/:projectId/attendance/bulk", requireAuth, async (req: Req
       hoursWorked = Math.min(totalHours, 9);
       overtimeHours = Math.max(0, totalHours - 9);
     }
+    const withinGeofence = await computeWithinGeofence(req.params.projectId, b.gpsLat, b.gpsLng);
     const [row] = await db.insert(attendanceRecordsTable).values({
       projectId: req.params.projectId, workerId: b.workerId,
       attendanceDate: new Date(b.attendanceDate),
       markInTime: markIn, markOutTime: markOut,
       gpsLat: b.gpsLat ? String(b.gpsLat) : null,
       gpsLng: b.gpsLng ? String(b.gpsLng) : null,
-      withinGeofence: b.withinGeofence ?? true,
+      withinGeofence,
       hoursWorked: String(Math.round(hoursWorked * 100) / 100),
       overtimeHours: String(Math.round(overtimeHours * 100) / 100),
       remarks: b.remarks ?? null,
