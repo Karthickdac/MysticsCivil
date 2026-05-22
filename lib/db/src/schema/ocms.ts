@@ -476,7 +476,8 @@ export type VariationOrder = typeof variationOrdersTable.$inferSelect;
 
 export const BILL_STATUSES = [
   "draft", "submitted", "technical_check", "qs_scrutiny", "pm_certification",
-  "auto_deductions", "gst_invoice", "finance_approval", "payment_released", "closed",
+  "auto_deductions", "gst_invoice", "finance_approval", "ledger_posting",
+  "payment_released", "closed",
 ] as const;
 export type BillStatus = (typeof BILL_STATUSES)[number];
 

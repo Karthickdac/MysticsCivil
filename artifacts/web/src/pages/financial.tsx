@@ -28,6 +28,7 @@ const BILL_STEPS = [
   { key: "auto_deductions",  label: "Auto Deductions",   color: "bg-orange-100 text-orange-700" },
   { key: "gst_invoice",      label: "GST Invoice",       color: "bg-yellow-100 text-yellow-700" },
   { key: "finance_approval", label: "Finance Approval",  color: "bg-purple-100 text-purple-700" },
+  { key: "ledger_posting",   label: "Ledger Posting",    color: "bg-pink-100 text-pink-700" },
   { key: "payment_released", label: "Payment Released",  color: "bg-emerald-100 text-emerald-700" },
   { key: "closed",           label: "Closed",            color: "bg-green-100 text-green-700" },
 ];
