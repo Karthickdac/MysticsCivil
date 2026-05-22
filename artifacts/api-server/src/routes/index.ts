@@ -18,6 +18,7 @@ import variationOrdersRouter from "./variation-orders";
 import financialRouter from "./financial";
 import supplyChainRouter from "./supply-chain";
 import workforceRouter from "./workforce";
+import storageRouter from "./storage";
 
 const router: IRouter = Router();
 
@@ -40,5 +41,6 @@ router.use(variationOrdersRouter);
 router.use(financialRouter);
 router.use(supplyChainRouter);
 router.use(workforceRouter);
+router.use(storageRouter);
 
 export default router;

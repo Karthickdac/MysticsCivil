@@ -206,6 +206,8 @@ export * from './updateInventoryItem200';
 export * from './updateMaterialTest200';
 export * from './updatePurchaseOrder200';
 export * from './updateVendor200';
+export * from './uploadUrlRequest';
+export * from './uploadUrlResponse';
 export * from './userRole';
 export * from './variationOrder';
 export * from './variationOrderInput';
