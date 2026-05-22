@@ -7,8 +7,10 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
-  SidebarItem,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -23,21 +25,46 @@ import {
   Settings,
   HardHat,
   LogOut,
-  FolderOpen,
   BookOpen,
 } from "lucide-react";
 
-function getNavItems(role: string | undefined) {
-  const items = [
-    { titleKey: "nav.dashboard", url: "/", icon: LayoutDashboard, roles: ["owner", "pm", "site_engineer", "qs", "finance", "contractor", "qc", "store", "hr", "admin"] },
-    { titleKey: "nav.projects", url: "/projects", icon: Building2, roles: ["owner", "pm", "site_engineer", "qs", "finance", "contractor", "qc", "store", "hr", "admin"] },
-    { titleKey: "nav.dsrRates", url: "/dsr-rates", icon: BookOpen, roles: ["owner", "pm", "qs", "admin"] },
-    { titleKey: "nav.approvals", url: "/approvals", icon: ClipboardList, roles: ["owner", "pm", "qs", "finance"] },
-    { titleKey: "nav.organisations", url: "/organisations", icon: Users, roles: ["admin"] },
-    { titleKey: "nav.profile", url: "/profile", icon: Settings, roles: ["owner", "pm", "site_engineer", "qs", "finance", "contractor", "qc", "store", "hr", "admin"] },
-  ];
+const ALL_ROLES = ["owner", "pm", "site_engineer", "qs", "finance", "contractor", "qc", "store", "hr", "admin"];
 
-  return items.filter(item => !role || item.roles.includes(role));
+type NavItem = { titleKey: string; url: string; icon: any; roles: string[] };
+type NavGroup = { labelKey: string; items: NavItem[] };
+
+function getNavGroups(role: string | undefined): NavGroup[] {
+  const groups: NavGroup[] = [
+    {
+      labelKey: "nav.group.overview",
+      items: [
+        { titleKey: "nav.dashboard", url: "/", icon: LayoutDashboard, roles: ALL_ROLES },
+      ],
+    },
+    {
+      labelKey: "nav.group.delivery",
+      items: [
+        { titleKey: "nav.projects", url: "/projects", icon: Building2, roles: ALL_ROLES },
+        { titleKey: "nav.approvals", url: "/approvals", icon: ClipboardList, roles: ["owner", "pm", "qs", "finance"] },
+      ],
+    },
+    {
+      labelKey: "nav.group.library",
+      items: [
+        { titleKey: "nav.dsrRates", url: "/dsr-rates", icon: BookOpen, roles: ["owner", "pm", "qs", "admin"] },
+      ],
+    },
+    {
+      labelKey: "nav.group.admin",
+      items: [
+        { titleKey: "nav.organisations", url: "/organisations", icon: Users, roles: ["admin"] },
+        { titleKey: "nav.profile", url: "/profile", icon: Settings, roles: ALL_ROLES },
+      ],
+    },
+  ];
+  return groups
+    .map(g => ({ ...g, items: g.items.filter(i => !role || i.roles.includes(role)) }))
+    .filter(g => g.items.length > 0);
 }
 
 function LangSwitcher() {
@@ -69,7 +96,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { data: profile } = useGetMyProfile();
   const { t } = useT();
 
-  const navItems = getNavItems(profile?.role);
+  const navGroups = getNavGroups(profile?.role);
 
   return (
     <SidebarProvider>
@@ -79,7 +106,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 font-bold text-lg text-primary">
                 <HardHat className="h-6 w-6" />
-                <span>{t("app.name")}</span>
+                <span className="text-left">{t("app.name")}</span>
               </div>
               <LangSwitcher />
             </div>
@@ -91,18 +118,27 @@ export function Layout({ children }: { children: React.ReactNode }) {
             )}
           </SidebarHeader>
           <SidebarContent className="p-2">
-            <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.titleKey}>
-                  <SidebarMenuButton asChild isActive={location === item.url}>
-                    <Link href={item.url} className="flex items-center gap-3">
-                      <item.icon className="h-4 w-4" />
-                      <span>{t(item.titleKey)}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
+            {navGroups.map((group) => (
+              <SidebarGroup key={group.labelKey} data-testid={`nav-group-${group.labelKey}`}>
+                <SidebarGroupLabel className="text-[10px] uppercase tracking-wider text-sidebar-foreground/50">
+                  {t(group.labelKey)}
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {group.items.map((item) => (
+                      <SidebarMenuItem key={item.titleKey}>
+                        <SidebarMenuButton asChild isActive={location === item.url}>
+                          <Link href={item.url} className="flex items-center gap-3">
+                            <item.icon className="h-4 w-4" />
+                            <span>{t(item.titleKey)}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            ))}
           </SidebarContent>
           <SidebarFooter className="p-4 border-t border-sidebar-border">
             <SidebarMenu>

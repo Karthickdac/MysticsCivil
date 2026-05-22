@@ -103,14 +103,40 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      <ProjectTabs id={id} project={project} />
+      <ProjectTabs
+        id={id}
+        project={project}
+        health={health}
+        nextMilestone={nextMilestone}
+        statusColors={statusColors}
+        chartStatusColors={chartStatusColors}
+        activityData={activityData}
+        miniGantt={miniGantt}
+        ganttBounds={ganttBounds}
+        recentPhotos={recentPhotos}
+        pendingActions={pendingActions}
+        cost={cost}
+      />
     </div>
   );
 }
 
 const VALID_PROJECT_TABS = ["dashboard","wbs","milestones","estimation","variation-orders","boq-actual","dprs","photos","documents","issues","financial","supply-chain","workforce"] as const;
 
-function ProjectTabs({ id, project }: { id: string; project: any }) {
+function ProjectTabs({ id, project, health, nextMilestone, statusColors, chartStatusColors, activityData, miniGantt, ganttBounds, recentPhotos, pendingActions, cost }: {
+  id: string;
+  project: any;
+  health: any;
+  nextMilestone: any;
+  statusColors: Record<string, string>;
+  chartStatusColors: Record<string, string>;
+  activityData: Array<{ name: string; value: number; fill: string }>;
+  miniGantt: any[];
+  ganttBounds: { min: number; max: number; span: number } | null;
+  recentPhotos: any[];
+  pendingActions: any;
+  cost: any;
+}) {
   const search = useSearch();
   const readTab = () => {
     const t = new URLSearchParams(search).get("tab");
@@ -241,7 +267,7 @@ function ProjectTabs({ id, project }: { id: string; project: any }) {
                   <div className="text-sm text-muted-foreground text-center py-4">No pending actions.</div>
                 ) : (
                   <div className="space-y-4">
-                    {pendingActions.map(action => (
+                    {pendingActions.map((action: any) => (
                       <div key={action.id} className="flex items-center justify-between p-3 border rounded-lg bg-card hover:bg-muted/50 transition-colors">
                         <div className="flex items-center gap-3">
                           <AlertCircle className={`h-5 w-5 ${action.severity === 'high' || action.severity === 'critical' ? 'text-rose-500' : 'text-amber-500'}`} />

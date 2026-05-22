@@ -15,6 +15,22 @@ const dict: Record<string, { en: string; ta: string }> = {
   "nav.organisations": { en: "Organisations", ta: "நிறுவனங்கள்" },
   "nav.profile": { en: "Profile", ta: "சுயவிவரம்" },
   "nav.logout": { en: "Log out", ta: "வெளியேறு" },
+  "nav.group.overview": { en: "Overview", ta: "மேற்பார்வை" },
+  "nav.group.delivery": { en: "Delivery", ta: "செயல்படுத்தல்" },
+  "nav.group.library": { en: "Library", ta: "தரவகம்" },
+  "nav.group.admin": { en: "Admin", ta: "நிர்வாகம்" },
+  "auth.signIn": { en: "Sign in", ta: "உள்நுழை" },
+  "auth.createAccount": { en: "Create account", ta: "கணக்கு உருவாக்கு" },
+  "auth.email": { en: "Email", ta: "மின்னஞ்சல்" },
+  "auth.password": { en: "Password", ta: "கடவுச்சொல்" },
+  "auth.firstName": { en: "First name", ta: "முதல் பெயர்" },
+  "auth.lastName": { en: "Last name", ta: "கடைசி பெயர்" },
+  "auth.organisationName": { en: "Organisation name", ta: "நிறுவனத்தின் பெயர்" },
+  "auth.passwordHint": { en: "Minimum 8 characters.", ta: "குறைந்தபட்சம் 8 எழுத்துக்கள்." },
+  "auth.signInFailed": { en: "Sign in failed", ta: "உள்நுழைவு தோல்வி" },
+  "auth.registerFailed": { en: "Registration failed", ta: "பதிவு தோல்வி" },
+  "auth.tagline": { en: "Construction Operations Cockpit", ta: "கட்டுமான செயல்பாடு மையம்" },
+  "auth.notice": { en: "Authorized personnel only. Access is logged and monitored.", ta: "அங்கீகரிக்கப்பட்ட நபர்கள் மட்டுமே. அணுகல் பதிவு செய்யப்படுகிறது." },
   "label.language": { en: "Language", ta: "மொழி" },
   "label.english": { en: "English", ta: "ஆங்கிலம்" },
   "label.tamil": { en: "Tamil", ta: "தமிழ்" },
@@ -344,6 +360,44 @@ const phrases: Record<string, string> = {
   "Optional": "விருப்பத்தேர்வு",
   "Choose file": "கோப்பை தேர்வு செய்",
   "Drop file here": "இங்கே கோப்பை விடவும்",
+
+  // Auth / onboarding
+  "Create account": "கணக்கு உருவாக்கு",
+  "First name": "முதல் பெயர்",
+  "Last name": "கடைசி பெயர்",
+  "Organisation name": "நிறுவனத்தின் பெயர்",
+  "Minimum 8 characters.": "குறைந்தபட்சம் 8 எழுத்துக்கள்.",
+  "Sign in failed": "உள்நுழைவு தோல்வி",
+  "Registration failed": "பதிவு தோல்வி",
+  "Please try again": "மீண்டும் முயலவும்",
+  "Construction Operations Cockpit": "கட்டுமான செயல்பாடு மையம்",
+  "Authorized personnel only. Access is logged and monitored.": "அங்கீகரிக்கப்பட்ட நபர்கள் மட்டுமே. அணுகல் பதிவு செய்யப்படுகிறது.",
+
+  // Nav group headers
+  "Delivery": "செயல்படுத்தல்",
+  "Library": "தரவகம்",
+  "Admin": "நிர்வாகம்",
+
+  // Financial workflow steps
+  "Technical Check": "தொழில்நுட்ப சோதனை",
+  "QS Scrutiny": "QS ஆய்வு",
+  "PM Certified": "PM சான்றளிக்கப்பட்டது",
+  "Auto Deductions": "தானியங்கி கழிவுகள்",
+  "GST Invoice": "GST விலைப்பட்டியல்",
+  "Finance Approval": "நிதி அனுமதி",
+  "Payment Released": "பணம் வழங்கப்பட்டது",
+  "Ledger Posting": "பேரேட்டுப் பதிவு",
+
+  // Project dashboard tiles
+  "Project Progress": "திட்ட முன்னேற்றம்",
+  "Activity Status": "செயல்பாட்டு நிலை",
+  "Mini Gantt": "சிறு கான்ட்",
+  "Cost Summary": "செலவு சுருக்கம்",
+  "Recent Photos": "சமீபத்திய புகைப்படங்கள்",
+  "Pending Actions": "நிலுவை செயல்கள்",
+  "Next Milestone": "அடுத்த கட்டம்",
+  "No upcoming milestones.": "வரவிருக்கும் கட்டங்கள் இல்லை.",
+  "No pending actions.": "நிலுவை செயல்கள் இல்லை.",
 };
 
 // ─── DOM text-node translator (runtime) ───────────────────────────────────────

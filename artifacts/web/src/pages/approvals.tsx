@@ -15,7 +15,7 @@ export default function Approvals() {
 
   const handleResolve = (id: string, decision: "approved" | "rejected") => {
     resolveApproval.mutate(
-      { id, data: { decision } },
+      { approvalId: id, data: { decision } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListApprovalsQueryKey() });

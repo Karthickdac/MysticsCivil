@@ -465,7 +465,7 @@ function BoqPanel({ estimate }: { estimate: Estimate }) {
 
   const { data: dsrResults = [] } = useListDsrRates(
     { q: dsrSearch, trade: newRow?.trade },
-    { query: { enabled: dsrSearch.length >= 2 } },
+    { query: { enabled: dsrSearch.length >= 2 } as any },
   );
 
   const startEdit = (item: BoqItem) => {

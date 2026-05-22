@@ -1412,7 +1412,7 @@ function JsaTab({ projectId }: { projectId: string }) {
               <CardContent className="pt-4 space-y-2">
                 <div className="flex justify-between items-start">
                   <div>
-                    <div className="font-medium text-sm">{steps[0]?.activity ?? (j.wbsActivityId ? activityMap[j.wbsActivityId] : null) ?? `JSA — ${steps.length} steps`}</div>
+                    <div className="font-medium text-sm">{j.activity ?? (j.wbsActivityId ? activityMap[j.wbsActivityId] : null) ?? `JSA — ${steps.length} steps`}</div>
                     <div className="text-xs text-muted-foreground">{fmtDate(j.jsaDate ?? j.createdAt)} · <Badge className={statusBadge(j.status)}>{j.status}</Badge></div>
                   </div>
                   <Badge variant="outline">{j.workersPresent ?? 0} workers</Badge>
