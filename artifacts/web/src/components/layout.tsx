@@ -19,38 +19,38 @@ import {
   Menu,
   X,
   ChevronsLeft,
+  ChevronDown,
   HardHat,
-  Wallet,
   ShieldCheck,
 } from "lucide-react";
 
 const ALL_ROLES = ["owner", "pm", "site_engineer", "qs", "finance", "contractor", "qc", "store", "hr", "admin"];
 
 type NavItem = { titleKey: string; url: string; icon: any; roles: string[] };
-type NavGroup = { labelKey: string; items: NavItem[] };
+type NavGroup = { key: string; labelKey: string; items: NavItem[] };
 
+// IA reorder: "what you act on" (Operations) → "money & contracts" (Commercial) → "settings" (Admin).
+// "People" is intentionally omitted — workforce is per-project (lives inside the project detail page).
 function getNavGroups(role: string | undefined): NavGroup[] {
   const groups: NavGroup[] = [
     {
-      labelKey: "nav.group.overview",
+      key: "operations",
+      labelKey: "nav.group.operations",
       items: [
         { titleKey: "nav.dashboard", url: "/", icon: Home, roles: ALL_ROLES },
         { titleKey: "nav.projects", url: "/projects", icon: Building2, roles: ALL_ROLES },
-      ],
-    },
-    {
-      labelKey: "nav.group.delivery",
-      items: [
         { titleKey: "nav.approvals", url: "/approvals", icon: ClipboardList, roles: ["owner", "pm", "qs", "finance"] },
       ],
     },
     {
-      labelKey: "nav.group.library",
+      key: "commercial",
+      labelKey: "nav.group.commercial",
       items: [
         { titleKey: "nav.dsrRates", url: "/dsr-rates", icon: BookOpen, roles: ["owner", "pm", "qs", "admin"] },
       ],
     },
     {
+      key: "admin",
       labelKey: "nav.group.admin",
       items: [
         { titleKey: "nav.organisations", url: "/organisations", icon: Users, roles: ["admin"] },
@@ -61,6 +61,22 @@ function getNavGroups(role: string | undefined): NavGroup[] {
   return groups
     .map((g) => ({ ...g, items: g.items.filter((i) => !role || i.roles.includes(role)) }))
     .filter((g) => g.items.length > 0);
+}
+
+const COLLAPSED_GROUPS_KEY = "mc.sidebar.collapsedGroups";
+function useCollapsedGroups() {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = window.localStorage.getItem(COLLAPSED_GROUPS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify(collapsed)); } catch {}
+  }, [collapsed]);
+  const toggle = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }));
+  return { collapsed, toggle };
 }
 
 // ─── Dark-mode hook (persisted) ──────────────────────────────────────────────
@@ -144,6 +160,7 @@ function Sidebar({
   mobile?: boolean;
 }) {
   const [location] = useLocation();
+  const { collapsed: collapsedGroups, toggle: toggleGroup } = useCollapsedGroups();
   return (
     <aside
       className={`
@@ -164,42 +181,62 @@ function Sidebar({
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
-        {groups.map((group) => (
-          <div key={group.labelKey}>
-            {(!collapsed || mobile) && (
-              <div className="px-2 mb-2 text-[10px] uppercase tracking-wider font-bold text-muted-foreground/70">
-                {t(group.labelKey)}
-              </div>
-            )}
-            <ul className="space-y-1">
-              {group.items.map((item) => {
-                const isActive = location === item.url || (item.url !== "/" && location.startsWith(item.url));
-                return (
-                  <li key={item.titleKey}>
-                    <Link
-                      href={item.url}
-                      onClick={onClose}
-                      className={`group relative flex items-center gap-3 rounded-xl text-sm font-semibold transition-all no-underline ${
-                        collapsed && !mobile ? "px-0 py-2.5 justify-center" : "px-3 py-2.5"
-                      } ${
-                        isActive
-                          ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/25"
-                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                      }`}
-                      title={collapsed && !mobile ? t(item.titleKey) : undefined}
-                      data-testid={`nav-${item.titleKey}`}
-                    >
-                      <item.icon className={`h-[18px] w-[18px] flex-shrink-0 ${isActive ? "text-white" : ""}`} />
-                      {(!collapsed || mobile) && <span className="truncate">{t(item.titleKey)}</span>}
-                      {isActive && (!collapsed || mobile) && <span className="ml-auto h-2 w-2 rounded-full bg-white/70" />}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-4">
+        {groups.map((group) => {
+          const showHeader = !collapsed || mobile;
+          const isFolded = showHeader && !!collapsedGroups[group.key];
+          // Any active item inside this group keeps the group expanded visually even if user collapsed it
+          const hasActiveItem = group.items.some(
+            (i) => location === i.url || (i.url !== "/" && location.startsWith(i.url)),
+          );
+          const expanded = !isFolded || hasActiveItem;
+          return (
+            <div key={group.key}>
+              {showHeader && (
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.key)}
+                  className="w-full flex items-center justify-between px-2 mb-1.5 text-[10px] uppercase tracking-wider font-bold text-muted-foreground/70 hover:text-foreground transition group"
+                  aria-expanded={expanded}
+                  data-testid={`nav-group-${group.key}`}
+                >
+                  <span>{t(group.labelKey)}</span>
+                  <ChevronDown
+                    className={`h-3 w-3 transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`}
+                  />
+                </button>
+              )}
+              {expanded && (
+                <ul className="space-y-1">
+                  {group.items.map((item) => {
+                    const isActive = location === item.url || (item.url !== "/" && location.startsWith(item.url));
+                    return (
+                      <li key={item.titleKey}>
+                        <Link
+                          href={item.url}
+                          onClick={onClose}
+                          className={`group relative flex items-center gap-3 rounded-xl text-sm font-semibold transition-all no-underline ${
+                            collapsed && !mobile ? "px-0 py-2.5 justify-center" : "px-3 py-2.5"
+                          } ${
+                            isActive
+                              ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/25"
+                              : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                          }`}
+                          title={collapsed && !mobile ? t(item.titleKey) : undefined}
+                          data-testid={`nav-${item.titleKey}`}
+                        >
+                          <item.icon className={`h-[18px] w-[18px] flex-shrink-0 ${isActive ? "text-white" : ""}`} />
+                          {(!collapsed || mobile) && <span className="truncate">{t(item.titleKey)}</span>}
+                          {isActive && (!collapsed || mobile) && <span className="ml-auto h-2 w-2 rounded-full bg-white/70" />}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
       {/* Footer card */}
