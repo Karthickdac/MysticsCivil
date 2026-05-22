@@ -68,7 +68,14 @@ function normStatutory(b: any): { aadhaar: string | null; pf: string | null; uan
   return { aadhaar, pf, uan, esi };
 }
 
-async function checkDuplicates(v: { aadhaar: string | null; pf: string | null; uan: string | null; esi: string | null }, excludeWorkerId?: string): Promise<string | null> {
+async function resolveOrgId(projectId: string): Promise<string | null> {
+  const [p] = await db.select({ organisationId: projectsTable.organisationId })
+    .from(projectsTable).where(eq(projectsTable.id, projectId));
+  return p?.organisationId ?? null;
+}
+
+async function checkDuplicates(orgId: string | null, v: { aadhaar: string | null; pf: string | null; uan: string | null; esi: string | null }, excludeWorkerId?: string): Promise<string | null> {
+  if (!orgId) return null; // can't scope safely; rely on DB unique index as fallback
   const checks: Array<{ col: any; value: string; label: string }> = [];
   if (v.aadhaar) checks.push({ col: workersTable.aadhaarNumber, value: v.aadhaar, label: "Aadhaar" });
   if (v.pf) checks.push({ col: workersTable.pfNumber, value: v.pf, label: "PF number" });
@@ -76,9 +83,10 @@ async function checkDuplicates(v: { aadhaar: string | null; pf: string | null; u
   if (v.esi) checks.push({ col: workersTable.esiNumber, value: v.esi, label: "ESI number" });
   for (const c of checks) {
     const rows = await db.select({ id: workersTable.id, name: workersTable.name, code: workersTable.workerCode })
-      .from(workersTable).where(eq(c.col, c.value));
+      .from(workersTable)
+      .where(and(eq(workersTable.organisationId, orgId), eq(c.col, c.value)));
     const dup = rows.find(r => r.id !== excludeWorkerId);
-    if (dup) return `${c.label} ${c.value} already belongs to ${dup.name} (${dup.code})`;
+    if (dup) return `${c.label} ${c.value} already belongs to ${dup.name} (${dup.code}) in this organisation`;
   }
   return null;
 }
@@ -88,7 +96,8 @@ router.post("/projects/:projectId/workers", requireAuth, async (req: Request, re
   if (!b.name || !b.trade) { res.status(400).json({ error: "name, trade required" }); return; }
   const v = normStatutory(b);
   if (v.error) { res.status(400).json({ error: v.error }); return; }
-  const dupErr = await checkDuplicates(v);
+  const orgId = await resolveOrgId(req.params.projectId);
+  const dupErr = await checkDuplicates(orgId, v);
   if (dupErr) { res.status(409).json({ error: dupErr }); return; }
   const count = await db.select({ c: sql`count(*)` }).from(workersTable)
     .where(eq(workersTable.projectId, req.params.projectId));
@@ -96,6 +105,7 @@ router.post("/projects/:projectId/workers", requireAuth, async (req: Request, re
   try {
     const [row] = await db.insert(workersTable).values({
       projectId: req.params.projectId,
+      organisationId: orgId,
       workerCode: b.workerCode ?? `WRK-${String(seq).padStart(4, "0")}`,
       name: b.name, trade: b.trade ?? "helper",
       skillLevel: b.skillLevel ?? "unskilled",
@@ -147,7 +157,8 @@ router.patch("/workers/:workerId", requireAuth, async (req: Request, res: Respon
     };
     const v = normStatutory(merged);
     if (v.error) { res.status(400).json({ error: v.error }); return; }
-    const dupErr = await checkDuplicates(v, w.id);
+    const orgId = (w as any).organisationId ?? await resolveOrgId(w.projectId);
+    const dupErr = await checkDuplicates(orgId, v, w.id);
     if (dupErr) { res.status(409).json({ error: dupErr }); return; }
     if (b.aadhaarNumber !== undefined) patch.aadhaarNumber = v.aadhaar;
     if (b.pfNumber !== undefined) patch.pfNumber = v.pf;

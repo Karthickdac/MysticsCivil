@@ -1126,6 +1126,7 @@ export const WORKER_STATUSES = ["active","inactive","terminated"] as const;
 export const workersTable = pgTable("workers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  organisationId: varchar("organisation_id").references(() => organisationsTable.id, { onDelete: "cascade" }),
   contractorId: varchar("contractor_id").references(() => vendorsTable.id, { onDelete: "set null" }),
   workerCode: varchar("worker_code", { length: 32 }).notNull(),
   name: varchar("name", { length: 128 }).notNull(),
@@ -1150,10 +1151,10 @@ export const workersTable = pgTable("workers", {
   registeredById: varchar("registered_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
-  uniqAadhaar: uniqueIndex("workers_aadhaar_uq").on(t.aadhaarNumber).where(sql`${t.aadhaarNumber} IS NOT NULL`),
-  uniqPf: uniqueIndex("workers_pf_uq").on(t.pfNumber).where(sql`${t.pfNumber} IS NOT NULL`),
-  uniqUan: uniqueIndex("workers_uan_uq").on(t.uan).where(sql`${t.uan} IS NOT NULL`),
-  uniqEsi: uniqueIndex("workers_esi_uq").on(t.esiNumber).where(sql`${t.esiNumber} IS NOT NULL`),
+  uniqAadhaar: uniqueIndex("workers_org_aadhaar_uq").on(t.organisationId, t.aadhaarNumber).where(sql`${t.aadhaarNumber} IS NOT NULL AND ${t.organisationId} IS NOT NULL`),
+  uniqPf: uniqueIndex("workers_org_pf_uq").on(t.organisationId, t.pfNumber).where(sql`${t.pfNumber} IS NOT NULL AND ${t.organisationId} IS NOT NULL`),
+  uniqUan: uniqueIndex("workers_org_uan_uq").on(t.organisationId, t.uan).where(sql`${t.uan} IS NOT NULL AND ${t.organisationId} IS NOT NULL`),
+  uniqEsi: uniqueIndex("workers_org_esi_uq").on(t.organisationId, t.esiNumber).where(sql`${t.esiNumber} IS NOT NULL AND ${t.organisationId} IS NOT NULL`),
 }));
 export type Worker = typeof workersTable.$inferSelect;
 
