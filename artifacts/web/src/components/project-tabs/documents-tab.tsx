@@ -297,13 +297,13 @@ export function DocumentsTab({ projectId }: { projectId: string }) {
         ) : (
           <div className="divide-y">
             {data.map((d) => (
-              <div key={d.id} className="flex items-center gap-3 py-3" data-testid={`document-row-${d.id}`}>
+              <div key={d.id} className="flex items-center gap-3 py-3 min-w-0" data-testid={`document-row-${d.id}`}>
                 <div className="h-9 w-9 rounded bg-muted text-muted-foreground flex items-center justify-center text-[10px] font-bold flex-shrink-0">
                   {fileIconLabel(d.name)}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{d.name}</div>
-                  <div className="text-xs text-muted-foreground">
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <div className="font-medium truncate" title={d.name}>{d.name}</div>
+                  <div className="text-xs text-muted-foreground truncate">
                     {d.category} · v{d.version} · {formatDate(d.createdAt)}
                   </div>
                 </div>
@@ -311,7 +311,7 @@ export function DocumentsTab({ projectId }: { projectId: string }) {
                   href={d.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-primary hover:underline text-sm flex items-center gap-1"
+                  className="text-primary hover:underline text-sm flex items-center gap-1 flex-shrink-0"
                   data-testid={`document-open-${d.id}`}
                 >
                   Open <ExternalLink className="h-3 w-3" />
@@ -321,7 +321,7 @@ export function DocumentsTab({ projectId }: { projectId: string }) {
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="text-muted-foreground hover:text-rose-600"
+                      className="text-muted-foreground hover:text-rose-600 flex-shrink-0"
                       data-testid={`document-delete-${d.id}`}
                       aria-label="Delete document"
                     >
