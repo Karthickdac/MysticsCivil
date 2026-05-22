@@ -445,11 +445,41 @@ router.get("/ncrs/:ncrId", requireAuth, async (req: Request, res: Response) => {
   res.json({ ...ncr, actions });
 });
 
+// NCR finite-state machine. Status may only transition along this graph;
+// requesting any other status via PATCH returns 409 Conflict.
+const NCR_TRANSITIONS: Record<string, string[]> = {
+  open: ["capa_submitted"],
+  capa_submitted: ["re_inspection"],
+  re_inspection: ["closed", "capa_submitted"],
+  closed: [],
+};
+
 router.patch("/ncrs/:ncrId", requireAuth, async (req: Request, res: Response) => {
   const b = req.body ?? {};
   const [ncr] = await db.select().from(ncrsTable).where(eq(ncrsTable.id, req.params.ncrId));
   if (!ncr) { res.status(404).json({ error: "Not found" }); return; }
   if (await denyIfNoProjectAccess(req, res, ncr.projectId)) return;
+
+  // Enforce FSM if caller is changing status
+  if (b.status !== undefined && b.status !== ncr.status) {
+    const allowed = NCR_TRANSITIONS[ncr.status] ?? [];
+    if (!allowed.includes(b.status)) {
+      res.status(409).json({
+        error: `Invalid NCR status transition: ${ncr.status} → ${b.status}`,
+        currentStatus: ncr.status, allowedNext: allowed,
+      });
+      return;
+    }
+    // Closing requires at least one CAPA action recorded
+    if (b.status === "closed") {
+      const [{ c }] = await db.select({ c: sql<number>`count(*)::int` }).from(ncrActionsTable).where(eq(ncrActionsTable.ncrId, ncr.id));
+      if (Number(c ?? 0) === 0) {
+        res.status(409).json({ error: "Cannot close NCR without at least one CAPA action" });
+        return;
+      }
+    }
+  }
+
   const patch: Record<string, any> = {};
   const fields = ["status","severity","rootCause","reworkCost"];
   for (const f of fields) if (b[f] !== undefined) patch[f] = b[f];

@@ -695,7 +695,6 @@ function NcrTab({ projectId }: { projectId: string }) {
                 <div className="text-sm font-medium mt-1 line-clamp-2">{n.description}</div>
                 <div className="flex justify-between items-center mt-1">
                   <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadge(n.status)}`}>{n.status.replace(/_/g," ")}</span>
-                  {n.status !== "closed" && <Button size="sm" variant="ghost" onClick={e => { e.stopPropagation(); patchNcr.mutate({ id: n.id, body: { status: "closed" } }); }}>Close</Button>}
                 </div>
               </CardContent>
             </Card>
