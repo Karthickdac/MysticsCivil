@@ -1,15 +1,13 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 export type Lang = "en" | "ta";
 
 const STORAGE_KEY = "ocms.lang";
 
+// ─── Keyed dictionary (used via t("key")) ─────────────────────────────────────
 const dict: Record<string, { en: string; ta: string }> = {
-  // Brand / app
   "app.name": { en: "Kattida Core", ta: "கட்டிட கோர்" },
   "app.tagline": { en: "Construction Management", ta: "கட்டுமான மேலாண்மை" },
-
-  // Sidebar navigation
   "nav.dashboard": { en: "Dashboard", ta: "முதன்மை பலகை" },
   "nav.projects": { en: "Projects", ta: "திட்டங்கள்" },
   "nav.dsrRates": { en: "DSR Rates", ta: "DSR விலைகள்" },
@@ -17,76 +15,402 @@ const dict: Record<string, { en: string; ta: string }> = {
   "nav.organisations": { en: "Organisations", ta: "நிறுவனங்கள்" },
   "nav.profile": { en: "Profile", ta: "சுயவிவரம்" },
   "nav.logout": { en: "Log out", ta: "வெளியேறு" },
-
-  // Module / page titles
-  "page.workforce": { en: "Workforce, Quality & Safety", ta: "தொழிலாளர், தரம் மற்றும் பாதுகாப்பு" },
-  "page.financial": { en: "Financial", ta: "நிதி" },
-  "page.supplyChain": { en: "Supply Chain", ta: "பொருள் வழங்கல்" },
-  "page.estimation": { en: "Estimation", ta: "மதிப்பீடு" },
-  "page.dpr": { en: "Daily Progress Report", ta: "தினசரி முன்னேற்ற அறிக்கை" },
-  "page.boqVsActual": { en: "BOQ vs Actual", ta: "மதிப்பீடு vs உண்மை" },
-  "page.variationOrders": { en: "Variation Orders", ta: "மாற்ற ஆணைகள்" },
-
-  // Common workforce tabs
-  "tab.workers": { en: "Workers", ta: "தொழிலாளர்கள்" },
-  "tab.attendance": { en: "Attendance", ta: "வருகை" },
-  "tab.payroll": { en: "Payroll", ta: "ஊதியம்" },
-  "tab.inspections": { en: "Inspections", ta: "ஆய்வுகள்" },
-  "tab.ncr": { en: "NCRs", ta: "தர குறைபாடுகள்" },
-  "tab.safety": { en: "Safety", ta: "பாதுகாப்பு" },
-  "tab.incidents": { en: "Incidents", ta: "சம்பவங்கள்" },
-  "tab.jsa": { en: "JSA", ta: "வேலை பாதுகாப்பு பகுப்பாய்வு" },
-  "tab.materialTesting": { en: "Material Testing", ta: "பொருள் சோதனை" },
-  "tab.statutory": { en: "Statutory", ta: "சட்டப்படியான" },
-  "tab.contractorBills": { en: "Contractor Bills", ta: "ஒப்பந்ததாரர் பில்கள்" },
-
-  // Financial tabs
-  "tab.bills": { en: "Contractor Bills", ta: "ஒப்பந்ததாரர் பில்கள்" },
-  "tab.clientBilling": { en: "Client Billing", ta: "வாடிக்கையாளர் பில்" },
-  "tab.ledger": { en: "Ledger", ta: "பேரேடு" },
-  "tab.reports": { en: "Reports", ta: "அறிக்கைகள்" },
-  "tab.analytics": { en: "Analytics", ta: "பகுப்பாய்வு" },
-  "tab.deductions": { en: "Deductions", ta: "கழிவுகள்" },
-
-  // Common buttons
-  "btn.save": { en: "Save", ta: "சேமி" },
-  "btn.cancel": { en: "Cancel", ta: "ரத்து" },
-  "btn.add": { en: "Add", ta: "சேர்" },
-  "btn.edit": { en: "Edit", ta: "திருத்து" },
-  "btn.delete": { en: "Delete", ta: "நீக்கு" },
-  "btn.approve": { en: "Approve", ta: "ஒப்புதல்" },
-  "btn.reject": { en: "Reject", ta: "நிராகரி" },
-  "btn.submit": { en: "Submit", ta: "சமர்ப்பி" },
-  "btn.close": { en: "Close", ta: "மூடு" },
-  "btn.export": { en: "Export", ta: "ஏற்றுமதி" },
-  "btn.download": { en: "Download", ta: "பதிவிறக்கம்" },
-  "btn.search": { en: "Search", ta: "தேடு" },
-  "btn.filter": { en: "Filter", ta: "வடிகட்டி" },
-  "btn.view": { en: "View", ta: "பார்" },
-  "btn.new": { en: "New", ta: "புதிய" },
-
-  // Status labels
-  "status.pending": { en: "Pending", ta: "நிலுவையில்" },
-  "status.approved": { en: "Approved", ta: "அங்கீகரிக்கப்பட்டது" },
-  "status.rejected": { en: "Rejected", ta: "நிராகரிக்கப்பட்டது" },
-  "status.draft": { en: "Draft", ta: "வரைவு" },
-  "status.active": { en: "Active", ta: "செயலில்" },
-  "status.closed": { en: "Closed", ta: "மூடப்பட்டது" },
-  "status.open": { en: "Open", ta: "திறந்த" },
-
-  // Common labels
   "label.language": { en: "Language", ta: "மொழி" },
   "label.english": { en: "English", ta: "ஆங்கிலம்" },
   "label.tamil": { en: "Tamil", ta: "தமிழ்" },
-  "label.role": { en: "Role", ta: "பங்கு" },
-  "label.name": { en: "Name", ta: "பெயர்" },
-  "label.date": { en: "Date", ta: "தேதி" },
-  "label.amount": { en: "Amount", ta: "தொகை" },
-  "label.total": { en: "Total", ta: "மொத்தம்" },
-  "label.notes": { en: "Notes", ta: "குறிப்புகள்" },
-  "label.actions": { en: "Actions", ta: "செயல்கள்" },
-  "label.loading": { en: "Loading…", ta: "ஏற்றுகிறது…" },
 };
+
+// ─── Phrase dictionary (used by DOM text-node translator) ─────────────────────
+// Keys are English text exactly as it appears on screen (after .trim()).
+// Anything not in this map stays in English as a safety fallback.
+const phrases: Record<string, string> = {
+  // Generic / chrome
+  "Dashboard": "முதன்மை பலகை",
+  "Projects": "திட்டங்கள்",
+  "Project": "திட்டம்",
+  "DSR Rates": "DSR விலைகள்",
+  "Approvals": "ஒப்புதல்கள்",
+  "Organisations": "நிறுவனங்கள்",
+  "Organisation": "நிறுவனம்",
+  "Profile": "சுயவிவரம்",
+  "Log out": "வெளியேறு",
+  "Logout": "வெளியேறு",
+  "Login": "உள்நுழை",
+  "Loading…": "ஏற்றுகிறது…",
+  "Loading...": "ஏற்றுகிறது…",
+  "Loading": "ஏற்றுகிறது",
+  "Sign in": "உள்நுழை",
+  "Sign out": "வெளியேறு",
+  "Welcome": "வரவேற்கிறோம்",
+  "Welcome back": "மீண்டும் வரவேற்கிறோம்",
+  "Home": "முகப்பு",
+  "Back": "பின்செல்",
+  "Next": "அடுத்து",
+  "Previous": "முந்தைய",
+  "Continue": "தொடரு",
+  "More": "மேலும்",
+  "Less": "குறைவாக",
+  "Show": "காட்டு",
+  "Hide": "மறை",
+  "Yes": "ஆம்",
+  "No": "இல்லை",
+  "OK": "சரி",
+  "All": "அனைத்தும்",
+  "None": "எதுவும் இல்லை",
+  "Select": "தேர்வு செய்",
+  "Select all": "அனைத்தையும் தேர்வு செய்",
+  "Search": "தேடு",
+  "Filter": "வடிகட்டி",
+  "Filters": "வடிகட்டிகள்",
+  "Sort": "வரிசைப்படுத்து",
+  "Refresh": "புதுப்பி",
+  "Reset": "மீட்டமை",
+  "Clear": "அழி",
+  "Apply": "பயன்படுத்து",
+  "Update": "புதுப்பி",
+  "Create": "உருவாக்கு",
+  "Add": "சேர்",
+  "New": "புதிய",
+  "Edit": "திருத்து",
+  "Save": "சேமி",
+  "Cancel": "ரத்து செய்",
+  "Delete": "நீக்கு",
+  "Remove": "அகற்று",
+  "Submit": "சமர்ப்பி",
+  "Approve": "ஒப்புதல் அளி",
+  "Reject": "நிராகரி",
+  "Close": "மூடு",
+  "Open": "திற",
+  "View": "பார்",
+  "Details": "விவரங்கள்",
+  "Export": "ஏற்றுமதி",
+  "Download": "பதிவிறக்கம்",
+  "Upload": "பதிவேற்று",
+  "Print": "அச்சிடு",
+  "Settings": "அமைப்புகள்",
+  "Help": "உதவி",
+  "Actions": "செயல்கள்",
+  "Action": "செயல்",
+  "Status": "நிலை",
+  "Type": "வகை",
+  "Date": "தேதி",
+  "Time": "நேரம்",
+  "From": "தொடக்கம்",
+  "To": "முடிவு",
+  "Name": "பெயர்",
+  "Code": "குறியீடு",
+  "Description": "விளக்கம்",
+  "Notes": "குறிப்புகள்",
+  "Note": "குறிப்பு",
+  "Remarks": "கருத்துகள்",
+  "Comments": "கருத்துகள்",
+  "Reason": "காரணம்",
+  "Total": "மொத்தம்",
+  "Subtotal": "கூட்டுத்தொகை",
+  "Amount": "தொகை",
+  "Quantity": "அளவு",
+  "Rate": "விலை",
+  "Unit": "அலகு",
+  "Price": "விலை",
+  "Cost": "செலவு",
+  "Value": "மதிப்பு",
+  "Percent": "சதவீதம்",
+  "Percentage": "சதவீதம்",
+  "Role": "பங்கு",
+  "Email": "மின்னஞ்சல்",
+  "Phone": "தொலைபேசி",
+  "Address": "முகவரி",
+  "City": "நகரம்",
+  "State": "மாநிலம்",
+  "Country": "நாடு",
+  "PIN": "PIN",
+  "Created": "உருவாக்கப்பட்டது",
+  "Created at": "உருவாக்கிய நேரம்",
+  "Updated": "புதுப்பிக்கப்பட்டது",
+  "Updated at": "புதுப்பிக்கப்பட்ட நேரம்",
+
+  // Status / lifecycle
+  "Pending": "நிலுவையில்",
+  "Approved": "அங்கீகரிக்கப்பட்டது",
+  "Rejected": "நிராகரிக்கப்பட்டது",
+  "Draft": "வரைவு",
+  "Active": "செயலில்",
+  "Inactive": "செயலற்ற",
+  "Closed": "மூடப்பட்டது",
+  "Completed": "முடிக்கப்பட்டது",
+  "In Progress": "செயல்பாட்டில்",
+  "In progress": "செயல்பாட்டில்",
+  "Not Started": "தொடங்கவில்லை",
+  "Not started": "தொடங்கவில்லை",
+  "On Hold": "நிறுத்தப்பட்டது",
+  "On hold": "நிறுத்தப்பட்டது",
+  "Submitted": "சமர்ப்பிக்கப்பட்டது",
+  "Verified": "சரிபார்க்கப்பட்டது",
+  "Paid": "செலுத்தப்பட்டது",
+  "Unpaid": "செலுத்தப்படாத",
+  "Cancelled": "ரத்து செய்யப்பட்டது",
+  "Failed": "தோல்வி",
+  "Success": "வெற்றி",
+  "Error": "பிழை",
+  "Warning": "எச்சரிக்கை",
+  "Info": "தகவல்",
+
+  // Projects
+  "All Projects": "அனைத்து திட்டங்கள்",
+  "New Project": "புதிய திட்டம்",
+  "Project Name": "திட்டத்தின் பெயர்",
+  "Project Code": "திட்ட குறியீடு",
+  "Client": "வாடிக்கையாளர்",
+  "Client Name": "வாடிக்கையாளர் பெயர்",
+  "Location": "இடம்",
+  "Start Date": "தொடக்க தேதி",
+  "End Date": "முடிவு தேதி",
+  "Target End Date": "இலக்கு முடிவு தேதி",
+  "Contract Value": "ஒப்பந்த மதிப்பு",
+  "Progress": "முன்னேற்றம்",
+  "Planned": "திட்டமிடப்பட்டது",
+  "Actual": "உண்மை",
+  "Forecast": "கணிப்பு",
+  "Overview": "மேற்பார்வை",
+  "Summary": "சுருக்கம்",
+
+  // Workforce / Quality / Safety
+  "Workforce": "தொழிலாளர்",
+  "Workforce, Quality & Safety": "தொழிலாளர், தரம் மற்றும் பாதுகாப்பு",
+  "Quality": "தரம்",
+  "Safety": "பாதுகாப்பு",
+  "Workers": "தொழிலாளர்கள்",
+  "Worker": "தொழிலாளர்",
+  "Worker Name": "தொழிலாளர் பெயர்",
+  "Attendance": "வருகை",
+  "Mark In": "வரவு பதிவு",
+  "Mark Out": "வெளியேற்ற பதிவு",
+  "Hours Worked": "வேலை மணி",
+  "Overtime": "கூடுதல் நேரம்",
+  "Overtime Hours": "கூடுதல் நேர மணி",
+  "OT": "OT",
+  "Approve OT": "OT ஒப்புதல்",
+  "Payroll": "ஊதியம்",
+  "Payroll Period": "ஊதிய காலம்",
+  "Wage": "கூலி",
+  "Wages": "கூலிகள்",
+  "Wage Slip": "ஊதிய ரசீது",
+  "Daily Rate": "தினசரி விலை",
+  "Mandays": "மனிதநாட்கள்",
+  "Headcount": "தொழிலாளர் எண்ணிக்கை",
+  "Trade": "தொழில்",
+  "Skill": "திறன்",
+  "Contractor": "ஒப்பந்ததாரர்",
+  "Contractors": "ஒப்பந்ததாரர்கள்",
+  "Contractor Bills": "ஒப்பந்ததாரர் பில்கள்",
+  "Contractor Bill": "ஒப்பந்ததாரர் பில்",
+  "Bill": "பில்",
+  "Bills": "பில்கள்",
+  "Inspections": "ஆய்வுகள்",
+  "Inspection": "ஆய்வு",
+  "Record Result": "முடிவு பதிவு",
+  "Checklist": "சரிபார்ப்பு பட்டியல்",
+  "Passed": "தேர்ச்சி",
+  "Conditional": "நிபந்தனையுடன்",
+  "NCR": "NCR",
+  "NCRs": "தர குறைபாடுகள்",
+  "Non-Conformance": "தர குறைபாடு",
+  "Severity": "தீவிரம்",
+  "Critical": "முக்கியமான",
+  "Major": "பெரிய",
+  "Minor": "சிறிய",
+  "Root Cause": "மூல காரணம்",
+  "Rework Cost": "மறுவேலை செலவு",
+  "CAPA": "CAPA",
+  "Add CAPA": "CAPA சேர்",
+  "Re-Inspection": "மறு ஆய்வு",
+  "Mark Re-Inspection": "மறு ஆய்வு பதிவு",
+  "Verify & Close NCR": "சரிபார்த்து மூடு",
+  "Verify & Close": "சரிபார்த்து மூடு",
+  "Rework": "மறுவேலை",
+  "JSA": "JSA",
+  "Job Safety Analysis": "வேலை பாதுகாப்பு பகுப்பாய்வு",
+  "Activity": "செயல்பாடு",
+  "Hazards": "ஆபத்துகள்",
+  "Controls": "கட்டுப்பாடுகள்",
+  "PPE": "PPE",
+  "Workers Present": "ஆஜர் தொழிலாளர்கள்",
+  "Steps": "படிகள்",
+  "Step": "படி",
+  "Material Testing": "பொருள் சோதனை",
+  "Test": "சோதனை",
+  "Tests": "சோதனைகள்",
+  "Sample": "மாதிரி",
+  "Result": "முடிவு",
+  "Statutory": "சட்டப்படியான",
+  "EPF": "EPF",
+  "ESI": "ESI",
+  "TDS": "TDS",
+  "PF": "PF",
+  "Incidents": "சம்பவங்கள்",
+  "Incident": "சம்பவம்",
+  "Permits": "அனுமதிகள்",
+  "Permit": "அனுமதி",
+  "Toolbox Talks": "பாதுகாப்பு கூட்டங்கள்",
+  "Toolbox Talk": "பாதுகாப்பு கூட்டம்",
+
+  // Financial
+  "Financial": "நிதி",
+  "Client Billing": "வாடிக்கையாளர் பில்",
+  "Client Invoice": "வாடிக்கையாளர் விலைப்பட்டியல்",
+  "Client Invoices": "வாடிக்கையாளர் விலைப்பட்டியல்கள்",
+  "Invoice": "விலைப்பட்டியல்",
+  "Invoices": "விலைப்பட்டியல்கள்",
+  "Ledger": "பேரேடு",
+  "Ledger Account": "பேரேட்டுக் கணக்கு",
+  "Ledger Accounts": "பேரேட்டுக் கணக்குகள்",
+  "Reports": "அறிக்கைகள்",
+  "Report": "அறிக்கை",
+  "Analytics": "பகுப்பாய்வு",
+  "Deductions": "கழிவுகள்",
+  "Deduction": "கழிவு",
+  "Retention": "தடுப்பு",
+  "Advance": "முன்பணம்",
+  "Advances": "முன்பணங்கள்",
+  "Payment": "பணம் செலுத்துதல்",
+  "Payments": "பணம் செலுத்துதல்கள்",
+  "Payment Voucher": "பண செலுத்து சீட்டு",
+  "Payment Vouchers": "பண செலுத்து சீட்டுகள்",
+  "Voucher": "சீட்டு",
+  "Vouchers": "சீட்டுகள்",
+  "UTR": "UTR",
+  "GST": "GST",
+  "GSTIN": "GSTIN",
+  "Tax": "வரி",
+  "Taxable": "வரிக்குரிய",
+  "Tax Amount": "வரி தொகை",
+  "Net Amount": "நிகர தொகை",
+  "Gross Amount": "மொத்த தொகை",
+  "Balance": "மீதம்",
+  "Opening Balance": "தொடக்க மீதம்",
+  "Closing Balance": "முடிவு மீதம்",
+  "Debit": "பற்று",
+  "Credit": "வரவு",
+  "RA Bill": "RA பில்",
+  "RA Bills": "RA பில்கள்",
+  "Running Account Bill": "ரன்னிங் கணக்கு பில்",
+  "Stage": "கட்டம்",
+  "Verified Amount": "சரிபார்க்கப்பட்ட தொகை",
+  "Claimed Amount": "கோரப்பட்ட தொகை",
+  "Discrepancy": "வேறுபாடு",
+  "Discrepancies": "வேறுபாடுகள்",
+
+  // Supply chain
+  "Supply Chain": "பொருள் வழங்கல்",
+  "Materials": "பொருட்கள்",
+  "Material": "பொருள்",
+  "Vendor": "விற்பனையாளர்",
+  "Vendors": "விற்பனையாளர்கள்",
+  "Purchase Order": "கொள்முதல் ஆணை",
+  "Purchase Orders": "கொள்முதல் ஆணைகள்",
+  "PO": "PO",
+  "GRN": "GRN",
+  "Goods Receipt Note": "சரக்கு பெறுதல் குறிப்பு",
+  "Stock": "சரக்கு",
+  "Inventory": "சரக்கு பட்டியல்",
+  "Issue": "வழங்கல்",
+  "Receipt": "பெறுதல்",
+  "Indent": "கோரிக்கை",
+  "Indents": "கோரிக்கைகள்",
+  "Warehouse": "கிடங்கு",
+  "Stores": "சேமிப்பு",
+
+  // Estimation / BOQ / DPR
+  "Estimation": "மதிப்பீடு",
+  "BOQ": "BOQ",
+  "BOQ vs Actual": "மதிப்பீடு vs உண்மை",
+  "Bill of Quantities": "அளவு பட்டியல்",
+  "Variation": "மாற்றம்",
+  "Variation Order": "மாற்ற ஆணை",
+  "Variation Orders": "மாற்ற ஆணைகள்",
+  "Daily Progress Report": "தினசரி முன்னேற்ற அறிக்கை",
+  "DPR": "DPR",
+  "DSR": "DSR",
+  "Daily Site Report": "தினசரி கள அறிக்கை",
+
+  // Common headings / hints
+  "No data": "தரவு இல்லை",
+  "No records": "பதிவுகள் இல்லை",
+  "No results": "முடிவுகள் இல்லை",
+  "No projects": "திட்டங்கள் இல்லை",
+  "No workers": "தொழிலாளர்கள் இல்லை",
+  "Try again": "மீண்டும் முயலவும்",
+  "Required": "கட்டாயம்",
+  "Optional": "விருப்பத்தேர்வு",
+  "Choose file": "கோப்பை தேர்வு செய்",
+  "Drop file here": "இங்கே கோப்பை விடவும்",
+};
+
+// ─── DOM text-node translator (runtime) ───────────────────────────────────────
+const SKIP_TAGS = new Set(["SCRIPT","STYLE","CODE","PRE","TEXTAREA","INPUT","NOSCRIPT"]);
+const ORIGINAL = "__ocms_en";
+
+function shouldTranslateText(text: string) {
+  const t = text.trim();
+  if (!t) return false;
+  if (t.length > 200) return false; // skip long blobs / pasted content
+  if (/^[\d\s.,:/+\-₹$%()]+$/.test(t)) return false; // pure numbers/currency/symbols
+  return phrases[t] !== undefined;
+}
+
+function translateNode(node: Node) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = node.nodeValue ?? "";
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const ta = phrases[trimmed];
+    if (!ta) return;
+    const el = node as any;
+    if (el[ORIGINAL] === undefined) el[ORIGINAL] = text;
+    // preserve surrounding whitespace
+    const leading = text.match(/^\s*/)?.[0] ?? "";
+    const trailing = text.match(/\s*$/)?.[0] ?? "";
+    node.nodeValue = leading + ta + trailing;
+    return;
+  }
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const el = node as Element;
+    if (SKIP_TAGS.has(el.tagName)) return;
+    // attribute-level translations (placeholder, title, aria-label)
+    for (const attr of ["placeholder", "title", "aria-label"]) {
+      const v = el.getAttribute(attr);
+      if (v && phrases[v.trim()] !== undefined) {
+        const key = `__ocms_attr_${attr}`;
+        if ((el as any)[key] === undefined) (el as any)[key] = v;
+        el.setAttribute(attr, phrases[v.trim()]);
+      }
+    }
+    el.childNodes.forEach(translateNode);
+  }
+}
+
+function revertNode(node: Node) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const el = node as any;
+    if (el[ORIGINAL] !== undefined) {
+      node.nodeValue = el[ORIGINAL];
+      el[ORIGINAL] = undefined;
+    }
+    return;
+  }
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    const el = node as Element;
+    if (SKIP_TAGS.has(el.tagName)) return;
+    for (const attr of ["placeholder", "title", "aria-label"]) {
+      const key = `__ocms_attr_${attr}`;
+      if ((el as any)[key] !== undefined) {
+        el.setAttribute(attr, (el as any)[key]);
+        (el as any)[key] = undefined;
+      }
+    }
+    el.childNodes.forEach(revertNode);
+  }
+}
 
 interface I18nContextValue {
   lang: Lang;
@@ -102,10 +426,42 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     return stored === "ta" ? "ta" : "en";
   });
+  const observerRef = useRef<MutationObserver | null>(null);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, lang);
     document.documentElement.setAttribute("lang", lang);
+
+    // Disconnect any previous observer
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+
+    const root = document.getElementById("root") ?? document.body;
+
+    if (lang === "ta") {
+      // Initial pass
+      translateNode(root);
+      // Watch DOM mutations and translate added nodes / changed text
+      const obs = new MutationObserver(mutations => {
+        for (const m of mutations) {
+          if (m.type === "characterData" && m.target.nodeType === Node.TEXT_NODE) {
+            translateNode(m.target);
+          } else if (m.type === "childList") {
+            m.addedNodes.forEach(translateNode);
+          }
+        }
+      });
+      obs.observe(root, { childList: true, subtree: true, characterData: true });
+      observerRef.current = obs;
+    } else {
+      // Revert any translations made earlier this session
+      revertNode(root);
+    }
+
+    return () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+    };
   }, [lang]);
 
   const t = (key: string, fallback?: string) => {
