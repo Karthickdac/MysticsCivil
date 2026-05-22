@@ -126,8 +126,8 @@ function WorkersTab({ projectId }: { projectId: string }) {
           <DialogContent className="max-w-lg">
             <DialogHeader><DialogTitle>Register Worker</DialogTitle></DialogHeader>
             <div className="grid grid-cols-2 gap-3 py-2">
-              {[["name","Full Name"],["aadhaarNumber","Aadhaar"],["phone","Phone"]].map(([k, lbl]) => (
-                <div key={k} className="col-span-2 space-y-1"><Label>{lbl}</Label><Input value={form[k]??""} onChange={e=>f(k,e.target.value)} /></div>
+              {[["name","Full Name"],["aadhaarNumber","Aadhaar"],["phone","Phone"],["email","Email (for wage slip delivery)"]].map(([k, lbl]) => (
+                <div key={k} className="col-span-2 space-y-1"><Label>{lbl}</Label><Input type={k==="email"?"email":"text"} value={form[k]??""} onChange={e=>f(k,e.target.value)} /></div>
               ))}
               <div className="space-y-1"><Label>Trade</Label>
                 <Select value={form.trade??""} onValueChange={v=>f("trade",v)}>
@@ -1676,6 +1676,8 @@ function StatutoryExportsTab({ projectId }: { projectId: string }) {
         </Card>
       )}
 
+      {periodId && <WageSlipDeliveryLog projectId={projectId} periodId={periodId} workerMap={workerMap} />}
+
       {periodId && (!epf?.rows?.length && !esi?.rows?.length) && (
         <div className="text-sm text-muted-foreground border rounded-lg p-8 text-center">No statutory data — compute payroll for the selected period first.</div>
       )}
@@ -1683,6 +1685,99 @@ function StatutoryExportsTab({ projectId }: { projectId: string }) {
         <div className="text-sm text-muted-foreground border rounded-lg p-8 text-center">Select a payroll period to view EPF / ESI / PT / LWF / TDS exports.</div>
       )}
     </div>
+  );
+}
+
+function WageSlipDeliveryLog({ projectId, periodId, workerMap }: { projectId: string; periodId: string; workerMap: Record<string, any> }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data, isLoading } = useQuery({
+    queryKey: ["wage-slip-deliveries", periodId],
+    queryFn: () => api(`/payroll-periods/${periodId}/wage-slip-deliveries`),
+    enabled: !!periodId,
+    refetchInterval: 5000,
+  });
+  const resend = useMutation({
+    mutationFn: (workerId: string) =>
+      api(`/payroll-periods/${periodId}/wage-slips/${workerId}/resend`, { method: "POST", body: JSON.stringify({}) }),
+    onSuccess: (row: any) => {
+      qc.invalidateQueries({ queryKey: ["wage-slip-deliveries", periodId] });
+      toast({
+        title: row.status === "sent" ? "Wage slip resent" : `Resend ${row.status}`,
+        description: row.errorMessage ?? row.recipient ?? "",
+        variant: row.status === "sent" ? "default" : "destructive",
+      });
+    },
+    onError: (e: any) => toast({ title: "Resend failed", description: e.message, variant: "destructive" }),
+  });
+  void projectId;
+  const deliveries: any[] = data?.deliveries ?? [];
+  const configured: boolean = !!data?.mailerConfigured;
+  const latestByWorker = new Map<string, any>();
+  for (const d of deliveries) {
+    if (!latestByWorker.has(d.workerId)) latestByWorker.set(d.workerId, d);
+  }
+  const counts = { sent: 0, bounced: 0, skipped: 0, error: 0 };
+  for (const d of latestByWorker.values()) {
+    if (d.status in counts) (counts as any)[d.status]++;
+  }
+  return (
+    <Card>
+      <CardHeader className="pb-2 flex flex-row justify-between items-center">
+        <CardTitle className="text-sm">Wage Slip Email Delivery</CardTitle>
+        <div className="flex gap-3 text-xs">
+          <span className="text-green-700">Sent: {counts.sent}</span>
+          <span className="text-amber-700">Skipped: {counts.skipped}</span>
+          <span className="text-red-600">Bounced: {counts.bounced}</span>
+          <span className="text-red-700">Errors: {counts.error}</span>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {!configured && (
+          <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+            SMTP is not configured. Set <code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_FROM</code> (and optionally <code>SMTP_USER</code> / <code>SMTP_PASS</code>) to enable automatic wage slip delivery. Deliveries are still being logged.
+          </div>
+        )}
+        {isLoading ? (
+          <div className="text-sm text-muted-foreground">Loading delivery log…</div>
+        ) : deliveries.length === 0 ? (
+          <div className="text-sm text-muted-foreground p-4 text-center">No delivery attempts yet. Approve this payroll period to dispatch wage slips.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/50"><tr>{["Worker","Email","Status","Attempts","Last Attempt","Message","Action"].map(h=><th key={h} className="px-2 py-1.5 text-left">{h}</th>)}</tr></thead>
+              <tbody>
+                {Array.from(latestByWorker.values()).map((d: any) => {
+                  const w = workerMap[d.workerId] ?? {};
+                  const badge =
+                    d.status === "sent" ? "bg-green-100 text-green-800" :
+                    d.status === "bounced" ? "bg-red-100 text-red-800" :
+                    d.status === "skipped" ? "bg-amber-100 text-amber-800" :
+                    "bg-red-100 text-red-700";
+                  return (
+                    <tr key={d.id} className="border-t">
+                      <td className="px-2 py-1.5"><div className="font-medium">{w.name ?? "—"}</div><div className="font-mono text-[10px] text-muted-foreground">{w.workerCode ?? d.workerId.slice(0,8)}</div></td>
+                      <td className="px-2 py-1.5 font-mono">{d.recipient ?? <span className="text-muted-foreground">— none on file</span>}</td>
+                      <td className="px-2 py-1.5"><span className={`px-2 py-0.5 rounded font-medium ${badge}`}>{d.status}</span></td>
+                      <td className="px-2 py-1.5 text-right">{d.attempts}</td>
+                      <td className="px-2 py-1.5">{d.sentAt ? new Date(d.sentAt).toLocaleString() : new Date(d.createdAt).toLocaleString()}</td>
+                      <td className="px-2 py-1.5 text-muted-foreground max-w-[20rem] truncate" title={d.errorMessage ?? ""}>{d.errorMessage ?? (d.status === "sent" ? "Delivered" : "—")}</td>
+                      <td className="px-2 py-1.5">
+                        <Button size="sm" variant="outline" className="h-7 px-2"
+                          disabled={resend.isPending}
+                          onClick={() => resend.mutate(d.workerId)}>
+                          Re-send
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

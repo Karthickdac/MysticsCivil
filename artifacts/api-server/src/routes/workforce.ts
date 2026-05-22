@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import {
   workersTable, workerDocumentsTable, attendanceRecordsTable,
   payrollPeriodsTable, payrollLinesTable, wageSlipsTable,
+  wageSlipDeliveriesTable,
   epfEntriesTable, esiEntriesTable,
   itpsTable, itpItemsTable, inspectionRequestsTable, inspectionChecklistsTable,
   ncrsTable, ncrActionsTable,
@@ -13,6 +14,7 @@ import {
   projectsTable, userProfilesTable, organisationsTable,
 } from "@workspace/db";
 import { buildTablePdf, buildWageSlipPdf, buildMultiWageSlipPdf, type WageSlipData } from "../lib/payrollPdf";
+import { mailerConfigured, sendMail } from "../lib/mailer";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 
@@ -307,7 +309,131 @@ router.post("/payroll-periods/:periodId/approve", requireAuth, requireRole(...RO
   if (await denyIfNoProjectAccess(req, res, period.projectId)) return;
   const [updated] = await db.update(payrollPeriodsTable).set({ status: "approved" })
     .where(eq(payrollPeriodsTable.id, period.id)).returning();
-  res.json(updated);
+  // Fire-and-forget: build slips + dispatch emails. Logged to wage_slip_deliveries.
+  const triggeredById = req.user?.id ?? null;
+  dispatchWageSlipEmails(period.id, triggeredById).catch((e) => {
+    // eslint-disable-next-line no-console
+    console.error("[wage-slip-email] dispatch failed", e);
+  });
+  res.json({ ...updated, emailDispatch: mailerConfigured() ? "queued" : "skipped (SMTP not configured)" });
+});
+
+// ─── Wage-slip email delivery ────────────────────────────────────────────────
+async function dispatchWageSlipEmails(periodId: string, triggeredById: string | null): Promise<void> {
+  const { data } = await buildWageSlipsForPeriod(periodId);
+  if (data.length === 0) return;
+  const workerIds = data.map((_, i) => i); // unused; we re-fetch worker rows for email
+  const workers = await db.select().from(workersTable)
+    .where(inArray(workersTable.id, (await db.select({ workerId: payrollLinesTable.workerId })
+      .from(payrollLinesTable).where(eq(payrollLinesTable.periodId, periodId))).map(r => r.workerId)));
+  const wmap = Object.fromEntries(workers.map(w => [w.id, w]));
+  const slips = await db.select().from(wageSlipsTable).where(eq(wageSlipsTable.periodId, periodId));
+  const slipMap = Object.fromEntries(slips.map(s => [s.workerId, s]));
+  void workerIds;
+  for (const slip of data) {
+    // resolve workerId by matching slipNumber back to slip row
+    const slipRow = slips.find(s => s.slipNumber === slip.slipNumber);
+    if (!slipRow) continue;
+    await deliverOneWageSlip({
+      periodId, workerId: slipRow.workerId, slipRowId: slipRow.id,
+      worker: wmap[slipRow.workerId], slip, triggeredById,
+    });
+  }
+  void slipMap;
+}
+
+async function deliverOneWageSlip(args: {
+  periodId: string; workerId: string; slipRowId: string;
+  worker: any; slip: WageSlipData; triggeredById: string | null;
+}): Promise<typeof wageSlipDeliveriesTable.$inferSelect> {
+  const { periodId, workerId, slipRowId, worker, slip, triggeredById } = args;
+  const email = (worker?.email ?? "").trim();
+  // count prior attempts (for resend)
+  const prior = await db.select({ c: sql<number>`count(*)` }).from(wageSlipDeliveriesTable)
+    .where(and(eq(wageSlipDeliveriesTable.periodId, periodId), eq(wageSlipDeliveriesTable.workerId, workerId)));
+  const attempts = Number(prior[0]?.c ?? 0) + 1;
+  if (!email) {
+    const [row] = await db.insert(wageSlipDeliveriesTable).values({
+      periodId, workerId, slipId: slipRowId, channel: "email",
+      recipient: null, status: "skipped", errorMessage: "Worker has no email on file",
+      attempts, triggeredById,
+    }).returning();
+    return row;
+  }
+  if (!mailerConfigured()) {
+    const [row] = await db.insert(wageSlipDeliveriesTable).values({
+      periodId, workerId, slipId: slipRowId, channel: "email",
+      recipient: email, status: "skipped",
+      errorMessage: "SMTP not configured (set SMTP_HOST, SMTP_PORT, SMTP_FROM)",
+      attempts, triggeredById,
+    }).returning();
+    return row;
+  }
+  let pdfBuf: Buffer;
+  try {
+    const bytes = await buildWageSlipPdf(slip);
+    pdfBuf = Buffer.from(bytes);
+  } catch (e: any) {
+    const [row] = await db.insert(wageSlipDeliveriesTable).values({
+      periodId, workerId, slipId: slipRowId, channel: "email",
+      recipient: email, status: "error",
+      errorMessage: `PDF render failed: ${e?.message ?? String(e)}`,
+      attempts, triggeredById,
+    }).returning();
+    return row;
+  }
+  const subject = `Wage slip ${slip.slipNumber} — ${slip.periodName}`;
+  const text = `Dear ${slip.worker.name},\n\nPlease find attached your wage slip ${slip.slipNumber} for the period ${slip.fromDate} to ${slip.toDate}.\n\nNet payable: ₹${slip.netPayable.toFixed(2)}\n\nIssued by ${slip.organisationName} on project ${slip.projectName}.`;
+  const html = `<p>Dear ${slip.worker.name},</p><p>Please find attached your wage slip <b>${slip.slipNumber}</b> for the period <b>${slip.fromDate}</b> to <b>${slip.toDate}</b>.</p><p>Net payable: <b>₹${slip.netPayable.toFixed(2)}</b></p><p>Issued by ${slip.organisationName} on project ${slip.projectName}.</p>`;
+  const result = await sendMail({
+    to: email, subject, text, html,
+    attachments: [{ filename: `wage-slip-${slip.slipNumber}.pdf`, content: pdfBuf, contentType: "application/pdf" }],
+  });
+  if (result.ok) {
+    const [row] = await db.insert(wageSlipDeliveriesTable).values({
+      periodId, workerId, slipId: slipRowId, channel: "email",
+      recipient: email, status: "sent",
+      messageId: result.messageId, sentAt: new Date(),
+      attempts, triggeredById,
+    }).returning();
+    return row;
+  }
+  const [row] = await db.insert(wageSlipDeliveriesTable).values({
+    periodId, workerId, slipId: slipRowId, channel: "email",
+    recipient: email, status: result.bounced ? "bounced" : "error",
+    errorMessage: result.error, attempts, triggeredById,
+  }).returning();
+  return row;
+}
+
+// List delivery log for a period
+router.get("/payroll-periods/:periodId/wage-slip-deliveries", requireAuth, async (req: Request, res: Response) => {
+  const [period] = await db.select().from(payrollPeriodsTable).where(eq(payrollPeriodsTable.id, req.params.periodId));
+  if (!period) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, period.projectId)) return;
+  const rows = await db.select().from(wageSlipDeliveriesTable)
+    .where(eq(wageSlipDeliveriesTable.periodId, period.id))
+    .orderBy(desc(wageSlipDeliveriesTable.createdAt));
+  res.json({ mailerConfigured: mailerConfigured(), deliveries: rows });
+});
+
+// Re-send a single wage slip to one worker
+router.post("/payroll-periods/:periodId/wage-slips/:workerId/resend", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
+  const [period] = await db.select().from(payrollPeriodsTable).where(eq(payrollPeriodsTable.id, req.params.periodId));
+  if (!period) { res.status(404).json({ error: "Period not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, period.projectId)) return;
+  const { data } = await buildWageSlipsForPeriod(period.id, req.params.workerId);
+  if (data.length === 0) { res.status(404).json({ error: "No payroll line for that worker" }); return; }
+  const [worker] = await db.select().from(workersTable).where(eq(workersTable.id, req.params.workerId));
+  if (!worker) { res.status(404).json({ error: "Worker not found" }); return; }
+  const [slipRow] = await db.select().from(wageSlipsTable)
+    .where(and(eq(wageSlipsTable.periodId, period.id), eq(wageSlipsTable.workerId, worker.id)));
+  if (!slipRow) { res.status(404).json({ error: "Wage slip not issued" }); return; }
+  const row = await deliverOneWageSlip({
+    periodId: period.id, workerId: worker.id, slipRowId: slipRow.id,
+    worker, slip: data[0], triggeredById: req.user?.id ?? null,
+  });
+  res.json(row);
 });
 
 // ─── ITP ──────────────────────────────────────────────────────────────────────

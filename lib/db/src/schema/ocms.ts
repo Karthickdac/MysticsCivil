@@ -1130,6 +1130,7 @@ export const workersTable = pgTable("workers", {
   name: varchar("name", { length: 128 }).notNull(),
   aadhaarNumber: varchar("aadhaar_number", { length: 16 }),
   phone: varchar("phone", { length: 16 }),
+  email: varchar("email", { length: 128 }),
   dob: timestamp("dob", { withTimezone: true }),
   gender: varchar("gender", { length: 16 }),
   trade: varchar("trade", { length: 32 }).notNull().default("helper"),
@@ -1231,6 +1232,23 @@ export const wageSlipsTable = pgTable("wage_slips", {
   issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const wageSlipDeliveriesTable = pgTable("wage_slip_deliveries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  periodId: varchar("period_id").notNull().references(() => payrollPeriodsTable.id, { onDelete: "cascade" }),
+  workerId: varchar("worker_id").notNull().references(() => workersTable.id, { onDelete: "cascade" }),
+  slipId: varchar("slip_id").references(() => wageSlipsTable.id, { onDelete: "set null" }),
+  channel: varchar("channel", { length: 16 }).notNull().default("email"),
+  recipient: varchar("recipient", { length: 256 }),
+  status: varchar("status", { length: 16 }).notNull(),
+  errorMessage: text("error_message"),
+  messageId: varchar("message_id", { length: 256 }),
+  attempts: integer("attempts").notNull().default(1),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  triggeredById: varchar("triggered_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type WageSlipDelivery = typeof wageSlipDeliveriesTable.$inferSelect;
 
 export const epfEntriesTable = pgTable("epf_entries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
