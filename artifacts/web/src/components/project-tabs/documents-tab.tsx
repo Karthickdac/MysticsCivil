@@ -130,8 +130,8 @@ export function DocumentsTab({ projectId }: { projectId: string }) {
   const busy = upload.isUploading || create.isPending;
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+    <Card className="overflow-hidden">
+      <CardHeader className="flex flex-row items-center justify-between gap-2">
         <CardTitle>Document Register</CardTitle>
         <Dialog open={open} onOpenChange={(o) => { if (!busy) { setOpen(o); if (!o) reset(); } }}>
           <DialogTrigger asChild>
@@ -302,8 +302,13 @@ export function DocumentsTab({ projectId }: { projectId: string }) {
                   {fileIconLabel(d.name)}
                 </div>
                 <div className="flex-1 min-w-0 overflow-hidden">
-                  <div className="font-medium truncate" title={d.name}>{d.name}</div>
-                  <div className="text-xs text-muted-foreground truncate">
+                  <div
+                    className="font-medium overflow-hidden text-ellipsis whitespace-nowrap"
+                    title={d.name}
+                  >
+                    {d.name}
+                  </div>
+                  <div className="text-xs text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
                     {d.category} · v{d.version} · {formatDate(d.createdAt)}
                   </div>
                 </div>
