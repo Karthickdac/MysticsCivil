@@ -9,6 +9,7 @@ import {
   safetyPermitsTable, hiraEntriesTable, jsaEntriesTable,
   ppeIssuesTable, incidentsTable, incidentActionsTable,
   qualityTestsTable, labourContractorBillsTable,
+  paymentVouchersTable,
   projectsTable, userProfilesTable,
 } from "@workspace/db";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
@@ -907,14 +908,16 @@ router.get("/projects/:projectId/labour-contractor-bills", requireAuth, async (r
 router.post("/projects/:projectId/labour-contractor-bills", requireAuth, async (req: Request, res: Response) => {
   if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
   const b = req.body ?? {};
-  if (!b.periodFrom || !b.periodTo || !b.claimedAmount) { res.status(400).json({ error: "periodFrom, periodTo, claimedAmount required" }); return; }
+  if (!b.periodFrom || !b.periodTo || !b.claimedAmount || !b.contractorId || !b.periodId) {
+    res.status(400).json({ error: "contractorId, periodId, periodFrom, periodTo, claimedAmount required" }); return;
+  }
   const count = await db.select({ c: sql`count(*)` }).from(labourContractorBillsTable)
     .where(eq(labourContractorBillsTable.projectId, req.params.projectId));
   const seq = Number(count[0]?.c ?? 0) + 1;
   const [row] = await db.insert(labourContractorBillsTable).values({
     projectId: req.params.projectId,
     billNumber: b.billNumber ?? `LCB-${String(seq).padStart(4, "0")}`,
-    contractorId: b.contractorId ?? null, periodId: b.periodId ?? null,
+    contractorId: b.contractorId, periodId: b.periodId,
     periodFrom: new Date(b.periodFrom), periodTo: new Date(b.periodTo),
     claimedHeadcount: b.claimedHeadcount ?? 0,
     claimedDays: String(n(b.claimedDays)), claimedAmount: String(n(b.claimedAmount)),
@@ -923,32 +926,66 @@ router.post("/projects/:projectId/labour-contractor-bills", requireAuth, async (
   res.status(201).json(row);
 });
 
+// Compute attendance-based verification for a labour contractor bill.
+// When the bill is scoped to a contractor, only that contractor's workers are
+// considered; otherwise the entire project workforce in the period is used.
+async function verifyLabourBill(bill: typeof labourContractorBillsTable.$inferSelect) {
+  // Restrict workers to this contractor when set
+  const workerScope = bill.contractorId
+    ? await db.select().from(workersTable).where(and(
+        eq(workersTable.projectId, bill.projectId),
+        eq(workersTable.contractorId, bill.contractorId),
+      ))
+    : await db.select().from(workersTable).where(eq(workersTable.projectId, bill.projectId));
+  const scopedIds = new Set(workerScope.map(w => w.id));
+
+  const attRecords = await db.select().from(attendanceRecordsTable)
+    .where(and(
+      eq(attendanceRecordsTable.projectId, bill.projectId),
+      sql`attendance_date >= ${bill.periodFrom.toISOString()} AND attendance_date <= ${bill.periodTo.toISOString()}`,
+    ));
+
+  const workerDays: Record<string, number> = {};
+  for (const a of attRecords) {
+    if (!scopedIds.has(a.workerId)) continue;
+    if (n(a.hoursWorked) >= 4) workerDays[a.workerId] = (workerDays[a.workerId] ?? 0) + 1;
+  }
+  const verifiedHeadcount = Object.keys(workerDays).length;
+  const verifiedDays = Object.values(workerDays).reduce((s, d) => s + d, 0);
+  const workerMap = Object.fromEntries(workerScope.map(w => [w.id, w]));
+  const verifiedAmount = Object.entries(workerDays)
+    .reduce((s, [wid, days]) => s + days * n(workerMap[wid]?.dailyRate ?? 0), 0);
+
+  const claimedAmount = n(bill.claimedAmount);
+  const verifiedAmt = Math.round(verifiedAmount * 100) / 100;
+  const discrepancy = Math.round((claimedAmount - verifiedAmt) * 100) / 100;
+  const flags: string[] = [];
+  if (bill.claimedHeadcount > verifiedHeadcount) {
+    flags.push(`Excess headcount claim: claimed ${bill.claimedHeadcount}, attended ${verifiedHeadcount}`);
+  }
+  if (n(bill.claimedDays) > verifiedDays) {
+    flags.push(`Excess mandays claim: claimed ${bill.claimedDays}, attended ${verifiedDays}`);
+  }
+  if (discrepancy > 0) flags.push(`Over-claim by ₹${discrepancy.toLocaleString("en-IN")}`);
+
+  return {
+    verifiedHeadcount, verifiedDays, verifiedAmount: verifiedAmt, discrepancy, flags,
+    workerBreakdown: Object.entries(workerDays).map(([wid, days]) => ({
+      workerId: wid, workerName: workerMap[wid]?.name ?? null, presentDays: days,
+      dailyRate: n(workerMap[wid]?.dailyRate ?? 0),
+    })),
+  };
+}
+
 // Cross-verify: compare claimed with attendance-derived figures
 router.get("/labour-contractor-bills/:billId", requireAuth, async (req: Request, res: Response) => {
   const [bill] = await db.select().from(labourContractorBillsTable).where(eq(labourContractorBillsTable.id, req.params.billId));
   if (!bill) { res.status(404).json({ error: "Not found" }); return; }
   if (await denyIfNoProjectAccess(req, res, bill.projectId)) return;
-  // Compute verified figures from attendance
-  const attRecords = await db.select().from(attendanceRecordsTable)
-    .where(and(
-      eq(attendanceRecordsTable.projectId, bill.projectId),
-      sql`attendance_date >= ${bill.periodFrom.toISOString()} AND attendance_date <= ${bill.periodTo.toISOString()}`
-    ));
-  const workerDays: Record<string, number> = {};
-  for (const a of attRecords) {
-    if (n(a.hoursWorked) >= 4) workerDays[a.workerId] = (workerDays[a.workerId] ?? 0) + 1;
-  }
-  const verifiedHeadcount = Object.keys(workerDays).length;
-  const verifiedDays = Object.values(workerDays).reduce((s, d) => s + d, 0);
-  const workers = await db.select().from(workersTable).where(
-    inArray(workersTable.id, Object.keys(workerDays).length > 0 ? Object.keys(workerDays) : ["_none_"])
-  );
-  const verifiedAmount = workers.reduce((s, w) => s + (workerDays[w.id] ?? 0) * n(w.dailyRate), 0);
-  const discrepancy = n(bill.claimedAmount) - verifiedAmount;
-  res.json({
-    ...bill,
-    verification: { verifiedHeadcount, verifiedDays, verifiedAmount: Math.round(verifiedAmount * 100) / 100, discrepancy: Math.round(discrepancy * 100) / 100, workerBreakdown: Object.entries(workerDays).map(([wid, days]) => ({ workerId: wid, presentDays: days })) },
-  });
+  const verification = await verifyLabourBill(bill);
+  const vouchers = await db.select().from(paymentVouchersTable)
+    .where(eq(paymentVouchersTable.labourContractorBillId, bill.id));
+  res.json({ ...bill, verification, vouchers });
 });
 
 router.patch("/labour-contractor-bills/:billId", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
@@ -956,19 +993,80 @@ router.patch("/labour-contractor-bills/:billId", requireAuth, requireRole(...ROL
   const [bill] = await db.select().from(labourContractorBillsTable).where(eq(labourContractorBillsTable.id, req.params.billId));
   if (!bill) { res.status(404).json({ error: "Not found" }); return; }
   if (await denyIfNoProjectAccess(req, res, bill.projectId)) return;
+  if (bill.status === "approved" || bill.status === "rejected") {
+    res.status(409).json({ error: `Bill already ${bill.status}` }); return;
+  }
   const patch: Record<string, any> = {};
+  const now = new Date();
+  let approving = false;
   if (b.status !== undefined) {
     patch.status = b.status;
-    if (b.status === "approved") { patch.approvedById = req.user?.id ?? null; patch.approvedAt = new Date(); }
+    if (b.status === "approved") {
+      approving = true;
+      patch.approvedById = req.user?.id ?? null;
+      patch.approvedAt = now;
+    }
   }
   if (b.verifiedHeadcount !== undefined) patch.verifiedHeadcount = b.verifiedHeadcount;
   if (b.verifiedDays !== undefined) patch.verifiedDays = String(n(b.verifiedDays));
   if (b.verifiedAmount !== undefined) patch.verifiedAmount = String(n(b.verifiedAmount));
   if (b.discrepancyNotes !== undefined) patch.discrepancyNotes = b.discrepancyNotes;
   if (b.rejectionReason !== undefined) patch.rejectionReason = b.rejectionReason;
+
+  // On approval: re-verify from attendance, generate payment voucher, lock payroll lines.
+  // Wrapped in a transaction so partial financial state can't be persisted on failure.
+  if (approving) {
+    if (!bill.contractorId || !bill.periodId) {
+      res.status(409).json({ error: "Cannot approve: bill is missing contractorId or periodId" }); return;
+    }
+    const verification = await verifyLabourBill(bill);
+    const payableAmount = b.verifiedAmount !== undefined ? n(b.verifiedAmount) : verification.verifiedAmount;
+    patch.verifiedHeadcount = patch.verifiedHeadcount ?? verification.verifiedHeadcount;
+    patch.verifiedDays = patch.verifiedDays ?? String(verification.verifiedDays);
+    patch.verifiedAmount = String(payableAmount);
+    if (!patch.discrepancyNotes && verification.flags.length > 0) {
+      patch.discrepancyNotes = verification.flags.join("; ");
+    }
+
+    const voucherNum = `LCV-${bill.projectId.slice(-4).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+    const result = await db.transaction(async (tx) => {
+      const [v] = await tx.insert(paymentVouchersTable).values({
+        labourContractorBillId: bill.id, projectId: bill.projectId,
+        voucherNumber: voucherNum, amount: String(payableAmount),
+        mode: b.paymentMode ?? "neft",
+        bankName: b.bankName ?? null, accountNumber: b.accountNumber ?? null,
+        ifscCode: b.ifscCode ?? null,
+        utr: b.utr ?? null, paidAt: null,
+        releasedById: req.user?.id ?? null,
+      }).returning();
+
+      const contractorWorkers = await tx.select({ id: workersTable.id }).from(workersTable).where(and(
+        eq(workersTable.projectId, bill.projectId),
+        eq(workersTable.contractorId, bill.contractorId!),
+      ));
+      const workerIds = contractorWorkers.map(w => w.id);
+      if (workerIds.length > 0) {
+        await tx.update(payrollLinesTable).set({
+          locked: true,
+          lockedReason: `Locked by labour contractor bill ${bill.billNumber}`,
+          lockedAt: now,
+        }).where(and(
+          eq(payrollLinesTable.periodId, bill.periodId!),
+          inArray(payrollLinesTable.workerId, workerIds),
+        ));
+      }
+
+      const [u] = await tx.update(labourContractorBillsTable).set(patch)
+        .where(eq(labourContractorBillsTable.id, bill.id)).returning();
+      return { updated: u, voucher: v, lockedWorkerCount: workerIds.length };
+    });
+    res.json({ ...result.updated, voucher: result.voucher, lockedPayrollLines: result.lockedWorkerCount });
+    return;
+  }
+
   const [updated] = await db.update(labourContractorBillsTable).set(patch)
     .where(eq(labourContractorBillsTable.id, bill.id)).returning();
-  res.json(updated);
+  res.json({ ...updated, voucher: null });
 });
 
 export default router;

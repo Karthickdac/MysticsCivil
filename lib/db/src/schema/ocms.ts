@@ -553,7 +553,9 @@ export type BillDeduction = typeof billDeductionsTable.$inferSelect;
 
 export const paymentVouchersTable = pgTable("payment_vouchers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  billId: varchar("bill_id").notNull().references(() => contractorBillsTable.id, { onDelete: "cascade" }),
+  billId: varchar("bill_id").references(() => contractorBillsTable.id, { onDelete: "cascade" }),
+  labourContractorBillId: varchar("labour_contractor_bill_id")
+    .references((): any => labourContractorBillsTable.id, { onDelete: "cascade" }),
   projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
   voucherNumber: varchar("voucher_number", { length: 32 }).notNull(),
   amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
@@ -1207,6 +1209,9 @@ export const payrollLinesTable = pgTable("payroll_lines", {
   totalDeductions: numeric("total_deductions", { precision: 14, scale: 2 }).notNull().default("0"),
   netWages: numeric("net_wages", { precision: 14, scale: 2 }).notNull().default("0"),
   remarks: text("remarks"),
+  locked: boolean("locked").notNull().default(false),
+  lockedReason: varchar("locked_reason", { length: 256 }),
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type PayrollLine = typeof payrollLinesTable.$inferSelect;

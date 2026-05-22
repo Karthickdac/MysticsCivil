@@ -1468,6 +1468,8 @@ function ContractorBillTab({ projectId }: { projectId: string }) {
   const f = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
   const { data: bills = [], isLoading } = useQuery({ queryKey: ["lcb", projectId], queryFn: () => api(`/projects/${projectId}/labour-contractor-bills`), enabled: !!projectId });
   const { data: detail } = useQuery({ queryKey: ["lcb-detail", selected], queryFn: () => api(`/labour-contractor-bills/${selected}`), enabled: !!selected });
+  const { data: vendors = [] } = useQuery({ queryKey: ["vendors-lcb"], queryFn: () => api(`/vendors`) });
+  const { data: periods = [] } = useQuery({ queryKey: ["payroll-periods-lcb", projectId], queryFn: () => api(`/projects/${projectId}/payroll-periods`), enabled: !!projectId });
   const create = useMutation({
     mutationFn: (b: any) => api(`/projects/${projectId}/labour-contractor-bills`, { method: "POST", body: JSON.stringify(b) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["lcb", projectId] }); setOpen(false); setForm({}); toast({ title: "Bill submitted" }); },
@@ -1492,6 +1494,22 @@ function ContractorBillTab({ projectId }: { projectId: string }) {
             <DialogHeader><DialogTitle>Submit Contractor Bill</DialogTitle></DialogHeader>
             <div className="space-y-3 py-2">
               <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Contractor</Label>
+                  <Select value={form.contractorId??""} onValueChange={v=>f("contractorId",v)}>
+                    <SelectTrigger><SelectValue placeholder={(vendors as any[]).length ? "Select contractor" : "No vendors available"} /></SelectTrigger>
+                    <SelectContent>{(vendors as any[]).map((v:any)=><SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Payroll Period</Label>
+                  <Select value={form.periodId??""} onValueChange={v=>f("periodId",v)}>
+                    <SelectTrigger><SelectValue placeholder={(periods as any[]).length ? "Select period" : "No periods available"} /></SelectTrigger>
+                    <SelectContent>{(periods as any[]).map((p:any)=><SelectItem key={p.id} value={p.id}>{fmtDate(p.startDate)} → {fmtDate(p.endDate)}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1"><Label>Period From</Label><Input type="date" value={form.periodFrom??""} onChange={e=>f("periodFrom",e.target.value)} /></div>
                 <div className="space-y-1"><Label>Period To</Label><Input type="date" value={form.periodTo??""} onChange={e=>f("periodTo",e.target.value)} /></div>
               </div>
@@ -1501,7 +1519,7 @@ function ContractorBillTab({ projectId }: { projectId: string }) {
               </div>
               <div className="space-y-1"><Label>Claimed Amount (₹)</Label><Input type="number" step="0.01" value={form.claimedAmount??""} onChange={e=>f("claimedAmount",e.target.value)} /></div>
             </div>
-            <Button className="w-full" disabled={!form.periodFrom || !form.periodTo || !form.claimedAmount || create.isPending} onClick={() => create.mutate(form)}>{create.isPending ? "Submitting…" : "Submit Bill"}</Button>
+            <Button className="w-full" disabled={!form.contractorId || !form.periodId || !form.periodFrom || !form.periodTo || !form.claimedAmount || create.isPending} onClick={() => create.mutate(form)}>{create.isPending ? "Submitting…" : "Submit Bill"}</Button>
           </DialogContent>
         </Dialog>
       </div>
@@ -1546,14 +1564,33 @@ function ContractorBillTab({ projectId }: { projectId: string }) {
                     {detail.verification?.discrepancy > 0 ? " over-claimed" : " under-claimed"}
                   </div>
                 )}
+                {detail.verification?.flags?.length > 0 && (
+                  <div className="rounded p-3 text-xs bg-orange-50 border border-orange-200 text-orange-900">
+                    <div className="font-semibold mb-1">Flags</div>
+                    <ul className="list-disc list-inside space-y-0.5">
+                      {detail.verification.flags.map((flag: string, i: number) => <li key={i}>{flag}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {detail.vouchers?.length > 0 && (
+                  <div className="rounded p-3 text-xs bg-green-50 border border-green-200 text-green-900">
+                    <div className="font-semibold mb-1">Payment Vouchers</div>
+                    {detail.vouchers.map((v: any) => (
+                      <div key={v.id} className="flex justify-between">
+                        <span className="font-mono">{v.voucherNumber}</span>
+                        <span>{fmtCur(v.amount)} · {v.mode?.toUpperCase()}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {detail.verification?.workerBreakdown?.length > 0 && (
                   <div>
                     <Label className="text-xs">Worker Breakdown ({detail.verification.workerBreakdown.length} workers)</Label>
                     <div className="text-xs mt-1 max-h-32 overflow-y-auto border rounded p-2">
                       {detail.verification.workerBreakdown.slice(0, 20).map((w: any) => (
                         <div key={w.workerId} className="flex justify-between py-0.5">
-                          <span className="font-mono text-muted-foreground truncate">{w.workerId.slice(0,8)}…</span>
-                          <span>{w.presentDays} days</span>
+                          <span className="truncate">{w.workerName ?? w.workerId.slice(0,8)+"…"}</span>
+                          <span>{w.presentDays} days{w.dailyRate ? ` · ${fmtCur(w.presentDays * w.dailyRate)}` : ""}</span>
                         </div>
                       ))}
                     </div>
