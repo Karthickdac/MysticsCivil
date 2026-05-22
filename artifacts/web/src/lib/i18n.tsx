@@ -6,7 +6,7 @@ const STORAGE_KEY = "ocms.lang";
 
 // ─── Keyed dictionary (used via t("key")) ─────────────────────────────────────
 const dict: Record<string, { en: string; ta: string }> = {
-  "app.name": { en: "Kattida Core", ta: "கட்டிட கோர்" },
+  "app.name": { en: "Mystics Civil", ta: "மிஸ்டிக்ஸ் சிவில்" },
   "app.tagline": { en: "Construction Management", ta: "கட்டுமான மேலாண்மை" },
   "nav.dashboard": { en: "Dashboard", ta: "முதன்மை பலகை" },
   "nav.projects": { en: "Projects", ta: "திட்டங்கள்" },
