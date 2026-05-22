@@ -1,0 +1,20 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "BK3j_-jZnNf6jGo4S8WPk"
+uri = "file://artifacts/web/public/assets/site1.png"
+type = "image"
+title = "construction site sunset"
+
+[[generated]]
+id = "YmM9fJHqCg3ybxfY5ONb8"
+uri = "file://artifacts/web/public/assets/site2.png"
+type = "image"
+title = "rebar grid close up"
+
+[[generated]]
+id = "aItDHfKcOVQ_jZ0lIXCT0"
+uri = "file://artifacts/web/public/assets/site3.png"
+type = "image"
+title = "site office blueprint"

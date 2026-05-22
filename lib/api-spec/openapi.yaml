@@ -1,22 +1,31 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: OCMS — Construction ERP API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: Auth
+  - name: Me
+  - name: Organisations
+  - name: Projects
+  - name: WBS
+  - name: Milestones
+  - name: DPR
+  - name: Photos
+  - name: Documents
+  - name: Issues
+  - name: Approvals
+  - name: Dashboard
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +33,1181 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the currently authenticated user
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: Auth status resolved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserEnvelope'
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      summary: Start the browser OIDC login flow
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to the OIDC authorization endpoint.
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      summary: Complete the browser OIDC login flow
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: iss
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uri
+      responses:
+        '302':
+          description: Redirect to the returnTo path.
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      summary: Clear the session and begin OIDC logout
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '302':
+          description: Redirect to the OIDC provider logout URL.
+  /mobile-auth/token-exchange:
+    post:
+      tags: [Auth]
+      operationId: exchangeMobileAuthorizationCode
+      summary: Exchange a mobile OIDC code for a session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileTokenExchangeRequest'
+      responses:
+        '200':
+          description: Session created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileTokenExchangeSuccess'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile-auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutMobileSession
+      summary: Delete a mobile session token
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      responses:
+        '200':
+          description: Logout processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutSuccess'
+
+  /me/profile:
+    get:
+      tags: [Me]
+      operationId: getMyProfile
+      summary: Get my OCMS profile (role, organisation)
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyProfile'
+    patch:
+      tags: [Me]
+      operationId: updateMyProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyProfileUpdate'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyProfile'
+
+  /organisations:
+    get:
+      tags: [Organisations]
+      operationId: listOrganisations
+      responses:
+        '200':
+          description: List of organisations
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Organisation' }
+    post:
+      tags: [Organisations]
+      operationId: createOrganisation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrganisationInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Organisation' }
+
+  /projects:
+    get:
+      tags: [Projects]
+      operationId: listProjects
+      responses:
+        '200':
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Project' }
+    post:
+      tags: [Projects]
+      operationId: createProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+  /projects/{projectId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Projects]
+      operationId: getProject
+      responses:
+        '200':
+          description: Project
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+    patch:
+      tags: [Projects]
+      operationId: updateProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+    delete:
+      tags: [Projects]
+      operationId: deleteProject
+      responses:
+        '204':
+          description: Deleted
+
+  /projects/{projectId}/dashboard:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Dashboard]
+      operationId: getProjectDashboard
+      summary: 6-panel project dashboard data (health, cost, gantt, activities, photos, pending)
+      responses:
+        '200':
+          description: Project dashboard
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectDashboard' }
+
+  /projects/{projectId}/wbs:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [WBS]
+      operationId: listProjectWbs
+      responses:
+        '200':
+          description: WBS activities
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WbsActivity' }
+    post:
+      tags: [WBS]
+      operationId: createWbsActivity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WbsActivityInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WbsActivity' }
+  /wbs/{activityId}:
+    parameters:
+      - name: activityId
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [WBS]
+      operationId: updateWbsActivity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WbsActivityUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WbsActivity' }
+    delete:
+      tags: [WBS]
+      operationId: deleteWbsActivity
+      responses:
+        '204':
+          description: Deleted
+
+  /projects/{projectId}/milestones:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Milestones]
+      operationId: listProjectMilestones
+      responses:
+        '200':
+          description: Milestones
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Milestone' }
+    post:
+      tags: [Milestones]
+      operationId: createMilestone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MilestoneInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Milestone' }
+  /milestones/{milestoneId}:
+    parameters:
+      - name: milestoneId
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [Milestones]
+      operationId: updateMilestone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MilestoneUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Milestone' }
+
+  /projects/{projectId}/dprs:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [DPR]
+      operationId: listProjectDprs
+      responses:
+        '200':
+          description: DPRs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Dpr' }
+    post:
+      tags: [DPR]
+      operationId: createDpr
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DprInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dpr' }
+  /dprs/{dprId}:
+    parameters:
+      - name: dprId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [DPR]
+      operationId: getDpr
+      responses:
+        '200':
+          description: DPR detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DprDetail' }
+  /dprs/{dprId}/submit:
+    parameters:
+      - name: dprId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [DPR]
+      operationId: submitDpr
+      responses:
+        '200':
+          description: Submitted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dpr' }
+  /dprs/{dprId}/approve:
+    parameters:
+      - name: dprId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [DPR]
+      operationId: approveDpr
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DprApprovalInput' }
+      responses:
+        '200':
+          description: Approved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dpr' }
+
+  /projects/{projectId}/photos:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Photos]
+      operationId: listProjectPhotos
+      responses:
+        '200':
+          description: Photos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SitePhoto' }
+    post:
+      tags: [Photos]
+      operationId: createSitePhoto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SitePhotoInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SitePhoto' }
+
+  /projects/{projectId}/documents:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Documents]
+      operationId: listProjectDocuments
+      responses:
+        '200':
+          description: Documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Document' }
+    post:
+      tags: [Documents]
+      operationId: createDocument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DocumentInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+
+  /projects/{projectId}/issues:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Issues]
+      operationId: listProjectIssues
+      responses:
+        '200':
+          description: Issues
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Issue' }
+    post:
+      tags: [Issues]
+      operationId: createIssue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IssueInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Issue' }
+  /issues/{issueId}:
+    parameters:
+      - name: issueId
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [Issues]
+      operationId: updateIssue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IssueUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Issue' }
+
+  /approvals:
+    get:
+      tags: [Approvals]
+      operationId: listApprovals
+      summary: Pending approvals queue (with aging)
+      responses:
+        '200':
+          description: Approvals
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ApprovalItem' }
+  /approvals/{approvalId}/resolve:
+    parameters:
+      - name: approvalId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Approvals]
+      operationId: resolveApproval
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApprovalResolutionInput' }
+      responses:
+        '200':
+          description: Resolved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApprovalItem' }
+
+  /dashboard/portfolio:
+    get:
+      tags: [Dashboard]
+      operationId: getPortfolioDashboard
+      summary: Portfolio KPI summary + live project status table
+      responses:
+        '200':
+          description: Portfolio dashboard
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PortfolioDashboard' }
+  /dashboard/activity-feed:
+    get:
+      tags: [Dashboard]
+      operationId: getActivityFeed
+      summary: Recent activity across all projects
+      responses:
+        '200':
+          description: Activity feed
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ActivityFeedItem' }
+
 components:
+  parameters:
+    AuthorizationSessionHeader:
+      name: Authorization
+      in: header
+      required: false
+      schema: { type: string }
+    SessionCookie:
+      name: sid
+      in: cookie
+      required: false
+      schema: { type: string }
+    ProjectIdParam:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: string }
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
-        status:
-          type: string
-      required:
-        - status
+        status: { type: string }
 
+    AuthUser:
+      type: object
+      required: [id, email, firstName, lastName, profileImageUrl]
+      properties:
+        id: { type: string }
+        email: { type: [string, 'null'], format: email }
+        firstName: { type: [string, 'null'] }
+        lastName: { type: [string, 'null'] }
+        profileImageUrl: { type: [string, 'null'] }
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/AuthUser'
+            - type: 'null'
+    MobileTokenExchangeRequest:
+      type: object
+      required: [code, code_verifier, redirect_uri, state]
+      properties:
+        code: { type: string, minLength: 1 }
+        code_verifier: { type: string, minLength: 1 }
+        redirect_uri: { type: string, minLength: 1, format: uri }
+        state: { type: string, minLength: 1 }
+        nonce: { type: string, minLength: 1 }
+    MobileTokenExchangeSuccess:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string }
+    LogoutSuccess:
+      type: object
+      required: [success]
+      properties:
+        success: { type: boolean, const: true }
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+
+    UserRole:
+      type: string
+      enum: [owner, pm, site_engineer, qs, finance, contractor, qc, store, hr, admin]
+    ProjectStatus:
+      type: string
+      enum: [not_started, on_track, at_risk, delayed, on_hold, completed]
+    ActivityStatus:
+      type: string
+      enum: [not_started, on_track, at_risk, delayed, on_hold, completed]
+    MilestoneStatus:
+      type: string
+      enum: [pending, on_track, at_risk, delayed, completed]
+    DprStatus:
+      type: string
+      enum: [draft, submitted, approved, rejected]
+    IssueSeverity:
+      type: string
+      enum: [low, medium, high, critical]
+
+    MyProfile:
+      type: object
+      required: [userId, role, firstName, lastName, email, profileImageUrl, organisationId, organisationName, phone, designation]
+      properties:
+        userId: { type: string }
+        role: { $ref: '#/components/schemas/UserRole' }
+        firstName: { type: [string, 'null'] }
+        lastName: { type: [string, 'null'] }
+        email: { type: [string, 'null'] }
+        profileImageUrl: { type: [string, 'null'] }
+        organisationId: { type: [string, 'null'] }
+        organisationName: { type: [string, 'null'] }
+        phone: { type: [string, 'null'] }
+        designation: { type: [string, 'null'] }
+    MyProfileUpdate:
+      type: object
+      properties:
+        role: { $ref: '#/components/schemas/UserRole' }
+        organisationId: { type: string }
+        phone: { type: string }
+        designation: { type: string }
+
+    Organisation:
+      type: object
+      required: [id, name, legalName, gstin, pan, address, city, state, pincode, logoUrl, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        legalName: { type: [string, 'null'] }
+        gstin: { type: [string, 'null'] }
+        pan: { type: [string, 'null'] }
+        address: { type: [string, 'null'] }
+        city: { type: [string, 'null'] }
+        state: { type: [string, 'null'] }
+        pincode: { type: [string, 'null'] }
+        logoUrl: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+    OrganisationInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        legalName: { type: string }
+        gstin: { type: string }
+        pan: { type: string }
+        address: { type: string }
+        city: { type: string }
+        state: { type: string }
+        pincode: { type: string }
+        logoUrl: { type: string }
+
+    Project:
+      type: object
+      required: [id, organisationId, code, name, clientName, description, location, latitude, longitude, reraNumber, contractValue, startDate, targetEndDate, forecastEndDate, status, plannedPercent, actualPercent, costToDate, budgetToDate, cpi, spi, pmId, coverImageUrl, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        organisationId: { type: string }
+        code: { type: string }
+        name: { type: string }
+        clientName: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        location: { type: [string, 'null'] }
+        latitude: { type: [number, 'null'] }
+        longitude: { type: [number, 'null'] }
+        reraNumber: { type: [string, 'null'] }
+        contractValue: { type: number }
+        startDate: { type: [string, 'null'], format: date-time }
+        targetEndDate: { type: [string, 'null'], format: date-time }
+        forecastEndDate: { type: [string, 'null'], format: date-time }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        plannedPercent: { type: number }
+        actualPercent: { type: number }
+        costToDate: { type: number }
+        budgetToDate: { type: number }
+        cpi: { type: number }
+        spi: { type: number }
+        pmId: { type: [string, 'null'] }
+        coverImageUrl: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ProjectInput:
+      type: object
+      required: [organisationId, code, name]
+      properties:
+        organisationId: { type: string }
+        code: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        clientName: { type: string }
+        description: { type: string }
+        location: { type: string }
+        latitude: { type: number }
+        longitude: { type: number }
+        reraNumber: { type: string }
+        contractValue: { type: number }
+        startDate: { type: string, format: date-time }
+        targetEndDate: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        pmId: { type: string }
+        coverImageUrl: { type: string }
+    ProjectUpdate:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        clientName: { type: string }
+        description: { type: string }
+        location: { type: string }
+        latitude: { type: number }
+        longitude: { type: number }
+        reraNumber: { type: string }
+        contractValue: { type: number }
+        startDate: { type: string, format: date-time }
+        targetEndDate: { type: string, format: date-time }
+        forecastEndDate: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        pmId: { type: string }
+        coverImageUrl: { type: string }
+
+    WbsActivity:
+      type: object
+      required: [id, projectId, parentId, code, name, unit, plannedQuantity, actualQuantity, plannedStart, plannedEnd, actualStart, actualEnd, plannedPercent, actualPercent, plannedCost, actualCost, status, weight, sortOrder, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        parentId: { type: [string, 'null'] }
+        code: { type: string }
+        name: { type: string }
+        unit: { type: [string, 'null'] }
+        plannedQuantity: { type: number }
+        actualQuantity: { type: number }
+        plannedStart: { type: [string, 'null'], format: date-time }
+        plannedEnd: { type: [string, 'null'], format: date-time }
+        actualStart: { type: [string, 'null'], format: date-time }
+        actualEnd: { type: [string, 'null'], format: date-time }
+        plannedPercent: { type: number }
+        actualPercent: { type: number }
+        plannedCost: { type: number }
+        actualCost: { type: number }
+        status: { $ref: '#/components/schemas/ActivityStatus' }
+        weight: { type: number }
+        sortOrder: { type: integer }
+        createdAt: { type: string, format: date-time }
+    WbsActivityInput:
+      type: object
+      required: [code, name]
+      properties:
+        parentId: { type: string }
+        code: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        unit: { type: string }
+        plannedQuantity: { type: number }
+        plannedStart: { type: string, format: date-time }
+        plannedEnd: { type: string, format: date-time }
+        plannedPercent: { type: number }
+        plannedCost: { type: number }
+        weight: { type: number }
+        sortOrder: { type: integer }
+    WbsActivityUpdate:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        unit: { type: string }
+        plannedQuantity: { type: number }
+        actualQuantity: { type: number }
+        plannedStart: { type: string, format: date-time }
+        plannedEnd: { type: string, format: date-time }
+        actualStart: { type: string, format: date-time }
+        actualEnd: { type: string, format: date-time }
+        plannedPercent: { type: number }
+        actualPercent: { type: number }
+        plannedCost: { type: number }
+        actualCost: { type: number }
+        status: { $ref: '#/components/schemas/ActivityStatus' }
+        weight: { type: number }
+        sortOrder: { type: integer }
+
+    Milestone:
+      type: object
+      required: [id, projectId, name, description, targetDate, forecastDate, actualDate, status, certificateIssued, sortOrder, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        targetDate: { type: string, format: date-time }
+        forecastDate: { type: [string, 'null'], format: date-time }
+        actualDate: { type: [string, 'null'], format: date-time }
+        status: { $ref: '#/components/schemas/MilestoneStatus' }
+        certificateIssued: { type: boolean }
+        sortOrder: { type: integer }
+        createdAt: { type: string, format: date-time }
+    MilestoneInput:
+      type: object
+      required: [name, targetDate]
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+        targetDate: { type: string, format: date-time }
+        forecastDate: { type: string, format: date-time }
+        sortOrder: { type: integer }
+    MilestoneUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        targetDate: { type: string, format: date-time }
+        forecastDate: { type: string, format: date-time }
+        actualDate: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/MilestoneStatus' }
+        certificateIssued: { type: boolean }
+        sortOrder: { type: integer }
+
+    Dpr:
+      type: object
+      required: [id, projectId, reportDate, weather, temperature, manpowerCount, summary, status, submittedById, approvedById, submittedAt, approvedAt, rejectionReason, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        reportDate: { type: string, format: date-time }
+        weather: { type: [string, 'null'] }
+        temperature: { type: [number, 'null'] }
+        manpowerCount: { type: integer }
+        summary: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/DprStatus' }
+        submittedById: { type: [string, 'null'] }
+        approvedById: { type: [string, 'null'] }
+        submittedAt: { type: [string, 'null'], format: date-time }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        rejectionReason: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+    DprInput:
+      type: object
+      required: [reportDate]
+      properties:
+        reportDate: { type: string, format: date-time }
+        weather: { type: string }
+        temperature: { type: number }
+        manpowerCount: { type: integer }
+        summary: { type: string }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DprItemInput' }
+    DprApprovalInput:
+      type: object
+      properties:
+        approve: { type: boolean }
+        rejectionReason: { type: string }
+    DprItemInput:
+      type: object
+      required: [activityId, quantityToday]
+      properties:
+        activityId: { type: string }
+        quantityToday: { type: number }
+        remarks: { type: string }
+    DprItem:
+      type: object
+      required: [id, dprId, activityId, activityName, quantityToday, cumulativeQuantity, remarks]
+      properties:
+        id: { type: string }
+        dprId: { type: string }
+        activityId: { type: string }
+        activityName: { type: string }
+        quantityToday: { type: number }
+        cumulativeQuantity: { type: number }
+        remarks: { type: [string, 'null'] }
+    DprDetail:
+      type: object
+      required: [dpr, items, photos, submittedBy, approvedBy]
+      properties:
+        dpr: { $ref: '#/components/schemas/Dpr' }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DprItem' }
+        photos:
+          type: array
+          items: { $ref: '#/components/schemas/SitePhoto' }
+        submittedBy:
+          oneOf:
+            - $ref: '#/components/schemas/AuthUser'
+            - type: 'null'
+        approvedBy:
+          oneOf:
+            - $ref: '#/components/schemas/AuthUser'
+            - type: 'null'
+
+    SitePhoto:
+      type: object
+      required: [id, projectId, activityId, dprId, url, caption, capturedAt, latitude, longitude, uploadedById, tag, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        activityId: { type: [string, 'null'] }
+        dprId: { type: [string, 'null'] }
+        url: { type: string }
+        caption: { type: [string, 'null'] }
+        capturedAt: { type: string, format: date-time }
+        latitude: { type: [number, 'null'] }
+        longitude: { type: [number, 'null'] }
+        uploadedById: { type: [string, 'null'] }
+        tag: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+    SitePhotoInput:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, minLength: 1 }
+        activityId: { type: string }
+        dprId: { type: string }
+        caption: { type: string }
+        capturedAt: { type: string, format: date-time }
+        latitude: { type: number }
+        longitude: { type: number }
+        tag: { type: string }
+
+    Document:
+      type: object
+      required: [id, projectId, name, category, url, version, uploadedById, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        name: { type: string }
+        category: { type: [string, 'null'] }
+        url: { type: string }
+        version: { type: integer }
+        uploadedById: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+    DocumentInput:
+      type: object
+      required: [name, url]
+      properties:
+        name: { type: string, minLength: 1 }
+        category: { type: string }
+        url: { type: string, minLength: 1 }
+        version: { type: integer }
+
+    Issue:
+      type: object
+      required: [id, projectId, dprId, title, description, severity, status, raisedById, assignedToId, raisedAt, resolvedAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        dprId: { type: [string, 'null'] }
+        title: { type: string }
+        description: { type: [string, 'null'] }
+        severity: { $ref: '#/components/schemas/IssueSeverity' }
+        status: { type: string }
+        raisedById: { type: [string, 'null'] }
+        assignedToId: { type: [string, 'null'] }
+        raisedAt: { type: string, format: date-time }
+        resolvedAt: { type: [string, 'null'], format: date-time }
+    IssueInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1 }
+        description: { type: string }
+        severity: { $ref: '#/components/schemas/IssueSeverity' }
+        dprId: { type: string }
+        assignedToId: { type: string }
+    IssueUpdate:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        severity: { $ref: '#/components/schemas/IssueSeverity' }
+        status: { type: string }
+        assignedToId: { type: string }
+
+    ApprovalItem:
+      type: object
+      required: [id, projectId, projectName, entityType, entityId, title, requestedById, requestedByName, assignedToRole, status, createdAt, resolvedAt, ageDays]
+      properties:
+        id: { type: string }
+        projectId: { type: [string, 'null'] }
+        projectName: { type: [string, 'null'] }
+        entityType: { type: string }
+        entityId: { type: string }
+        title: { type: string }
+        requestedById: { type: [string, 'null'] }
+        requestedByName: { type: [string, 'null'] }
+        assignedToRole: { $ref: '#/components/schemas/UserRole' }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+        resolvedAt: { type: [string, 'null'], format: date-time }
+        ageDays: { type: integer }
+    ApprovalResolutionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approved, rejected] }
+        comment: { type: string }
+
+    PortfolioKpi:
+      type: object
+      required: [totalProjects, onTrack, atRisk, delayed, completed, pendingApprovals, totalContractValue, totalCostToDate, totalBudgetToDate, weightedCpi]
+      properties:
+        totalProjects: { type: integer }
+        onTrack: { type: integer }
+        atRisk: { type: integer }
+        delayed: { type: integer }
+        completed: { type: integer }
+        pendingApprovals: { type: integer }
+        totalContractValue: { type: number }
+        totalCostToDate: { type: number }
+        totalBudgetToDate: { type: number }
+        weightedCpi: { type: number }
+    PortfolioDashboard:
+      type: object
+      required: [kpi, projects]
+      properties:
+        kpi: { $ref: '#/components/schemas/PortfolioKpi' }
+        projects:
+          type: array
+          items: { $ref: '#/components/schemas/Project' }
+
+    ActivityFeedItem:
+      type: object
+      required: [id, kind, projectId, projectName, title, actorName, occurredAt]
+      properties:
+        id: { type: string }
+        kind: { type: string }
+        projectId: { type: [string, 'null'] }
+        projectName: { type: [string, 'null'] }
+        title: { type: string }
+        actorName: { type: [string, 'null'] }
+        occurredAt: { type: string, format: date-time }
+
+    ProjectHealthRing:
+      type: object
+      required: [plannedPercent, actualPercent, variancePercent, status]
+      properties:
+        plannedPercent: { type: number }
+        actualPercent: { type: number }
+        variancePercent: { type: number }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+    CostHealth:
+      type: object
+      required: [budgetToDate, costToDate, contractValue, cpi, overrunPercent]
+      properties:
+        budgetToDate: { type: number }
+        costToDate: { type: number }
+        contractValue: { type: number }
+        cpi: { type: number }
+        overrunPercent: { type: number }
+    GanttSegment:
+      type: object
+      required: [activityId, code, name, plannedStart, plannedEnd, actualStart, actualEnd, plannedPercent, actualPercent, status]
+      properties:
+        activityId: { type: string }
+        code: { type: string }
+        name: { type: string }
+        plannedStart: { type: [string, 'null'], format: date-time }
+        plannedEnd: { type: [string, 'null'], format: date-time }
+        actualStart: { type: [string, 'null'], format: date-time }
+        actualEnd: { type: [string, 'null'], format: date-time }
+        plannedPercent: { type: number }
+        actualPercent: { type: number }
+        status: { $ref: '#/components/schemas/ActivityStatus' }
+    PendingActionItem:
+      type: object
+      required: [id, kind, title, ageDays, severity]
+      properties:
+        id: { type: string }
+        kind: { type: string }
+        title: { type: string }
+        ageDays: { type: integer }
+        severity: { type: string }
+    ProjectDashboard:
+      type: object
+      required: [project, health, cost, miniGantt, activityStatusCounts, recentPhotos, pendingActions, nextMilestone]
+      properties:
+        project: { $ref: '#/components/schemas/Project' }
+        health: { $ref: '#/components/schemas/ProjectHealthRing' }
+        cost: { $ref: '#/components/schemas/CostHealth' }
+        miniGantt:
+          type: array
+          items: { $ref: '#/components/schemas/GanttSegment' }
+        activityStatusCounts:
+          type: object
+          required: [not_started, on_track, at_risk, delayed, on_hold, completed]
+          properties:
+            not_started: { type: integer }
+            on_track: { type: integer }
+            at_risk: { type: integer }
+            delayed: { type: integer }
+            on_hold: { type: integer }
+            completed: { type: integer }
+        recentPhotos:
+          type: array
+          items: { $ref: '#/components/schemas/SitePhoto' }
+        pendingActions:
+          type: array
+          items: { $ref: '#/components/schemas/PendingActionItem' }
+        nextMilestone:
+          oneOf:
+            - $ref: '#/components/schemas/Milestone'
+            - type: 'null'
