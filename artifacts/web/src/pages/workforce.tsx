@@ -1743,7 +1743,7 @@ function ContractorBillTab({ projectId }: { projectId: string }) {
                       }));
                     }}
                   >
-                    <SelectTrigger><SelectValue placeholder={(periods as any[]).length ? "Select period (locks payroll lines on approval)" : "No periods — bill will not lock payroll lines"} /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={(periods as any[]).length ? "Select period (required for approval; locks payroll lines)" : "No periods — bill can be submitted but cannot be approved"} /></SelectTrigger>
                     <SelectContent>{(periods as any[]).map((p: any) => <SelectItem key={p.id} value={p.id}>{fmtDate(p.startDate)} → {fmtDate(p.endDate)}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>

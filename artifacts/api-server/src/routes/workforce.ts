@@ -1204,8 +1204,8 @@ router.get("/projects/:projectId/labour-contractor-bills", requireAuth, async (r
 router.post("/projects/:projectId/labour-contractor-bills", requireAuth, async (req: Request, res: Response) => {
   if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
   const b = req.body ?? {};
-  if (!b.periodFrom || !b.periodTo || !b.claimedAmount || !b.contractorId || !b.periodId) {
-    res.status(400).json({ error: "contractorId, periodId, periodFrom, periodTo, claimedAmount required" }); return;
+  if (!b.periodFrom || !b.periodTo || !b.claimedAmount || !b.contractorId) {
+    res.status(400).json({ error: "contractorId, periodFrom, periodTo, claimedAmount required" }); return;
   }
   const count = await db.select({ c: sql`count(*)` }).from(labourContractorBillsTable)
     .where(eq(labourContractorBillsTable.projectId, req.params.projectId));
@@ -1213,7 +1213,7 @@ router.post("/projects/:projectId/labour-contractor-bills", requireAuth, async (
   const [row] = await db.insert(labourContractorBillsTable).values({
     projectId: req.params.projectId,
     billNumber: b.billNumber ?? `LCB-${String(seq).padStart(4, "0")}`,
-    contractorId: b.contractorId, periodId: b.periodId,
+    contractorId: b.contractorId, periodId: b.periodId ?? null,
     periodFrom: new Date(b.periodFrom), periodTo: new Date(b.periodTo),
     claimedHeadcount: b.claimedHeadcount ?? 0,
     claimedDays: String(n(b.claimedDays)), claimedAmount: String(n(b.claimedAmount)),
