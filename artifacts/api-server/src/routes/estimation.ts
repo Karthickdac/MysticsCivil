@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import multer from "multer";
 import {
   db,
@@ -345,32 +345,41 @@ router.get(
       .where(eq(boqItemsTable.estimateId, req.params.estimateId))
       .orderBy(asc(boqItemsTable.trade), asc(boqItemsTable.sortOrder));
 
-    const header = ["#", "Trade", "Item Code", "Description", "Unit", "Quantity", "Rate (INR)", "Amount (INR)", "GST %", "HSN Code", "Locked"];
-    const rows = items.map((item, idx) => [
-      idx + 1,
-      item.trade ?? "",
-      item.itemCode ?? "",
-      item.description ?? "",
-      item.unit ?? "",
-      n(item.quantity),
-      n(item.rate),
-      n(item.amount),
-      n(item.gstRate),
-      item.hsnCode ?? "",
-      item.locked ? "Yes" : "No",
-    ]);
-    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-    ws["!cols"] = [
-      { wch: 4 }, { wch: 18 }, { wch: 10 }, { wch: 55 }, { wch: 8 },
-      { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 7 }, { wch: 12 }, { wch: 7 },
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("BOQ");
+    ws.columns = [
+      { header: "#", width: 4 },
+      { header: "Trade", width: 18 },
+      { header: "Item Code", width: 10 },
+      { header: "Description", width: 55 },
+      { header: "Unit", width: 8 },
+      { header: "Quantity", width: 12 },
+      { header: "Rate (INR)", width: 14 },
+      { header: "Amount (INR)", width: 16 },
+      { header: "GST %", width: 7 },
+      { header: "HSN Code", width: 12 },
+      { header: "Locked", width: 7 },
     ];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "BOQ");
-    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    items.forEach((item, idx) => {
+      ws.addRow([
+        idx + 1,
+        item.trade ?? "",
+        item.itemCode ?? "",
+        item.description ?? "",
+        item.unit ?? "",
+        n(item.quantity),
+        n(item.rate),
+        n(item.amount),
+        n(item.gstRate),
+        item.hsnCode ?? "",
+        item.locked ? "Yes" : "No",
+      ]);
+    });
+    const buf = await wb.xlsx.writeBuffer();
     const filename = `BOQ_${est?.level ?? "L3"}_${req.params.estimateId.slice(0, 8)}.xlsx`;
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.send(buf);
+    res.send(Buffer.from(buf));
   },
 );
 
@@ -466,11 +475,15 @@ router.post(
       res.status(409).json({ error: "Estimate is locked — unlock it before importing BOQ items" });
       return;
     }
-    const wb = XLSX.read(file.buffer, { type: "buffer" });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const raw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(file.buffer);
+    const ws = wb.worksheets[0];
+    const raw: any[][] = [];
+    ws.eachRow((row) => { raw.push(row.values as any[]); });
+    // ExcelJS row.values is 1-indexed (index 0 is null); normalise to 0-indexed
+    const normalised = raw.map((r) => (r[0] === null || r[0] === undefined ? r.slice(1) : r));
     // Skip header row (row 0); skip rows missing a description (col index 3)
-    const dataRows = raw.slice(1).filter((r) => r.length > 3 && r[3]);
+    const dataRows = normalised.slice(1).filter((r) => r.length > 3 && r[3]);
     const created: ReturnType<typeof serializeBoqItem>[] = [];
     for (const [i, row] of dataRows.entries()) {
       // Columns: #(0), Trade(1), Item Code(2), Description(3), Unit(4),
