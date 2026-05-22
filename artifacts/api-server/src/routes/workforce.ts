@@ -70,6 +70,7 @@ router.post("/projects/:projectId/workers", requireAuth, async (req: Request, re
     skillLevel: b.skillLevel ?? "unskilled",
     dailyRate: String(n(b.dailyRate)), otRate: String(n(b.otRate)),
     aadhaarNumber: b.aadhaarNumber ?? null, phone: b.phone ?? null,
+    email: b.email ? String(b.email).trim().toLowerCase() : null,
     gender: b.gender ?? null, state: b.state ?? null,
     bocwRegNumber: b.bocwRegNumber ?? null,
     pfNumber: b.pfNumber ?? null, esiNumber: b.esiNumber ?? null,
@@ -98,6 +99,10 @@ router.patch("/workers/:workerId", requireAuth, async (req: Request, res: Respon
   for (const f of fields) if (b[f] !== undefined) patch[f] = b[f];
   if (b.dailyRate !== undefined) patch.dailyRate = String(n(b.dailyRate));
   if (b.otRate !== undefined) patch.otRate = String(n(b.otRate));
+  if (b.email !== undefined) {
+    const e = String(b.email ?? "").trim().toLowerCase();
+    patch.email = e || null;
+  }
   const [updated] = await db.update(workersTable).set(patch).where(eq(workersTable.id, w.id)).returning();
   res.json(updated);
 });
@@ -320,26 +325,24 @@ router.post("/payroll-periods/:periodId/approve", requireAuth, requireRole(...RO
 
 // ─── Wage-slip email delivery ────────────────────────────────────────────────
 async function dispatchWageSlipEmails(periodId: string, triggeredById: string | null): Promise<void> {
+  // Build slips so wage_slips rows exist + we have render-ready data per worker.
   const { data } = await buildWageSlipsForPeriod(periodId);
   if (data.length === 0) return;
-  const workerIds = data.map((_, i) => i); // unused; we re-fetch worker rows for email
-  const workers = await db.select().from(workersTable)
-    .where(inArray(workersTable.id, (await db.select({ workerId: payrollLinesTable.workerId })
-      .from(payrollLinesTable).where(eq(payrollLinesTable.periodId, periodId))).map(r => r.workerId)));
-  const wmap = Object.fromEntries(workers.map(w => [w.id, w]));
+  // Map slip data by slipNumber for lookup; we iterate slip rows (workerId-authoritative).
+  const slipDataByNumber = new Map(data.map(d => [d.slipNumber, d]));
   const slips = await db.select().from(wageSlipsTable).where(eq(wageSlipsTable.periodId, periodId));
-  const slipMap = Object.fromEntries(slips.map(s => [s.workerId, s]));
-  void workerIds;
-  for (const slip of data) {
-    // resolve workerId by matching slipNumber back to slip row
-    const slipRow = slips.find(s => s.slipNumber === slip.slipNumber);
-    if (!slipRow) continue;
+  if (slips.length === 0) return;
+  const workers = await db.select().from(workersTable)
+    .where(inArray(workersTable.id, slips.map(s => s.workerId)));
+  const wmap = Object.fromEntries(workers.map(w => [w.id, w]));
+  for (const slipRow of slips) {
+    const slipData = slipDataByNumber.get(slipRow.slipNumber);
+    if (!slipData) continue; // payroll line missing for this slip; skip
     await deliverOneWageSlip({
       periodId, workerId: slipRow.workerId, slipRowId: slipRow.id,
-      worker: wmap[slipRow.workerId], slip, triggeredById,
+      worker: wmap[slipRow.workerId], slip: slipData, triggeredById,
     });
   }
-  void slipMap;
 }
 
 async function deliverOneWageSlip(args: {
