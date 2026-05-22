@@ -2,91 +2,67 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useGetMyProfile } from "@workspace/api-client-react";
 import { useT, type Lang } from "@/lib/i18n";
-import { Languages } from "lucide-react";
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
-import {
+  Languages,
+  Home,
   Building2,
-  LayoutDashboard,
   ClipboardList,
+  BookOpen,
   Users,
   Settings,
-  HardHat,
   LogOut,
-  BookOpen,
+  Search,
+  Bell,
 } from "lucide-react";
 
 const ALL_ROLES = ["owner", "pm", "site_engineer", "qs", "finance", "contractor", "qc", "store", "hr", "admin"];
 
 type NavItem = { titleKey: string; url: string; icon: any; roles: string[] };
-type NavGroup = { labelKey: string; items: NavItem[] };
 
-function getNavGroups(role: string | undefined): NavGroup[] {
-  const groups: NavGroup[] = [
-    {
-      labelKey: "nav.group.overview",
-      items: [
-        { titleKey: "nav.dashboard", url: "/", icon: LayoutDashboard, roles: ALL_ROLES },
-      ],
-    },
-    {
-      labelKey: "nav.group.delivery",
-      items: [
-        { titleKey: "nav.projects", url: "/projects", icon: Building2, roles: ALL_ROLES },
-        { titleKey: "nav.approvals", url: "/approvals", icon: ClipboardList, roles: ["owner", "pm", "qs", "finance"] },
-      ],
-    },
-    {
-      labelKey: "nav.group.library",
-      items: [
-        { titleKey: "nav.dsrRates", url: "/dsr-rates", icon: BookOpen, roles: ["owner", "pm", "qs", "admin"] },
-      ],
-    },
-    {
-      labelKey: "nav.group.admin",
-      items: [
-        { titleKey: "nav.organisations", url: "/organisations", icon: Users, roles: ["admin"] },
-        { titleKey: "nav.profile", url: "/profile", icon: Settings, roles: ALL_ROLES },
-      ],
-    },
+function getNavItems(role: string | undefined): NavItem[] {
+  const items: NavItem[] = [
+    { titleKey: "nav.dashboard", url: "/", icon: Home, roles: ALL_ROLES },
+    { titleKey: "nav.projects", url: "/projects", icon: Building2, roles: ALL_ROLES },
+    { titleKey: "nav.approvals", url: "/approvals", icon: ClipboardList, roles: ["owner", "pm", "qs", "finance"] },
+    { titleKey: "nav.dsrRates", url: "/dsr-rates", icon: BookOpen, roles: ["owner", "pm", "qs", "admin"] },
+    { titleKey: "nav.organisations", url: "/organisations", icon: Users, roles: ["admin"] },
+    { titleKey: "nav.profile", url: "/profile", icon: Settings, roles: ALL_ROLES },
   ];
-  return groups
-    .map(g => ({ ...g, items: g.items.filter(i => !role || i.roles.includes(role)) }))
-    .filter(g => g.items.length > 0);
+  return items.filter(i => !role || i.roles.includes(role));
 }
 
 function LangSwitcher() {
-  const { lang, setLang, t } = useT();
-  const opts: { value: Lang; label: string }[] = [
-    { value: "en", label: t("label.english") },
-    { value: "ta", label: t("label.tamil") },
-  ];
+  const { lang, setLang } = useT();
+  const opts: Lang[] = ["en", "ta"];
   return (
-    <div className="flex items-center gap-1 text-xs" data-testid="lang-switcher">
-      <Languages className="h-3.5 w-3.5 opacity-70" />
+    <div className="flex items-center gap-1 text-xs bg-white border border-border rounded-full px-1.5 py-1" data-testid="lang-switcher">
+      <Languages className="h-3.5 w-3.5 text-muted-foreground" />
       {opts.map(o => (
         <button
-          key={o.value}
-          onClick={() => setLang(o.value)}
-          className={`px-2 py-0.5 rounded ${lang === o.value ? "bg-primary text-primary-foreground" : "hover:bg-sidebar-accent/50"}`}
-          data-testid={`lang-${o.value}`}
+          key={o}
+          onClick={() => setLang(o)}
+          className={`px-2 py-0.5 rounded-full font-semibold transition ${lang === o ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          data-testid={`lang-${o}`}
         >
-          {o.value.toUpperCase()}
+          {o.toUpperCase()}
         </button>
       ))}
     </div>
+  );
+}
+
+function Logo({ t }: { t: (k: string) => string }) {
+  return (
+    <Link href="/">
+      <a className="flex items-center gap-2 bg-white border border-border rounded-full pl-2 pr-4 py-1.5 hover:shadow-sm transition" data-testid="logo-home">
+        <span className="relative inline-flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-white">
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M4 18 L10 6" /><path d="M10 18 L16 6" /><path d="M16 18 L20 10" />
+          </svg>
+        </span>
+        <span className="font-extrabold text-sm tracking-tight">{t("app.name")}</span>
+      </a>
+    </Link>
   );
 }
 
@@ -96,75 +72,91 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { data: profile } = useGetMyProfile();
   const { t } = useT();
 
-  const navGroups = getNavGroups(profile?.role);
+  const navItems = getNavItems(profile?.role);
+  const initials = `${profile?.firstName?.[0] ?? ""}${profile?.lastName?.[0] ?? ""}`.toUpperCase() || "U";
 
   return (
-    <SidebarProvider>
-      <div className="flex h-screen w-full bg-background overflow-hidden">
-        <Sidebar className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-          <SidebarHeader className="p-4 border-b border-sidebar-border">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 font-bold text-lg text-primary">
-                <HardHat className="h-6 w-6" />
-                <span className="text-left">{t("app.name")}</span>
-              </div>
-              <LangSwitcher />
-            </div>
+    <div className="min-h-screen w-full bg-[hsl(240_30%_94%)] p-3 md:p-5">
+      <div className="mx-auto max-w-[1440px] bg-white rounded-[28px] border border-border shadow-[0_8px_40px_-12px_rgba(76,29,149,0.15)] overflow-hidden">
+        {/* ── Top bar ────────────────────────────────────────────────────── */}
+        <header className="flex items-center justify-between gap-3 px-4 md:px-6 py-4 border-b border-border/60">
+          <div className="flex items-center gap-3">
+            <Logo t={t} />
+          </div>
+
+          {/* Pill nav */}
+          <nav className="hidden md:flex items-center gap-1 bg-[hsl(240_25%_96%)] rounded-full p-1.5 border border-border/60" data-testid="top-nav">
+            {navItems.map((item) => {
+              const isActive = location === item.url;
+              return (
+                <Link key={item.titleKey} href={item.url}>
+                  <a
+                    className={`group inline-flex items-center gap-2 rounded-full text-sm font-semibold transition ${
+                      isActive
+                        ? "bg-primary text-primary-foreground px-4 py-2 shadow-sm"
+                        : "text-muted-foreground hover:text-foreground h-9 w-9 justify-center"
+                    }`}
+                    title={t(item.titleKey)}
+                    data-testid={`nav-${item.titleKey}`}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {isActive && <span>{t(item.titleKey)}</span>}
+                  </a>
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="flex items-center gap-2">
+            <LangSwitcher />
+            <button className="h-9 w-9 rounded-full bg-white border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition" data-testid="btn-search">
+              <Search className="h-4 w-4" />
+            </button>
+            <button className="h-9 w-9 rounded-full bg-white border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition" data-testid="btn-notifications">
+              <Bell className="h-4 w-4" />
+            </button>
             {profile && (
-              <div className="mt-4 flex flex-col">
-                <span className="text-sm font-medium">{profile.firstName} {profile.lastName}</span>
-                <span className="text-xs text-sidebar-foreground/70 capitalize">{profile.role.replace("_", " ")}</span>
+              <div className="hidden md:flex items-center gap-2 bg-white border border-border rounded-full pl-1 pr-3 py-1" data-testid="user-chip">
+                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 text-white flex items-center justify-center text-xs font-bold">
+                  {initials}
+                </div>
+                <div className="flex flex-col leading-tight">
+                  <span className="text-xs font-semibold">{profile.firstName} {profile.lastName}</span>
+                  <span className="text-[10px] text-muted-foreground">{profile.email}</span>
+                </div>
               </div>
             )}
-          </SidebarHeader>
-          <SidebarContent className="p-2">
-            {navGroups.map((group) => (
-              <SidebarGroup key={group.labelKey} data-testid={`nav-group-${group.labelKey}`}>
-                <SidebarGroupLabel className="text-[10px] uppercase tracking-wider text-sidebar-foreground/50">
-                  {t(group.labelKey)}
-                </SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {group.items.map((item) => (
-                      <SidebarMenuItem key={item.titleKey}>
-                        <SidebarMenuButton asChild isActive={location === item.url}>
-                          <Link href={item.url} className="flex items-center gap-3">
-                            <item.icon className="h-4 w-4" />
-                            <span>{t(item.titleKey)}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            ))}
-          </SidebarContent>
-          <SidebarFooter className="p-4 border-t border-sidebar-border">
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={async () => { await logout(); setLocation("/login"); }} className="text-sidebar-foreground/70 hover:text-sidebar-foreground">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  <span>{t("nav.logout")}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarFooter>
-        </Sidebar>
-        <main className="flex-1 flex flex-col h-screen overflow-hidden bg-muted/30">
-          <header className="h-14 border-b bg-background flex items-center px-4 md:hidden">
-            <SidebarTrigger />
-            <div className="ml-4 font-bold text-primary flex items-center gap-2">
-              <HardHat className="h-5 w-5" />
-              <span>{t("app.name")}</span>
-            </div>
-            <div className="ml-auto"><LangSwitcher /></div>
-          </header>
-          <div className="flex-1 overflow-y-auto p-4 md:p-8">
-            {children}
+            <button
+              onClick={async () => { await logout(); setLocation("/login"); }}
+              className="h-9 w-9 rounded-full bg-white border border-border flex items-center justify-center text-muted-foreground hover:text-rose-600 transition"
+              title={t("nav.logout")}
+              data-testid="btn-logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
+        </header>
+
+        {/* Mobile nav row */}
+        <div className="md:hidden flex items-center gap-1 px-3 py-2 border-b border-border/60 overflow-x-auto">
+          {navItems.map((item) => {
+            const isActive = location === item.url;
+            return (
+              <Link key={item.titleKey} href={item.url}>
+                <a className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${isActive ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                  <item.icon className="h-3.5 w-3.5" />
+                  <span>{t(item.titleKey)}</span>
+                </a>
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* ── Content ────────────────────────────────────────────────────── */}
+        <main className="p-4 md:p-6 lg:p-8 bg-[hsl(240_30%_98%)]">
+          {children}
         </main>
       </div>
-    </SidebarProvider>
+    </div>
   );
 }

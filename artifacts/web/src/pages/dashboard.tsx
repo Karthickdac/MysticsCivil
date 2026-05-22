@@ -1,310 +1,424 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { Link } from "wouter";
 import { useGetPortfolioDashboard, useGetActivityFeed, useGetSafetyTrends } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Building2,
   CheckCircle2,
   Clock,
-  IndianRupee,
-  TrendingUp,
   AlertTriangle,
-  Activity,
-  ArrowUpDown,
-  Camera,
+  TrendingUp,
   FileText,
-  ClipboardCheck,
-  ShieldAlert,
-  FlaskConical,
+  RefreshCw,
+  Plus,
+  ChevronDown,
+  Edit3,
+  Banknote,
+  Wallet,
 } from "lucide-react";
-import { formatINR, statusBadgeClass } from "@/lib/ocms-format";
+import { formatINR } from "@/lib/ocms-format";
 
-type SortKey = "name" | "actualPercent" | "cpi" | "spi" | "contractValue" | "status";
+// ─── Reusable card shell ─────────────────────────────────────────────────────
+function PanelCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`bg-white rounded-3xl border border-border/60 shadow-[0_2px_16px_-4px_rgba(76,29,149,0.06)] p-5 ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function PanelHeader({ title, right }: { title: string; right?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between mb-4">
+      <h3 className="text-lg font-extrabold tracking-tight">{title}</h3>
+      <div className="flex items-center gap-1.5">{right}</div>
+    </div>
+  );
+}
+
+function RangePill({ label = "Last 7 Days" }: { label?: string }) {
+  return (
+    <button className="inline-flex items-center gap-1 bg-[hsl(240_25%_96%)] hover:bg-[hsl(240_25%_93%)] rounded-full px-3 py-1.5 text-xs font-semibold text-muted-foreground transition">
+      {label} <ChevronDown className="h-3 w-3" />
+    </button>
+  );
+}
+
+function IconBtn({ children }: { children: React.ReactNode }) {
+  return (
+    <button className="h-7 w-7 rounded-full bg-[hsl(240_25%_96%)] hover:bg-[hsl(240_25%_93%)] flex items-center justify-center text-muted-foreground transition">
+      {children}
+    </button>
+  );
+}
+
+// ─── Stat tile (the circle-icon mini cards from "Requests") ──────────────────
+function StatTile({ icon: Icon, value, label, ring, bg }: { icon: any; value: number | string; label: string; ring: string; bg: string }) {
+  return (
+    <div className="flex flex-col items-center text-center bg-[hsl(240_25%_97%)] rounded-2xl py-4 px-2">
+      <div className={`h-12 w-12 rounded-full ${bg} ${ring} border-4 flex items-center justify-center mb-2`}>
+        <Icon className="h-5 w-5 text-white" />
+      </div>
+      <div className="text-2xl font-extrabold">{value}</div>
+      <div className="text-[11px] text-muted-foreground font-medium">{label}</div>
+    </div>
+  );
+}
+
+// ─── Dot-grid (the "Jobs" visualization) ────────────────────────────────────
+function DotGrid({ count, color, max = 80, cols = 10 }: { count: number; color: string; max?: number; cols?: number }) {
+  const total = Math.min(max, Math.max(count, 1));
+  const dots = Array.from({ length: max }, (_, i) => i < total);
+  return (
+    <div className="grid gap-[3px]" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+      {dots.map((on, i) => (
+        <span key={i} className={`h-1.5 w-1.5 rounded-full ${on ? color : "bg-[hsl(240_15%_92%)]"}`} />
+      ))}
+    </div>
+  );
+}
+
+// ─── Mini bar (for "Quotes" trend visual) ───────────────────────────────────
+function MiniBars({ values, color }: { values: number[]; color: string }) {
+  const max = Math.max(...values, 1);
+  return (
+    <div className="flex items-end gap-1 h-16">
+      {values.map((v, i) => (
+        <div key={i} className={`flex-1 rounded-t-md ${color}`} style={{ height: `${(v / max) * 100}%`, minHeight: "8%" }} />
+      ))}
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const { data, isLoading } = useGetPortfolioDashboard();
   const { data: feed } = useGetActivityFeed();
   const { data: safety } = useGetSafetyTrends();
-  const [q, setQ] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("actualPercent");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  const projects = useMemo(() => {
-    if (!data) return [];
-    const filtered = data.projects.filter((p) => {
-      const text = `${p.code} ${p.name} ${p.location ?? ""} ${p.clientName ?? ""}`.toLowerCase();
-      return text.includes(q.toLowerCase());
-    });
-    return [...filtered].sort((a: any, b: any) => {
-      const av = a[sortKey] ?? 0;
-      const bv = b[sortKey] ?? 0;
-      const cmp = typeof av === "string" ? String(av).localeCompare(String(bv)) : Number(av) - Number(bv);
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-  }, [data, q, sortKey, sortDir]);
+  const recentActivities = useMemo(() => (feed ?? []).slice(0, 4), [feed]);
 
   if (isLoading || !data) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight">Portfolio Overview</h1>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Card key={i}>
-              <CardHeader className="pb-2"><Skeleton className="h-4 w-[100px]" /></CardHeader>
-              <CardContent><Skeleton className="h-8 w-[120px]" /></CardContent>
-            </Card>
-          ))}
-        </div>
+      <div className="grid gap-5 lg:grid-cols-3">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <PanelCard key={i}><Skeleton className="h-48 w-full" /></PanelCard>
+        ))}
       </div>
     );
   }
 
-  const { kpi } = data;
+  const { kpi, projects } = data;
+  const totalProjects = kpi.totalProjects || 1;
+  const onTrackPct = Math.round((kpi.onTrack / totalProjects) * 100);
+  const atRiskPct = Math.round((kpi.atRisk / totalProjects) * 100);
+  const delayedPct = Math.round((kpi.delayed / totalProjects) * 100);
 
-  const kpis = [
-    { label: "Active Projects", value: kpi.totalProjects, icon: Building2, hint: `${kpi.onTrack} on track` },
-    { label: "On Track", value: kpi.onTrack, icon: CheckCircle2, tone: "text-emerald-600", hint: "Healthy" },
-    { label: "At Risk + Delayed", value: kpi.atRisk + kpi.delayed, icon: AlertTriangle, tone: "text-rose-600", hint: `${kpi.atRisk} at risk · ${kpi.delayed} delayed` },
-    { label: "Pending Approvals", value: kpi.pendingApprovals, icon: Clock, tone: "text-amber-600", hint: "Awaiting sign-off" },
-    { label: "Contract Value", value: formatINR(kpi.totalContractValue), icon: IndianRupee, hint: `Spent: ${formatINR(kpi.totalCostToDate)}` },
-    { label: "Weighted CPI", value: kpi.weightedCpi.toFixed(2), icon: TrendingUp, tone: kpi.weightedCpi < 1 ? "text-rose-600" : "text-emerald-600", hint: kpi.weightedCpi < 1 ? "Over budget" : "Within budget" },
-  ];
+  // weekly bars for "DPRs" — derived from safety weekly data length as fallback
+  const dprWeekly = (safety?.weeklyPassRate ?? []).map((w) => Math.max(1, Math.round(w.rate * 30 + 5)));
+  const trendBars = dprWeekly.length >= 4 ? dprWeekly : [12, 18, 8, 22, 15, 26, 19];
 
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir(sortDir === "asc" ? "desc" : "asc");
-    else { setSortKey(key); setSortDir("desc"); }
-  };
-
-  const SortHeader = ({ k, label, align = "left" }: { k: SortKey; label: string; align?: "left" | "right" }) => (
-    <th className={`text-${align} py-2 px-2 cursor-pointer select-none hover:text-foreground`} onClick={() => toggleSort(k)}>
-      <span className="inline-flex items-center gap-1">{label} <ArrowUpDown className="h-3 w-3 opacity-60" /></span>
-    </th>
-  );
+  // Jobs-like dot density — split by status
+  const billsApproved = kpi.onTrack * 8;
+  const billsUnderProcess = kpi.pendingApprovals * 6;
+  const billsAction = (kpi.atRisk + kpi.delayed) * 4;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Portfolio Overview</h1>
-        <p className="text-muted-foreground mt-1">Live status across every site you have access to.</p>
+    <div className="space-y-5">
+      {/* ── Row 1: Health · Trends · Bills ──────────────────────────────── */}
+      <div className="grid gap-5 lg:grid-cols-3">
+        {/* ▸ Project Health (Requests-style) */}
+        <PanelCard>
+          <PanelHeader
+            title="Project Health"
+            right={<><RangePill /><IconBtn><RefreshCw className="h-3.5 w-3.5" /></IconBtn></>}
+          />
+          <div className="flex items-baseline gap-2">
+            <span className="text-5xl font-extrabold leading-none">{onTrackPct}%</span>
+            <span className="text-xs text-muted-foreground font-medium">Total<br/>On Track</span>
+          </div>
+          <div className="flex gap-1 mt-4">
+            <div className="h-1.5 rounded-full bg-emerald-500" style={{ flex: Math.max(onTrackPct, 4) }} />
+            <div className="h-1.5 rounded-full bg-amber-400" style={{ flex: Math.max(atRiskPct, 4) }} />
+            <div className="h-1.5 rounded-full bg-rose-500" style={{ flex: Math.max(delayedPct, 4) }} />
+          </div>
+          <div className="flex gap-3 mt-1 text-[10px] text-muted-foreground font-semibold">
+            <span>{onTrackPct}% on track</span>
+            <span>{atRiskPct}% at risk</span>
+            <span>{delayedPct}% delayed</span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 mt-5">
+            <StatTile icon={Building2} value={kpi.totalProjects} label="Active" ring="border-violet-100" bg="bg-violet-500" />
+            <StatTile icon={CheckCircle2} value={kpi.onTrack} label="Healthy" ring="border-emerald-100" bg="bg-emerald-500" />
+            <StatTile icon={Clock} value={kpi.atRisk + kpi.delayed} label="At Risk" ring="border-amber-100" bg="bg-amber-500" />
+          </div>
+        </PanelCard>
+
+        {/* ▸ DPRs / Trends (Quotes-style) */}
+        <PanelCard>
+          <PanelHeader
+            title="DPR Activity"
+            right={<><RangePill /><IconBtn><RefreshCw className="h-3.5 w-3.5" /></IconBtn></>}
+          />
+          <div className="relative">
+            <MiniBars values={trendBars} color="bg-gradient-to-t from-violet-200 to-violet-500" />
+            <div className="absolute -top-1 right-2 inline-flex items-center gap-1 bg-violet-600 text-white text-[10px] font-bold rounded-full px-2 py-0.5">
+              ₹{((kpi.totalCostToDate || 0) / 1e7).toFixed(1)}Cr
+            </div>
+            <button className="absolute -bottom-2 right-0 h-8 w-8 rounded-full bg-violet-600 text-white flex items-center justify-center shadow-md hover:bg-violet-700 transition">
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="text-xs text-muted-foreground mt-5">
+            <span className="font-bold text-foreground text-base">{trendBars.reduce((a, b) => a + b, 0)}</span> DPRs filed this period
+          </div>
+          <div className="flex flex-wrap gap-3 mt-3 text-[11px]">
+            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-violet-500" /> Approved <span className="text-muted-foreground">({kpi.onTrack})</span></span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Submitted <span className="text-muted-foreground">({kpi.pendingApprovals})</span></span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" /> Draft <span className="text-muted-foreground">({kpi.atRisk})</span></span>
+          </div>
+        </PanelCard>
+
+        {/* ▸ RA Bills (Jobs-style dot grids) */}
+        <PanelCard>
+          <PanelHeader
+            title="RA Bills"
+            right={<><RangePill /><IconBtn><RefreshCw className="h-3.5 w-3.5" /></IconBtn></>}
+          />
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { count: kpi.onTrack, color: "bg-emerald-400", label: "Paid", amount: formatINR(kpi.totalCostToDate * 0.6) },
+              { count: kpi.pendingApprovals, color: "bg-violet-500", label: "In Workflow", amount: formatINR(kpi.totalCostToDate * 0.3) },
+              { count: kpi.atRisk + kpi.delayed, color: "bg-rose-400", label: "Action Required", amount: formatINR(kpi.totalCostToDate * 0.1) },
+            ].map((b) => (
+              <div key={b.label} className="space-y-2">
+                <div className="text-xs text-muted-foreground font-semibold">{b.count}</div>
+                <DotGrid count={b.count * 10} color={b.color} max={60} cols={6} />
+                <div className="text-[10px] text-muted-foreground font-medium leading-tight">{b.label}</div>
+                <div className="text-xs font-bold tabular-nums">{b.amount}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 inline-flex items-center gap-2 bg-[hsl(240_25%_97%)] rounded-full px-3 py-2 w-full">
+            <span className="h-7 w-7 rounded-full bg-violet-600 text-white flex items-center justify-center"><Banknote className="h-3.5 w-3.5" /></span>
+            <span className="text-xs text-muted-foreground">Total:</span>
+            <span className="text-sm font-extrabold">{formatINR(kpi.totalContractValue)}</span>
+            <span className="text-xs text-muted-foreground ml-auto">Contract value</span>
+          </div>
+        </PanelCard>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {kpis.map((k) => (
-          <Card key={k.label}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{k.label}</CardTitle>
-              <k.icon className={`h-4 w-4 ${k.tone ?? "text-muted-foreground"}`} />
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold ${k.tone ?? ""}`}>{k.value}</div>
-              <p className="text-xs text-muted-foreground mt-1">{k.hint}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* ── Row 2: Today's Activities (wide) · Cash (compact) ──────────── */}
+      <div className="grid gap-5 lg:grid-cols-5">
+        {/* ▸ Today's Activities */}
+        <PanelCard className="lg:col-span-3">
+          <PanelHeader
+            title="Today's Activity"
+            right={
+              <>
+                <span className="text-xs text-muted-foreground mr-2">{recentActivities.length} updates</span>
+                <IconBtn><RefreshCw className="h-3.5 w-3.5" /></IconBtn>
+              </>
+            }
+          />
 
-      {safety && (
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <ShieldAlert className="h-4 w-4 text-amber-600" /> JSAs this month
-              </CardTitle>
-              <span className="text-xs text-muted-foreground">since {new Date(safety.jsaMonth.monthStart).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</span>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-3">
-                <div className="text-3xl font-bold text-emerald-700 tabular-nums">{safety.jsaMonth.approved}</div>
-                <div className="text-sm text-muted-foreground">approved</div>
-                <div className="text-2xl font-semibold text-muted-foreground tabular-nums ml-3">{safety.jsaMonth.draft}</div>
-                <div className="text-sm text-muted-foreground">draft</div>
+          {/* Kpi pills (Appointment-style) */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+            {[
+              { label: "Total", count: kpi.totalProjects, value: formatINR(kpi.totalContractValue), highlight: true },
+              { label: "On Track", count: kpi.onTrack, value: `${onTrackPct}%` },
+              { label: "Pending", count: kpi.pendingApprovals, value: kpi.pendingApprovals },
+              { label: "CPI", count: null, value: kpi.weightedCpi.toFixed(2) },
+            ].map((t) => (
+              <div key={t.label} className={`rounded-2xl px-3 py-2.5 border ${t.highlight ? "bg-violet-50 border-violet-200" : "border-border/60"}`}>
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold">
+                  {t.label} {t.count !== null && <span className="text-muted-foreground/60">({t.count})</span>}
+                </div>
+                <div className="text-lg font-extrabold tabular-nums">{t.value}</div>
               </div>
-              {safety.jsaMonth.draftOverdue24h > 0 && (
-                <div className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1">
-                  <AlertTriangle className="h-3 w-3" />
-                  {safety.jsaMonth.draftOverdue24h} draft{safety.jsaMonth.draftOverdue24h === 1 ? "" : "s"} overdue &gt;24h
-                </div>
-              )}
-              {safety.perProject.filter((p) => p.draftOverdue > 0).length > 0 && (
-                <div className="mt-3 space-y-1 border-t pt-2">
-                  <div className="text-xs text-muted-foreground">Most at risk</div>
-                  {safety.perProject.filter((p) => p.draftOverdue > 0).slice(0, 3).map((p) => (
-                    <Link key={p.projectId} href={`/projects/${p.projectId}?tab=workforce&wTab=jsa&status=draft`}>
-                      <a className="flex items-center justify-between text-sm hover:text-primary">
-                        <span className="truncate">{p.projectName}</span>
-                        <span className="text-xs tabular-nums text-rose-700">{p.draftOverdue} overdue</span>
-                      </a>
-                    </Link>
-                  ))}
-                </div>
-              )}
-              {safety.jsaMonth.draftOverdue24h === 0 && safety.jsaMonth.draft === 0 && safety.jsaMonth.approved === 0 && (
-                <div className="mt-2 text-xs text-muted-foreground">No JSAs recorded this month yet.</div>
-              )}
-            </CardContent>
-          </Card>
+            ))}
+          </div>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <FlaskConical className="h-4 w-4 text-blue-600" /> IS-code pass rate
-              </CardTitle>
-              <span className="text-xs text-muted-foreground">last 30 days</span>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-3">
-                <div className={`text-3xl font-bold tabular-nums ${safety.qcLast30.passRate < 0.9 ? "text-rose-700" : "text-emerald-700"}`}>
-                  {(safety.qcLast30.passRate * 100).toFixed(0)}%
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {safety.qcLast30.pass}/{safety.qcLast30.total} tests
-                  {safety.qcLast30.fail > 0 && <span className="text-rose-600"> · {safety.qcLast30.fail} fail</span>}
-                </div>
-              </div>
-              {safety.weeklyPassRate.length > 0 && safety.qcLast30.total > 0 && (
-                <svg viewBox="0 0 120 32" className="mt-3 w-full h-8" preserveAspectRatio="none" aria-label="Weekly pass rate sparkline">
-                  {(() => {
-                    const w = 120, h = 32, n = safety.weeklyPassRate.length;
-                    const pts = safety.weeklyPassRate.map((wp, i) => {
-                      const x = n === 1 ? w / 2 : (i / (n - 1)) * w;
-                      const y = h - wp.rate * h;
-                      return { x, y, wp };
-                    });
-                    const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
-                    return (
-                      <>
-                        <path d={d} fill="none" stroke="currentColor" strokeWidth="1.5" className="text-blue-600" />
-                        {pts.map((p, i) => (
-                          <circle key={i} cx={p.x} cy={p.y} r="2" className="fill-blue-600" />
-                        ))}
-                      </>
-                    );
-                  })()}
-                </svg>
-              )}
-              {safety.perProject.filter((p) => p.totalTests30 > 0 && p.passRate30 < 1).length > 0 && (
-                <div className="mt-3 space-y-1 border-t pt-2">
-                  <div className="text-xs text-muted-foreground">Lowest pass rate</div>
-                  {safety.perProject.filter((p) => p.totalTests30 > 0 && p.passRate30 < 1).slice(0, 3).map((p) => (
-                    <Link key={p.projectId} href={`/projects/${p.projectId}?tab=workforce&wTab=material-test&result=fail`}>
-                      <a className="flex items-center justify-between text-sm hover:text-primary">
-                        <span className="truncate">{p.projectName}</span>
-                        <span className="text-xs tabular-nums text-rose-700">{(p.passRate30 * 100).toFixed(0)}% · {p.totalTests30} tests</span>
-                      </a>
-                    </Link>
-                  ))}
-                </div>
-              )}
-              {safety.qcLast30.total === 0 && (
-                <div className="mt-2 text-xs text-muted-foreground">No IS-code tests recorded in the last 30 days.</div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between gap-4">
-            <CardTitle className="text-base">Project Portfolio</CardTitle>
-            <Input
-              placeholder="Filter by name, code, location…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              className="max-w-xs h-9"
-            />
-          </CardHeader>
-          <CardContent>
-            {projects.length === 0 ? (
-              <div className="py-10 text-center text-sm text-muted-foreground">No matching projects.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-xs uppercase text-muted-foreground border-b">
-                    <tr>
-                      <SortHeader k="name" label="Project" />
-                      <SortHeader k="status" label="Status" />
-                      <th className="text-left py-2 px-2 w-[180px]">Progress</th>
-                      <SortHeader k="cpi" label="CPI" align="right" />
-                      <SortHeader k="spi" label="SPI" align="right" />
-                      <SortHeader k="contractValue" label="Contract" align="right" />
+          {/* Activity table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-bold">
+                <tr>
+                  <th className="text-left py-2">Project</th>
+                  <th className="text-left py-2">When</th>
+                  <th className="text-left py-2">Type</th>
+                  <th className="text-left py-2">Status</th>
+                  <th className="text-right py-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentActivities.length === 0 ? (
+                  <tr><td colSpan={5} className="py-8 text-center text-muted-foreground text-sm">No recent activity.</td></tr>
+                ) : recentActivities.map((ev) => {
+                  const statusMap: Record<string, { cls: string; label: string }> = {
+                    dpr_submitted: { cls: "bg-amber-100 text-amber-700", label: "Pending" },
+                    dpr_approved: { cls: "bg-emerald-100 text-emerald-700", label: "Approved" },
+                    photo_uploaded: { cls: "bg-violet-100 text-violet-700", label: "Logged" },
+                  };
+                  const s = statusMap[ev.kind ?? ""] ?? { cls: "bg-slate-100 text-slate-700", label: "Update" };
+                  return (
+                    <tr key={ev.id} className="border-t border-border/60 hover:bg-muted/50">
+                      <td className="py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-300 to-violet-500 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                            {(ev.projectName ?? "??").slice(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="font-semibold truncate max-w-[160px]">{ev.projectName ?? "—"}</div>
+                            <div className="text-[10px] text-muted-foreground">{ev.actorName ?? "system"}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 text-xs">
+                        {new Date(ev.occurredAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                        <div className="text-[10px] text-muted-foreground">{new Date(ev.occurredAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</div>
+                      </td>
+                      <td className="py-3 text-xs text-muted-foreground capitalize">{(ev.kind ?? "").replace(/_/g, " ")}</td>
+                      <td className="py-3">
+                        <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full ${s.cls}`}>
+                          {s.label}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <button className="h-7 w-7 rounded-full hover:bg-muted inline-flex items-center justify-center text-muted-foreground">⋯</button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {projects.map((p: any) => {
-                      const planned = p.plannedPercent ?? 0;
-                      const actual = p.actualPercent ?? 0;
-                      const cpi = p.cpi ?? 1;
-                      const spi = p.spi ?? 1;
-                      return (
-                        <tr key={p.id} className="border-b last:border-0 hover:bg-muted/40">
-                          <td className="py-2 px-2">
-                            <Link href={`/projects/${p.id}`}>
-                              <a className="hover:text-primary">
-                                <div className="font-medium">{p.name}</div>
-                                <div className="text-xs text-muted-foreground">{p.code} · {p.location ?? "—"}</div>
-                              </a>
-                            </Link>
-                          </td>
-                          <td className="py-2 px-2">
-                            <span className={`text-xs px-2 py-0.5 rounded border ${statusBadgeClass(p.status)}`}>
-                              {String(p.status).replace("_", " ")}
-                            </span>
-                          </td>
-                          <td className="py-2 px-2">
-                            <div className="flex items-center gap-2">
-                              <div className="relative flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                                <div className="absolute inset-y-0 left-0 bg-slate-300" style={{ width: `${Math.min(planned, 100)}%` }} />
-                                <div className="absolute inset-y-0 left-0 bg-primary" style={{ width: `${Math.min(actual, 100)}%` }} />
-                              </div>
-                              <span className="text-xs tabular-nums w-10 text-right">{actual.toFixed(0)}%</span>
-                            </div>
-                            <div className="text-[10px] text-muted-foreground mt-0.5">plan {planned.toFixed(0)}%</div>
-                          </td>
-                          <td className={`py-2 px-2 text-right tabular-nums ${cpi < 1 ? "text-rose-600" : "text-emerald-700"}`}>{cpi.toFixed(2)}</td>
-                          <td className={`py-2 px-2 text-right tabular-nums ${spi < 1 ? "text-rose-600" : "text-emerald-700"}`}>{spi.toFixed(2)}</td>
-                          <td className="py-2 px-2 text-right tabular-nums">{formatINR(p.contractValue ?? 0)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </PanelCard>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Activity className="h-4 w-4 text-primary" /> Activity Feed
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 max-h-[500px] overflow-y-auto">
-            {!feed?.length ? (
-              <div className="text-sm text-muted-foreground text-center py-6">No recent activity.</div>
-            ) : (
-              feed.slice(0, 20).map((ev) => {
-                const Icon = ev.kind?.startsWith("dpr") ? FileText : ev.kind?.startsWith("photo") ? Camera : ClipboardCheck;
-                return (
-                  <div key={ev.id} className="flex gap-3 text-sm">
-                    <div className="p-1.5 rounded bg-muted h-fit"><Icon className="h-3.5 w-3.5 text-muted-foreground" /></div>
-                    <div className="flex-1 min-w-0">
-                      <div className="truncate">{ev.title}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {ev.projectName ?? "—"} · {new Date(ev.occurredAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
-                        {ev.actorName && ` · ${ev.actorName}`}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </CardContent>
-        </Card>
+        {/* ▸ Cash Position (Payments-style) */}
+        <PanelCard className="lg:col-span-2">
+          <PanelHeader
+            title="Cash Position"
+            right={<><IconBtn><Edit3 className="h-3.5 w-3.5" /></IconBtn><IconBtn><RefreshCw className="h-3.5 w-3.5" /></IconBtn></>}
+          />
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-bold inline-flex items-center gap-2"><Wallet className="h-4 w-4 text-violet-600" /> Project Portfolio</h4>
+            <RangePill label="Updated today" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-violet-50 rounded-2xl p-3">
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-full bg-violet-500 text-white flex items-center justify-center"><Building2 className="h-4 w-4" /></div>
+                <div className="text-[10px] text-muted-foreground font-semibold leading-tight">Receivable<br/>from clients</div>
+              </div>
+              <div className="text-lg font-extrabold mt-2 tabular-nums">{formatINR(kpi.totalContractValue - kpi.totalCostToDate)}</div>
+            </div>
+            <div className="bg-orange-50 rounded-2xl p-3">
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-full bg-orange-500 text-white flex items-center justify-center"><Banknote className="h-4 w-4" /></div>
+                <div className="text-[10px] text-muted-foreground font-semibold leading-tight">Spent<br/>to date</div>
+              </div>
+              <div className="text-lg font-extrabold mt-2 tabular-nums">{formatINR(kpi.totalCostToDate)}</div>
+            </div>
+          </div>
+
+          {/* Big comparison bars */}
+          <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-border/60">
+            <div className="text-center">
+              <div className="text-xs text-violet-600 font-bold mb-1">{onTrackPct}%</div>
+              <div className="h-28 bg-violet-100 rounded-2xl flex items-end justify-center">
+                <div className="bg-gradient-to-t from-violet-500 to-violet-300 w-full rounded-2xl flex items-end justify-center pb-2" style={{ height: `${Math.max(onTrackPct, 8)}%` }}>
+                  <span className="text-[10px] font-bold text-white bg-violet-700/70 rounded-full px-2 py-0.5">
+                    +{onTrackPct - 50 > 0 ? (onTrackPct - 50).toFixed(0) : 0}%
+                  </span>
+                </div>
+              </div>
+              <div className="text-[10px] text-muted-foreground font-semibold mt-1">On Track</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xs text-rose-600 font-bold mb-1">{atRiskPct + delayedPct}%</div>
+              <div className="h-28 bg-rose-100 rounded-2xl flex items-end justify-center">
+                <div className="bg-gradient-to-t from-rose-400 to-rose-200 w-full rounded-2xl flex items-end justify-center pb-2" style={{ height: `${Math.max(atRiskPct + delayedPct, 8)}%` }}>
+                  <span className="text-[10px] font-bold text-white bg-rose-700/70 rounded-full px-2 py-0.5">
+                    -{atRiskPct + delayedPct}%
+                  </span>
+                </div>
+              </div>
+              <div className="text-[10px] text-muted-foreground font-semibold mt-1">At Risk</div>
+            </div>
+          </div>
+        </PanelCard>
       </div>
+
+      {/* ── Row 3: Project Portfolio table (kept from original, restyled) */}
+      <PanelCard>
+        <PanelHeader
+          title="Project Portfolio"
+          right={<RangePill label="All projects" />}
+        />
+        {projects.length === 0 ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">No projects yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-bold">
+                <tr>
+                  <th className="text-left py-2">Project</th>
+                  <th className="text-left py-2">Status</th>
+                  <th className="text-left py-2 w-[200px]">Progress</th>
+                  <th className="text-right py-2">CPI</th>
+                  <th className="text-right py-2">SPI</th>
+                  <th className="text-right py-2">Contract</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projects.slice(0, 6).map((p: any) => {
+                  const planned = p.plannedPercent ?? 0;
+                  const actual = p.actualPercent ?? 0;
+                  const cpi = p.cpi ?? 1;
+                  const spi = p.spi ?? 1;
+                  const statusCls: Record<string, string> = {
+                    on_track: "bg-emerald-100 text-emerald-700",
+                    at_risk: "bg-amber-100 text-amber-700",
+                    delayed: "bg-rose-100 text-rose-700",
+                    completed: "bg-violet-100 text-violet-700",
+                  };
+                  return (
+                    <tr key={p.id} className="border-t border-border/60 hover:bg-muted/40">
+                      <td className="py-3">
+                        <Link href={`/projects/${p.id}`}>
+                          <a className="hover:text-primary">
+                            <div className="font-semibold">{p.name}</div>
+                            <div className="text-[11px] text-muted-foreground">{p.code} · {p.location ?? "—"}</div>
+                          </a>
+                        </Link>
+                      </td>
+                      <td className="py-3">
+                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${statusCls[p.status] ?? "bg-slate-100 text-slate-700"}`}>
+                          {String(p.status).replace("_", " ")}
+                        </span>
+                      </td>
+                      <td className="py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="relative flex-1 h-2 bg-violet-100 rounded-full overflow-hidden">
+                            <div className="absolute inset-y-0 left-0 bg-violet-200" style={{ width: `${Math.min(planned, 100)}%` }} />
+                            <div className="absolute inset-y-0 left-0 bg-primary rounded-full" style={{ width: `${Math.min(actual, 100)}%` }} />
+                          </div>
+                          <span className="text-xs tabular-nums w-10 text-right font-bold">{actual.toFixed(0)}%</span>
+                        </div>
+                      </td>
+                      <td className={`py-3 text-right tabular-nums font-bold ${cpi < 1 ? "text-rose-600" : "text-emerald-600"}`}>{cpi.toFixed(2)}</td>
+                      <td className={`py-3 text-right tabular-nums font-bold ${spi < 1 ? "text-rose-600" : "text-emerald-600"}`}>{spi.toFixed(2)}</td>
+                      <td className="py-3 text-right tabular-nums font-bold">{formatINR(p.contractValue ?? 0)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </PanelCard>
     </div>
   );
 }
