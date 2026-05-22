@@ -1,22 +1,39 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useGetPortfolioDashboard, useGetActivityFeed, useGetSafetyTrends } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Building2,
   CheckCircle2,
   Clock,
-  AlertTriangle,
-  TrendingUp,
-  FileText,
   RefreshCw,
   Plus,
   ChevronDown,
   Edit3,
   Banknote,
   Wallet,
+  Check,
+  Eye,
 } from "lucide-react";
 import { formatINR } from "@/lib/ocms-format";
+
+const RANGE_OPTIONS = [
+  { value: "7d", label: "Last 7 Days" },
+  { value: "30d", label: "Last 30 Days" },
+  { value: "90d", label: "Last 90 Days" },
+  { value: "ytd", label: "Year to Date" },
+  { value: "all", label: "All Time" },
+] as const;
+type RangeValue = (typeof RANGE_OPTIONS)[number]["value"];
 
 // ─── Reusable card shell ─────────────────────────────────────────────────────
 function PanelCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -36,19 +53,92 @@ function PanelHeader({ title, right }: { title: string; right?: React.ReactNode 
   );
 }
 
-function RangePill({ label = "Last 7 Days" }: { label?: string }) {
+function RangePill({
+  value,
+  onChange,
+  options = RANGE_OPTIONS as unknown as { value: string; label: string }[],
+  testId,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options?: { value: string; label: string }[];
+  testId?: string;
+}) {
+  const current = options.find((o) => o.value === value) ?? options[0];
   return (
-    <button className="inline-flex items-center gap-1 bg-[hsl(240_25%_96%)] hover:bg-[hsl(240_25%_93%)] rounded-full px-3 py-1.5 text-xs font-semibold text-muted-foreground transition">
-      {label} <ChevronDown className="h-3 w-3" />
-    </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          data-testid={testId}
+          className="inline-flex items-center gap-1 bg-[hsl(240_25%_96%)] hover:bg-[hsl(240_25%_93%)] rounded-full px-3 py-1.5 text-xs font-semibold text-muted-foreground transition focus:outline-none focus:ring-2 focus:ring-violet-300"
+        >
+          {current.label} <ChevronDown className="h-3 w-3" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[160px]">
+        <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          Time range
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {options.map((opt) => (
+          <DropdownMenuItem
+            key={opt.value}
+            onSelect={() => onChange(opt.value)}
+            className="text-xs cursor-pointer flex items-center justify-between"
+            data-testid={`range-option-${opt.value}`}
+          >
+            <span>{opt.label}</span>
+            {opt.value === value && <Check className="h-3.5 w-3.5 text-violet-600" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
-function IconBtn({ children }: { children: React.ReactNode }) {
+function IconBtn({
+  children,
+  label,
+  onClick,
+  href,
+  testId,
+  spinning = false,
+}: {
+  children: React.ReactNode;
+  label: string;
+  onClick?: () => void;
+  href?: string;
+  testId?: string;
+  spinning?: boolean;
+}) {
+  const className =
+    "h-7 w-7 rounded-full bg-[hsl(240_25%_96%)] hover:bg-[hsl(240_25%_93%)] flex items-center justify-center text-muted-foreground transition focus:outline-none focus:ring-2 focus:ring-violet-300 disabled:opacity-50";
+  const body = (
+    <span className={spinning ? "animate-spin" : undefined}>{children}</span>
+  );
   return (
-    <button className="h-7 w-7 rounded-full bg-[hsl(240_25%_96%)] hover:bg-[hsl(240_25%_93%)] flex items-center justify-center text-muted-foreground transition">
-      {children}
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {href ? (
+          <Link href={href} className={className} aria-label={label} data-testid={testId}>
+            {body}
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={onClick}
+            className={className}
+            aria-label={label}
+            disabled={spinning}
+            data-testid={testId}
+          >
+            {body}
+          </button>
+        )}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -91,11 +181,36 @@ function MiniBars({ values, color }: { values: number[]; color: string }) {
 }
 
 export default function Dashboard() {
-  const { data, isLoading } = useGetPortfolioDashboard();
-  const { data: feed } = useGetActivityFeed();
-  const { data: safety } = useGetSafetyTrends();
+  const { data, isLoading, refetch: refetchPortfolio, isFetching: isFetchingPortfolio } = useGetPortfolioDashboard();
+  const { data: feed, refetch: refetchFeed, isFetching: isFetchingFeed } = useGetActivityFeed();
+  const { data: safety, refetch: refetchSafety, isFetching: isFetchingSafety } = useGetSafetyTrends();
+
+  const [healthRange, setHealthRange] = useState<RangeValue>("7d");
+  const [dprRange, setDprRange] = useState<RangeValue>("7d");
+  const [billsRange, setBillsRange] = useState<RangeValue>("30d");
+  const [portfolioRange, setPortfolioRange] = useState<string>("all");
+
+  const PORTFOLIO_OPTIONS = [
+    { value: "all", label: "All projects" },
+    { value: "on_track", label: "On track only" },
+    { value: "at_risk", label: "At risk only" },
+    { value: "delayed", label: "Delayed only" },
+    { value: "completed", label: "Completed only" },
+  ];
+  const CASH_OPTIONS = [
+    { value: "today", label: "Updated today" },
+    { value: "week", label: "This week" },
+    { value: "month", label: "This month" },
+  ];
+  const [cashRange, setCashRange] = useState<string>("today");
 
   const recentActivities = useMemo(() => (feed ?? []).slice(0, 4), [feed]);
+
+  const refreshAll = () => {
+    refetchPortfolio();
+    refetchFeed();
+    refetchSafety();
+  };
 
   if (isLoading || !data) {
     return (
@@ -130,7 +245,14 @@ export default function Dashboard() {
         <PanelCard>
           <PanelHeader
             title="Project Health"
-            right={<><RangePill /><IconBtn><RefreshCw className="h-3.5 w-3.5" /></IconBtn></>}
+            right={
+              <>
+                <RangePill value={healthRange} onChange={(v) => setHealthRange(v as RangeValue)} testId="range-health" />
+                <IconBtn label="Refresh health" onClick={refetchPortfolio} spinning={isFetchingPortfolio} testId="refresh-health">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </IconBtn>
+              </>
+            }
           />
           <div className="flex items-baseline gap-2">
             <span className="text-5xl font-extrabold leading-none">{onTrackPct}%</span>
@@ -158,16 +280,33 @@ export default function Dashboard() {
         <PanelCard>
           <PanelHeader
             title="DPR Activity"
-            right={<><RangePill /><IconBtn><RefreshCw className="h-3.5 w-3.5" /></IconBtn></>}
+            right={
+              <>
+                <RangePill value={dprRange} onChange={(v) => setDprRange(v as RangeValue)} testId="range-dpr" />
+                <IconBtn label="Refresh DPRs" onClick={refetchSafety} spinning={isFetchingSafety} testId="refresh-dpr">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </IconBtn>
+              </>
+            }
           />
           <div className="relative">
             <MiniBars values={trendBars} color="bg-gradient-to-t from-violet-200 to-violet-500" />
             <div className="absolute -top-1 right-2 inline-flex items-center gap-1 bg-violet-600 text-white text-[10px] font-bold rounded-full px-2 py-0.5">
               ₹{((kpi.totalCostToDate || 0) / 1e7).toFixed(1)}Cr
             </div>
-            <button className="absolute -bottom-2 right-0 h-8 w-8 rounded-full bg-violet-600 text-white flex items-center justify-center shadow-md hover:bg-violet-700 transition">
-              <Plus className="h-4 w-4" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/projects"
+                  className="absolute -bottom-2 right-0 h-8 w-8 rounded-full bg-violet-600 text-white flex items-center justify-center shadow-md hover:bg-violet-700 transition focus:outline-none focus:ring-2 focus:ring-violet-300"
+                  aria-label="File a new DPR"
+                  data-testid="dpr-new"
+                >
+                  <Plus className="h-4 w-4" />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent>File a new DPR</TooltipContent>
+            </Tooltip>
           </div>
           <div className="text-xs text-muted-foreground mt-5">
             <span className="font-bold text-foreground text-base">{trendBars.reduce((a, b) => a + b, 0)}</span> DPRs filed this period
@@ -183,7 +322,14 @@ export default function Dashboard() {
         <PanelCard>
           <PanelHeader
             title="RA Bills"
-            right={<><RangePill /><IconBtn><RefreshCw className="h-3.5 w-3.5" /></IconBtn></>}
+            right={
+              <>
+                <RangePill value={billsRange} onChange={(v) => setBillsRange(v as RangeValue)} testId="range-bills" />
+                <IconBtn label="Refresh bills" onClick={refetchPortfolio} spinning={isFetchingPortfolio} testId="refresh-bills">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </IconBtn>
+              </>
+            }
           />
           <div className="grid grid-cols-3 gap-3">
             {[
@@ -217,7 +363,9 @@ export default function Dashboard() {
             right={
               <>
                 <span className="text-xs text-muted-foreground mr-2">{recentActivities.length} updates</span>
-                <IconBtn><RefreshCw className="h-3.5 w-3.5" /></IconBtn>
+                <IconBtn label="Refresh activity" onClick={refetchFeed} spinning={isFetchingFeed} testId="refresh-feed">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </IconBtn>
               </>
             }
           />
@@ -285,7 +433,37 @@ export default function Dashboard() {
                         </span>
                       </td>
                       <td className="py-3 text-right">
-                        <button className="h-7 w-7 rounded-full hover:bg-muted inline-flex items-center justify-center text-muted-foreground">⋯</button>
+                        <DropdownMenu>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="h-7 w-7 rounded-full hover:bg-muted inline-flex items-center justify-center text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-300"
+                                  aria-label="Activity actions"
+                                  data-testid={`activity-actions-${ev.id}`}
+                                >
+                                  ⋯
+                                </button>
+                              </DropdownMenuTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent>Actions</TooltipContent>
+                          </Tooltip>
+                          <DropdownMenuContent align="end" className="min-w-[180px]">
+                            {ev.projectId && (
+                              <DropdownMenuItem asChild className="text-xs cursor-pointer">
+                                <Link href={`/projects/${ev.projectId}`} className="flex items-center gap-2">
+                                  <Eye className="h-3.5 w-3.5" /> Open project
+                                </Link>
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem asChild className="text-xs cursor-pointer">
+                              <Link href="/approvals" className="flex items-center gap-2">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Go to approvals
+                              </Link>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   );
@@ -299,11 +477,20 @@ export default function Dashboard() {
         <PanelCard className="lg:col-span-2">
           <PanelHeader
             title="Cash Position"
-            right={<><IconBtn><Edit3 className="h-3.5 w-3.5" /></IconBtn><IconBtn><RefreshCw className="h-3.5 w-3.5" /></IconBtn></>}
+            right={
+              <>
+                <IconBtn label="Open financial module" href="/approvals" testId="cash-edit">
+                  <Edit3 className="h-3.5 w-3.5" />
+                </IconBtn>
+                <IconBtn label="Refresh cash" onClick={refreshAll} spinning={isFetchingPortfolio} testId="refresh-cash">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </IconBtn>
+              </>
+            }
           />
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-bold inline-flex items-center gap-2"><Wallet className="h-4 w-4 text-violet-600" /> Project Portfolio</h4>
-            <RangePill label="Updated today" />
+            <RangePill value={cashRange} onChange={setCashRange} options={CASH_OPTIONS} testId="range-cash" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -355,7 +542,14 @@ export default function Dashboard() {
       <PanelCard>
         <PanelHeader
           title="Project Portfolio"
-          right={<RangePill label="All projects" />}
+          right={
+            <RangePill
+              value={portfolioRange}
+              onChange={setPortfolioRange}
+              options={PORTFOLIO_OPTIONS}
+              testId="range-portfolio"
+            />
+          }
         />
         {projects.length === 0 ? (
           <div className="py-10 text-center text-sm text-muted-foreground">No projects yet.</div>
@@ -373,7 +567,10 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {projects.slice(0, 6).map((p: any) => {
+                {projects
+                  .filter((p: any) => portfolioRange === "all" || p.status === portfolioRange)
+                  .slice(0, 6)
+                  .map((p: any) => {
                   const planned = p.plannedPercent ?? 0;
                   const actual = p.actualPercent ?? 0;
                   const cpi = p.cpi ?? 1;
