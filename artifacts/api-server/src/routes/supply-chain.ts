@@ -192,6 +192,12 @@ async function denyIfNoProjectAccess(
   return false;
 }
 
+// Apply project-access guard to ALL /projects/:projectId/* routes
+router.use("/projects/:projectId", requireAuth, async (req: Request, res: Response, next) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  next();
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // VENDORS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1012,83 +1018,93 @@ router.get("/projects/:projectId/stock-issues", requireAuth, async (req: Request
 router.post("/projects/:projectId/stock-issues", requireAuth, async (req: Request, res: Response) => {
   const b = req.body ?? {};
   if (!b.issueNumber) { res.status(400).json({ error: "issueNumber required" }); return; }
-  const [row] = await db.insert(stockIssuesTable).values({
-    projectId: req.params.projectId, issueNumber: b.issueNumber,
-    indentId: b.indentId ?? null, storeId: b.storeId ?? null,
-    issuedToName: b.issuedToName ?? null, issuedToContractor: b.issuedToContractor ?? null,
-    wbsActivityId: b.wbsActivityId ?? null, notes: b.notes ?? null,
-    contractorSignature: b.contractorSignature ?? null,
-    issuedById: req.user?.id ?? null,
-  }).returning();
-  // Process issue items if provided
-  if (Array.isArray(b.items)) {
-    for (const it of b.items) {
-      const issuedQty = n(it.issuedQty ?? 0);
-      if (issuedQty <= 0) continue;
-      const [inv] = await db.select().from(inventoryItemsTable)
-        .where(eq(inventoryItemsTable.id, it.inventoryItemId ?? ""));
-      if (!inv) continue;
-      // Validate: cannot issue more than current stock
-      const currentStock = n(inv.currentStock);
-      if (issuedQty > currentStock + 0.001) {
-        res.status(400).json({
-          error: `Insufficient stock for ${inv.itemName}: requested ${issuedQty} ${inv.unit} but only ${currentStock} ${inv.unit} available`,
-          itemName: inv.itemName, available: currentStock, requested: issuedQty,
+  // Pre-validate stock for ALL line items BEFORE any writes, then wrap the
+  // whole flow in a transaction so errors roll back the issue header too.
+  const items: any[] = Array.isArray(b.items) ? b.items : [];
+  try {
+    const result = await db.transaction(async (tx) => {
+      // 1) Insert header
+      const [row] = await tx.insert(stockIssuesTable).values({
+        projectId: req.params.projectId, issueNumber: b.issueNumber,
+        indentId: b.indentId ?? null, storeId: b.storeId ?? null,
+        issuedToName: b.issuedToName ?? null, issuedToContractor: b.issuedToContractor ?? null,
+        wbsActivityId: b.wbsActivityId ?? null, notes: b.notes ?? null,
+        contractorSignature: b.contractorSignature ?? null,
+        issuedById: req.user?.id ?? null,
+      }).returning();
+      // 2) Process line items
+      for (const it of items) {
+        const issuedQty = n(it.issuedQty ?? 0);
+        if (issuedQty <= 0) continue;
+        const [inv] = await tx.select().from(inventoryItemsTable)
+          .where(eq(inventoryItemsTable.id, it.inventoryItemId ?? ""));
+        if (!inv) continue;
+        const currentStock = n(inv.currentStock);
+        if (issuedQty > currentStock + 0.001) {
+          // Throw to abort transaction; caller maps to HTTP 400
+          throw Object.assign(new Error("insufficient_stock"), {
+            httpStatus: 400,
+            body: {
+              error: `Insufficient stock for ${inv.itemName}: requested ${issuedQty} ${inv.unit} but only ${currentStock} ${inv.unit} available`,
+              itemName: inv.itemName, available: currentStock, requested: issuedQty,
+            },
+          });
+        }
+        const rate = n(inv.avgRate);
+        const amount = Math.round(issuedQty * rate * 100) / 100;
+        await tx.insert(issueItemsTable).values({
+          issueId: row.id, inventoryItemId: it.inventoryItemId ?? null,
+          indentItemId: it.indentItemId ?? null, itemName: inv.itemName,
+          unit: inv.unit, issuedQty: String(issuedQty), rate: String(rate), amount: String(amount),
         });
-        return;
+        const newStock = currentStock - issuedQty;
+        await tx.update(inventoryItemsTable).set({
+          currentStock: String(newStock),
+          isReorderTriggered: newStock <= n(inv.minStockLevel),
+        }).where(eq(inventoryItemsTable.id, inv.id));
+        await tx.insert(stockLedgerTable).values({
+          projectId: req.params.projectId, inventoryItemId: inv.id, storeId: b.storeId ?? null,
+          transactionType: "issue", entityType: "stock_issue", entityId: row.id,
+          qty: String(-issuedQty), rate: String(rate), amount: String(-amount), balanceQty: String(newStock),
+          narration: `Issue ${b.issueNumber} — ${inv.itemName}`, createdById: req.user?.id ?? null,
+        });
       }
-      const rate = n(inv.avgRate);
-      const amount = Math.round(issuedQty * rate * 100) / 100;
-      await db.insert(issueItemsTable).values({
-        issueId: row.id, inventoryItemId: it.inventoryItemId ?? null,
-        indentItemId: it.indentItemId ?? null, itemName: inv.itemName,
-        unit: inv.unit, issuedQty: String(issuedQty), rate: String(rate), amount: String(amount),
-      });
-      const newStock = currentStock - issuedQty;
-      await db.update(inventoryItemsTable).set({
-        currentStock: String(newStock),
-        isReorderTriggered: newStock <= n(inv.minStockLevel),
-      }).where(eq(inventoryItemsTable.id, inv.id));
-      // Ledger entry
-      await db.insert(stockLedgerTable).values({
-        projectId: req.params.projectId, inventoryItemId: inv.id, storeId: b.storeId ?? null,
-        transactionType: "issue", entityType: "stock_issue", entityId: row.id,
-        qty: String(-issuedQty), rate: String(rate), amount: String(-amount), balanceQty: String(newStock),
-        narration: `Issue ${b.issueNumber} — ${inv.itemName}`, createdById: req.user?.id ?? null,
-      });
-    }
-    // Mark indent as fulfilled when ALL approved items have been cumulatively issued
-    // (checks all historical issue_items + current request, not just current request)
-    if (b.indentId) {
-      const [indentRow] = await db.select().from(materialIndentsTable)
-        .where(eq(materialIndentsTable.id, b.indentId));
-      if (indentRow?.status === "approved") {
-        const indentItems = await db.select().from(indentItemsTable)
-          .where(eq(indentItemsTable.indentId, b.indentId));
-        const indentItemIds = indentItems.map(ii => ii.id).filter(Boolean);
-        // Get all previously issued quantities for these indent items
-        const historicalIssues = indentItemIds.length > 0
-          ? await db.select().from(issueItemsTable)
-              .where(inArray(issueItemsTable.indentItemId, indentItemIds))
-          : [];
-        const isFullyFulfilled = indentItems.every(ii => {
-          const approvedQty = n(ii.approvedQty ?? ii.requiredQty);
-          // Sum all historical issue amounts for this indent item
-          const historicalTotal = historicalIssues
-            .filter(h => h.indentItemId === ii.id)
-            .reduce((s, h) => s + n(h.issuedQty), 0);
-          // Add what was just issued in this request (if indentItemId was linked)
-          const currentReqQty = n(b.items?.find((it: any) => it.indentItemId === ii.id)?.issuedQty ?? 0);
-          return historicalTotal + currentReqQty >= approvedQty - 0.01;
-        });
-        if (isFullyFulfilled) {
-          await db.update(materialIndentsTable).set({ status: "fulfilled" })
-            .where(eq(materialIndentsTable.id, b.indentId));
+      // 3) Cumulative indent fulfillment — historical query runs AFTER inserts,
+      // so it already includes the just-inserted issue_items. Do NOT add current
+      // request qty again (would double-count).
+      if (b.indentId) {
+        const [indentRow] = await tx.select().from(materialIndentsTable)
+          .where(eq(materialIndentsTable.id, b.indentId));
+        if (indentRow?.status === "approved") {
+          const indentItems = await tx.select().from(indentItemsTable)
+            .where(eq(indentItemsTable.indentId, b.indentId));
+          const indentItemIds = indentItems.map(ii => ii.id).filter(Boolean);
+          const allIssued = indentItemIds.length > 0
+            ? await tx.select().from(issueItemsTable)
+                .where(inArray(issueItemsTable.indentItemId, indentItemIds))
+            : [];
+          const isFullyFulfilled = indentItems.every(ii => {
+            const approvedQty = n(ii.approvedQty ?? ii.requiredQty);
+            const total = allIssued
+              .filter(h => h.indentItemId === ii.id)
+              .reduce((s, h) => s + n(h.issuedQty), 0);
+            return total >= approvedQty - 0.01;
+          });
+          if (isFullyFulfilled) {
+            await tx.update(materialIndentsTable).set({ status: "fulfilled" })
+              .where(eq(materialIndentsTable.id, b.indentId));
+          }
         }
       }
+      return row;
+    });
+    res.status(201).json(sIssue(result));
+  } catch (err: any) {
+    if (err?.httpStatus === 400 && err?.body) {
+      res.status(400).json(err.body); return;
     }
+    throw err;
   }
-  res.status(201).json(sIssue(row));
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
