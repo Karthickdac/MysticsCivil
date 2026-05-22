@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListOrganisations,
@@ -8,6 +8,7 @@ import {
   getListOrganisationsQueryKey,
   type Organisation,
 } from "@workspace/api-client-react";
+import { useUpload } from "@workspace/object-storage-web";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Building, Pencil } from "lucide-react";
+import { Plus, Building, Pencil, Upload, Loader2, X, AlertCircle } from "lucide-react";
 
 type OrgForm = {
   name: string;
@@ -62,6 +63,9 @@ export default function Organisations() {
   });
   const create = useCreateOrganisation();
   const update = useUpdateOrganisation();
+  const upload = useUpload();
+  const logoFileRef = useRef<HTMLInputElement>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
 
   const editing = data?.find((o) => o.id === editingId) ?? null;
 
@@ -73,6 +77,20 @@ export default function Organisations() {
     setCreateOpen(false);
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setLogoError(null);
+  };
+
+  const onLogoPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    setLogoError(null);
+    const uploaded = await upload.uploadFile(f);
+    if (!uploaded) {
+      setLogoError(upload.error?.message ?? "Could not upload logo.");
+      return;
+    }
+    setForm((prev) => ({ ...prev, logoUrl: `/api/storage${uploaded.objectPath}` }));
   };
 
   const submit = () => {
@@ -107,7 +125,7 @@ export default function Organisations() {
 
   const dialogOpen = createOpen || !!editingId;
   const setDialogOpen = (open: boolean) => { if (!open) onClose(); };
-  const busy = create.isPending || update.isPending;
+  const busy = create.isPending || update.isPending || upload.isUploading;
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -140,7 +158,70 @@ export default function Organisations() {
                 <div><Label>City</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>
                 <div><Label>State</Label><Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} /></div>
                 <div><Label>Pincode</Label><Input value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} /></div>
-                <div><Label>Logo URL</Label><Input value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} /></div>
+                <div className="col-span-2">
+                  <Label>Logo</Label>
+                  <input
+                    ref={logoFileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={onLogoPick}
+                    data-testid="org-logo-input"
+                  />
+                  {form.logoUrl ? (
+                    <div className="mt-2 flex items-center gap-3">
+                      <div className="relative inline-block rounded-lg overflow-hidden border bg-muted">
+                        <img src={form.logoUrl} alt="Logo preview" className="h-20 w-20 object-cover" data-testid="org-logo-preview" />
+                        <button
+                          type="button"
+                          onClick={() => { setForm({ ...form, logoUrl: "" }); setLogoError(null); }}
+                          className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+                          aria-label="Remove logo"
+                          data-testid="org-logo-remove"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => logoFileRef.current?.click()}
+                        disabled={upload.isUploading}
+                        data-testid="org-logo-replace"
+                      >
+                        {upload.isUploading ? (
+                          <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Uploading…</>
+                        ) : (
+                          <><Upload className="h-4 w-4 mr-1" /> Replace</>
+                        )}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="mt-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => logoFileRef.current?.click()}
+                        disabled={upload.isUploading}
+                        data-testid="org-logo-upload-btn"
+                      >
+                        {upload.isUploading ? (
+                          <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Uploading…</>
+                        ) : (
+                          <><Upload className="h-4 w-4 mr-1" /> Upload logo</>
+                        )}
+                      </Button>
+                      <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 10 MB.</p>
+                    </div>
+                  )}
+                  {logoError && (
+                    <div className="mt-2 flex items-start gap-2 text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded p-2">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                      <span>{logoError}</span>
+                    </div>
+                  )}
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
