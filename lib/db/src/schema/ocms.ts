@@ -476,8 +476,8 @@ export type VariationOrder = typeof variationOrdersTable.$inferSelect;
 
 export const BILL_STATUSES = [
   "draft", "submitted", "technical_check", "qs_scrutiny", "pm_certification",
-  "auto_deductions", "gst_invoice", "finance_approval", "ledger_posting",
-  "payment_released", "closed",
+  "auto_deductions", "gst_invoice", "finance_approval",
+  "payment_released", "ledger_posting", "closed",
 ] as const;
 export type BillStatus = (typeof BILL_STATUSES)[number];
 
@@ -532,6 +532,7 @@ export const contractorBillsTable = pgTable("contractor_bills", {
   qsScrutinizedAt: timestamp("qs_scrutinized_at", { withTimezone: true }),
   pmCertifiedAt: timestamp("pm_certified_at", { withTimezone: true }),
   financeApprovedAt: timestamp("finance_approved_at", { withTimezone: true }),
+  ledgerPostedAt: timestamp("ledger_posted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
