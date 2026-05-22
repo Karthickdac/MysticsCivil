@@ -14,6 +14,7 @@ import {
 import { eq, and, desc, asc, sql, gte, lte, inArray } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { n, d, dReq } from "../lib/serialize";
+import { notifyMaterialTestFinalised } from "../lib/notifications";
 
 const router: IRouter = Router();
 
@@ -1007,6 +1008,9 @@ router.post("/projects/:projectId/material-tests", requireAuth, async (req: Requ
   if (b.grnItemId && (b.testResult === "pass" || b.testResult === "fail")) {
     await applyQcResult(req.params.projectId, b.grnItemId, b.testResult, req.user?.id ?? null);
   }
+  if (row.testResult === "pass" || row.testResult === "fail") {
+    notifyMaterialTestFinalised(row.id).catch(() => {});
+  }
   res.status(201).json(sTest(row));
 });
 
@@ -1028,6 +1032,9 @@ router.patch("/material-tests/:testId", requireAuth, async (req: Request, res: R
   // Apply pass/fail side-effects only when transitioning from pending
   if (test.testResult === "pending" && test.grnItemId && (b.testResult === "pass" || b.testResult === "fail")) {
     await applyQcResult(test.projectId, test.grnItemId, b.testResult, req.user?.id ?? null);
+  }
+  if (test.testResult === "pending" && (updated.testResult === "pass" || updated.testResult === "fail")) {
+    notifyMaterialTestFinalised(updated.id).catch(() => {});
   }
   res.json(sTest(updated));
 });

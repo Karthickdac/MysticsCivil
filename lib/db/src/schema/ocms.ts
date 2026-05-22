@@ -114,6 +114,7 @@ export const projectsTable = pgTable("projects", {
   spi: numeric("spi", { precision: 6, scale: 3 }).notNull().default("1"),
   pmId: varchar("pm_id").references(() => usersTable.id),
   coverImageUrl: varchar("cover_image_url"),
+  notificationRecipients: jsonb("notification_recipients").notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()

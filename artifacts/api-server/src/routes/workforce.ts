@@ -15,6 +15,7 @@ import {
 } from "@workspace/db";
 import { buildTablePdf, buildWageSlipPdf, buildMultiWageSlipPdf, type WageSlipData } from "../lib/payrollPdf";
 import { mailerConfigured, sendMail } from "../lib/mailer";
+import { notifyJsaApproved, notifyQualityTestFinalised, getProjectRecipients } from "../lib/notifications";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 
@@ -837,6 +838,9 @@ router.post("/projects/:projectId/jsa", requireAuth, async (req: Request, res: R
     approvedAt: status === "approved" ? new Date() : null,
     approvedById: status === "approved" ? (req.user?.id ?? null) : null,
   }).returning();
+  if (row.status === "approved") {
+    notifyJsaApproved(row.id).catch(() => {});
+  }
   res.status(201).json(row);
 });
 
@@ -857,7 +861,34 @@ router.patch("/jsa/:id", requireAuth, async (req: Request, res: Response) => {
     }
   }
   const [updated] = await db.update(jsaEntriesTable).set(patch).where(eq(jsaEntriesTable.id, entry.id)).returning();
+  if (updated.status === "approved" && entry.status !== "approved") {
+    notifyJsaApproved(updated.id).catch(() => {});
+  }
   res.json(updated);
+});
+
+// ─── PROJECT NOTIFICATION RECIPIENTS ──────────────────────────────────────────
+router.get("/projects/:projectId/notification-settings", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const r = await getProjectRecipients(req.params.projectId);
+  res.json({ ...r, mailerConfigured: mailerConfigured() });
+});
+
+router.put("/projects/:projectId/notification-settings", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const b = req.body ?? {};
+  const clean = (a: any): string[] => Array.isArray(a)
+    ? a.map((x: any) => String(x).trim().toLowerCase()).filter((x: string) => x.includes("@"))
+    : [];
+  const settings = {
+    safetyOfficers: clean(b.safetyOfficers),
+    qcOfficers: clean(b.qcOfficers),
+    cc: clean(b.cc),
+    emailVendorOnQcFail: b.emailVendorOnQcFail !== false,
+  };
+  await db.update(projectsTable).set({ notificationRecipients: settings as any })
+    .where(eq(projectsTable.id, req.params.projectId));
+  res.json({ ...settings, mailerConfigured: mailerConfigured() });
 });
 
 // ─── PPE ISSUES ───────────────────────────────────────────────────────────────
@@ -1392,6 +1423,9 @@ router.post("/projects/:projectId/quality-tests", requireAuth, async (req: Reque
     irId: b.irId ?? null, itpItemId: b.itpItemId ?? null,
     conductedById: req.user?.id ?? null,
   }).returning();
+  if (row.passed !== null && row.passed !== undefined) {
+    notifyQualityTestFinalised(row.id).catch(() => {});
+  }
   res.status(201).json(row);
 });
 

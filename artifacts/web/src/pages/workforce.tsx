@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -1181,6 +1181,75 @@ function PpeTab({ projectId }: { projectId: string }) {
   );
 }
 
+// ─── Notification Recipients dialog ───────────────────────────────────────────
+function NotificationRecipientsDialog({ projectId, kind }: { projectId: string; kind: "safety" | "qc" }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const { data } = useQuery<any>({
+    queryKey: ["notif-settings", projectId],
+    queryFn: () => api(`/projects/${projectId}/notification-settings`),
+    enabled: !!projectId && open,
+  });
+  const [safety, setSafety] = useState("");
+  const [qcs, setQcs] = useState("");
+  const [cc, setCc] = useState("");
+  const [vendorOnFail, setVendorOnFail] = useState(true);
+  useEffect(() => {
+    if (data) {
+      setSafety((data.safetyOfficers ?? []).join(", "));
+      setQcs((data.qcOfficers ?? []).join(", "));
+      setCc((data.cc ?? []).join(", "));
+      setVendorOnFail(data.emailVendorOnQcFail !== false);
+    }
+  }, [data]);
+  const split = (s: string) => s.split(/[,;\s]+/).map(x => x.trim()).filter(x => x.includes("@"));
+  const save = useMutation({
+    mutationFn: (body: any) => api(`/projects/${projectId}/notification-settings`, { method: "PUT", body: JSON.stringify(body) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["notif-settings", projectId] }); setOpen(false); toast({ title: "Recipients saved" }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+  const label = kind === "safety" ? "JSA email recipients" : "Test certificate recipients";
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild><Button size="sm" variant="outline">{label}</Button></DialogTrigger>
+      <DialogContent className="max-w-xl">
+        <DialogHeader><DialogTitle>Auto-email recipients</DialogTitle></DialogHeader>
+        {data && data.mailerConfigured === false && (
+          <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded p-2">
+            SMTP is not configured. Recipients are saved, but emails will not be sent until SMTP_HOST / SMTP_PORT / SMTP_FROM are set.
+          </div>
+        )}
+        <div className="space-y-3 py-1 text-sm">
+          <div className="space-y-1">
+            <Label className="text-xs">Safety officers (for approved JSAs) — comma separated emails</Label>
+            <Input value={safety} onChange={e => setSafety(e.target.value)} placeholder="safety@example.com, hsemanager@example.com" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">QC officers (for material test pass/fail)</Label>
+            <Input value={qcs} onChange={e => setQcs(e.target.value)} placeholder="qc@example.com" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Always CC (both)</Label>
+            <Input value={cc} onChange={e => setCc(e.target.value)} placeholder="pm@example.com" />
+          </div>
+          <label className="flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={vendorOnFail} onChange={e => setVendorOnFail(e.target.checked)} />
+            Email vendor when a material test fails (uses vendor email from linked GRN)
+          </label>
+          <div className="text-xs text-muted-foreground">
+            PM, supervisor, preparer, and tester emails (resolved from user accounts) are always included automatically.
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={() => save.mutate({ safetyOfficers: split(safety), qcOfficers: split(qcs), cc: split(cc), emailVendorOnQcFail: vendorOnFail })} disabled={save.isPending}>Save</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── JSA Tab (Job Safety Analysis) ────────────────────────────────────────────
 type JsaStep = { seq: number; step: string; hazards: string; controls: string; ppe?: string };
 
@@ -1243,8 +1312,10 @@ function JsaTab({ projectId }: { projectId: string }) {
       <div className="flex justify-between items-center">
         <div>
           <h3 className="font-semibold">Daily Job Safety Analysis</h3>
-          <p className="text-xs text-muted-foreground">Step-by-step hazard breakdown · supervisor signs before work starts</p>
+          <p className="text-xs text-muted-foreground">Step-by-step hazard breakdown · supervisor signs before work starts · approved JSAs auto-email PDF to safety officers</p>
         </div>
+        <div className="flex gap-2">
+        <NotificationRecipientsDialog projectId={projectId} kind="safety" />
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" />New JSA</Button></DialogTrigger>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -1308,6 +1379,7 @@ function JsaTab({ projectId }: { projectId: string }) {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {isLoading ? <div className="text-sm text-muted-foreground">Loading…</div> :
@@ -1411,8 +1483,10 @@ function MaterialTestingTab({ projectId }: { projectId: string }) {
       <div className="flex justify-between items-center">
         <div>
           <h3 className="font-semibold">IS-Code Material Test Register</h3>
-          <p className="text-xs text-muted-foreground">Concrete, rebar, aggregate, brick tests with acceptance limits</p>
+          <p className="text-xs text-muted-foreground">Concrete, rebar, aggregate, brick tests with acceptance limits · pass/fail auto-emails certificate PDF to QC officers</p>
         </div>
+        <div className="flex gap-2">
+        <NotificationRecipientsDialog projectId={projectId} kind="qc" />
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" />New Test</Button></DialogTrigger>
           <DialogContent className="max-w-lg">
@@ -1444,6 +1518,7 @@ function MaterialTestingTab({ projectId }: { projectId: string }) {
             <Button className="w-full" disabled={!form.testType || !form.testValue || create.isPending} onClick={() => create.mutate(form)}>{create.isPending ? "Saving…" : "Record Test"}</Button>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
       <Card>
         <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
