@@ -186,17 +186,28 @@ export function DocumentsTab({ projectId }: { projectId: string }) {
                     data-testid="document-file-input"
                   />
                   {file ? (
-                    <div className="rounded-lg border bg-muted/30 p-3 flex items-center gap-3">
-                      <div className="h-10 w-10 rounded bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                    <div className="rounded-lg border bg-muted/30 p-3 flex items-center gap-3 min-w-0 overflow-hidden">
+                      <div className="h-10 w-10 rounded bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">
                         {fileIconLabel(file.name)}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{file.name}</div>
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <div
+                          className="text-sm font-medium overflow-hidden text-ellipsis whitespace-nowrap"
+                          title={file.name}
+                        >
+                          {file.name}
+                        </div>
                         <div className="text-xs text-muted-foreground">
                           {(file.size / 1024).toFixed(1)} KB
                         </div>
                       </div>
-                      <Button size="sm" variant="ghost" onClick={() => setFile(null)} type="button">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setFile(null)}
+                        type="button"
+                        className="flex-shrink-0"
+                      >
                         Change
                       </Button>
                     </div>
