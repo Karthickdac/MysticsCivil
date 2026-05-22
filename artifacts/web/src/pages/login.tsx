@@ -65,14 +65,13 @@ export default function Login() {
         <div className="absolute -top-[10%] -right-[10%] w-[50%] h-[50%] rounded-full bg-primary blur-[120px]" />
         <div className="absolute bottom-[0%] -left-[10%] w-[40%] h-[40%] rounded-full bg-blue-600 blur-[100px]" />
       </div>
-
       <div className="relative z-10 w-full max-w-md p-8 md:p-10 bg-zinc-900/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl">
         <div className="flex flex-col items-center text-center space-y-6">
           <div className="w-16 h-16 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
             <HardHat className="w-8 h-8 text-white" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-3xl font-bold tracking-tight text-white">Kattida Core</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-white">Mystics Civil</h1>
             <p className="text-zinc-400 text-sm">Construction Operations Cockpit</p>
           </div>
 
