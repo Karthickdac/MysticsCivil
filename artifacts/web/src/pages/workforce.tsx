@@ -1618,11 +1618,19 @@ function StatutoryExportsTab({ projectId }: { projectId: string }) {
 
   const downloadExcel = async (rows: any[], filename: string, sheetName: string) => {
     if (!rows?.length) return;
-    const XLSX = await import("xlsx");
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-    XLSX.writeFile(wb, filename);
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet(sheetName);
+    ws.columns = Object.keys(rows[0]).map((key) => ({ header: key, key }));
+    ws.addRows(rows);
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const downloadPdf = async (path: string, filename: string) => {
