@@ -9,7 +9,7 @@ import {
   safetyPermitsTable, hiraEntriesTable, jsaEntriesTable,
   ppeIssuesTable, incidentsTable, incidentActionsTable,
   qualityTestsTable, labourContractorBillsTable,
-  paymentVouchersTable,
+  paymentVouchersTable, billDeductionsTable, advanceLedgerTable,
   projectsTable, userProfilesTable, organisationsTable,
 } from "@workspace/db";
 import { buildTablePdf, buildWageSlipPdf, buildMultiWageSlipPdf, type WageSlipData } from "../lib/payrollPdf";
@@ -1273,6 +1273,74 @@ async function verifyLabourBill(bill: typeof labourContractorBillsTable.$inferSe
   };
 }
 
+// Auto-deduction engine for labour contractor bills.
+// Applied on approval against gross (verified) payable amount.
+// Deductions: TDS 194C @ 2%, Retention @ 5%, LWF @ 0.5%,
+// PF employer share @ 13%, ESI employer share @ 3.25%,
+// advance recovery @ 20% (capped at outstanding contractor advance balance).
+// Idempotent: clears previous labour-kind deductions for this bill before recomputing.
+async function computeLabourBillDeductions(
+  tx: any, billId: string, gross: number, projectId: string, contractorId: string | null,
+): Promise<{ totalDeductions: number; netPayable: number }> {
+  await tx.delete(billDeductionsTable).where(and(
+    eq(billDeductionsTable.billId, billId),
+    eq(billDeductionsTable.billKind, "labour"),
+  ));
+
+  type Ded = { type: string; desc: string; rate: number; base: number; amount: number; legal: string };
+  const deds: Ded[] = [];
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+
+  deds.push({ type: "tds_194c", desc: "TDS u/s 194C — Payments to contractors",
+    rate: 2, base: gross, amount: r2(gross * 0.02),
+    legal: "Income Tax Act, 1961 — Section 194C" });
+  deds.push({ type: "retention", desc: "Retention money @ 5% of bill value",
+    rate: 5, base: gross, amount: r2(gross * 0.05),
+    legal: "Contract clause 14.3 — Retention 5% until DLP" });
+  deds.push({ type: "lwf", desc: "Labour Welfare Fund @ 0.5%",
+    rate: 0.5, base: gross, amount: r2(gross * 0.005),
+    legal: "Building & Other Construction Workers Act, 1996" });
+  deds.push({ type: "pf_employer", desc: "PF employer share @ 13% (12% EPF + 1% admin/EDLI)",
+    rate: 13, base: gross, amount: r2(gross * 0.13),
+    legal: "EPF & MP Act, 1952 — Sections 6 & 6C" });
+  deds.push({ type: "esi_employer", desc: "ESI employer share @ 3.25%",
+    rate: 3.25, base: gross, amount: r2(gross * 0.0325),
+    legal: "Employees' State Insurance Act, 1948 — Section 39" });
+
+  if (contractorId) {
+    const advRows = await tx.select({ balance: advanceLedgerTable.balance })
+      .from(advanceLedgerTable)
+      .where(and(
+        eq(advanceLedgerTable.contractorId, contractorId),
+        eq(advanceLedgerTable.projectId, projectId),
+      ))
+      .orderBy(desc(advanceLedgerTable.createdAt)).limit(1);
+    const advBalance = advRows.length > 0 ? n(advRows[0].balance) : 0;
+    if (advBalance > 0) {
+      const uncapped = r2(gross * 0.20);
+      const recoveryAmt = Math.min(uncapped, advBalance);
+      deds.push({ type: "advance_recovery",
+        desc: `Advance recovery @ 20% of gross, capped at outstanding ₹${advBalance.toLocaleString("en-IN")}`,
+        rate: 20, base: gross, amount: recoveryAmt,
+        legal: "Contract clause 9.1 — Mobilization advance recovery" });
+    }
+  }
+
+  let totalDeductions = 0;
+  for (const ded of deds) {
+    totalDeductions += ded.amount;
+    await tx.insert(billDeductionsTable).values({
+      billId, billKind: "labour",
+      deductionType: ded.type, description: ded.desc,
+      rate: String(ded.rate), baseAmount: String(ded.base),
+      amount: String(ded.amount), legalRef: ded.legal,
+    });
+  }
+  totalDeductions = Math.round(totalDeductions * 100) / 100;
+  const netPayable = Math.max(0, Math.round((gross - totalDeductions) * 100) / 100);
+  return { totalDeductions, netPayable };
+}
+
 // Cross-verify: compare claimed with attendance-derived figures
 router.get("/labour-contractor-bills/:billId", requireAuth, async (req: Request, res: Response) => {
   const [bill] = await db.select().from(labourContractorBillsTable).where(eq(labourContractorBillsTable.id, req.params.billId));
@@ -1281,7 +1349,11 @@ router.get("/labour-contractor-bills/:billId", requireAuth, async (req: Request,
   const verification = await verifyLabourBill(bill);
   const vouchers = await db.select().from(paymentVouchersTable)
     .where(eq(paymentVouchersTable.labourContractorBillId, bill.id));
-  res.json({ ...bill, verification, vouchers });
+  const deductions = await db.select().from(billDeductionsTable).where(and(
+    eq(billDeductionsTable.billId, bill.id),
+    eq(billDeductionsTable.billKind, "labour"),
+  )).orderBy(billDeductionsTable.createdAt);
+  res.json({ ...bill, verification, vouchers, deductions });
 });
 
 router.patch("/labour-contractor-bills/:billId", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
@@ -1326,15 +1398,55 @@ router.patch("/labour-contractor-bills/:billId", requireAuth, requireRole(...ROL
 
     const voucherNum = `LCV-${bill.projectId.slice(-4).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
     const result = await db.transaction(async (tx) => {
+      // Apply auto-deduction engine (TDS, retention, LWF, PF, ESI, advance recovery)
+      // against the verified gross amount; voucher is issued at net payable.
+      const { totalDeductions, netPayable } = await computeLabourBillDeductions(
+        tx, bill.id, payableAmount, bill.projectId, bill.contractorId,
+      );
+      patch.grossAmount = String(payableAmount);
+      patch.totalDeductions = String(totalDeductions);
+      patch.netPayable = String(netPayable);
+
       const [v] = await tx.insert(paymentVouchersTable).values({
         labourContractorBillId: bill.id, projectId: bill.projectId,
-        voucherNumber: voucherNum, amount: String(payableAmount),
+        voucherNumber: voucherNum, amount: String(netPayable),
         mode: b.paymentMode ?? "neft",
         bankName: b.bankName ?? null, accountNumber: b.accountNumber ?? null,
         ifscCode: b.ifscCode ?? null,
         utr: b.utr ?? null, paidAt: null,
         releasedById: req.user?.id ?? null,
       }).returning();
+
+      // Post advance recovery against the contractor's advance ledger so the
+      // outstanding balance is decremented as bills are approved.
+      if (bill.contractorId) {
+        const advRows = await tx.select({ balance: advanceLedgerTable.balance })
+          .from(advanceLedgerTable)
+          .where(and(
+            eq(advanceLedgerTable.contractorId, bill.contractorId),
+            eq(advanceLedgerTable.projectId, bill.projectId),
+          ))
+          .orderBy(desc(advanceLedgerTable.createdAt)).limit(1);
+        const prevBalance = advRows.length > 0 ? n(advRows[0].balance) : 0;
+        const recoveryRows = await tx.select({ amount: billDeductionsTable.amount })
+          .from(billDeductionsTable)
+          .where(and(
+            eq(billDeductionsTable.billId, bill.id),
+            eq(billDeductionsTable.billKind, "labour"),
+            eq(billDeductionsTable.deductionType, "advance_recovery"),
+          )).limit(1);
+        const recoveryAmt = recoveryRows.length > 0 ? n(recoveryRows[0].amount) : 0;
+        if (recoveryAmt > 0) {
+          await tx.insert(advanceLedgerTable).values({
+            projectId: bill.projectId, contractorId: bill.contractorId,
+            labourContractorBillId: bill.id,
+            transactionType: "recovery",
+            amount: String(recoveryAmt),
+            balance: String(Math.max(0, Math.round((prevBalance - recoveryAmt) * 100) / 100)),
+            remarks: `Recovered against labour bill ${bill.billNumber}`,
+          });
+        }
+      }
 
       const contractorWorkers = await tx.select({ id: workersTable.id }).from(workersTable).where(and(
         eq(workersTable.projectId, bill.projectId),

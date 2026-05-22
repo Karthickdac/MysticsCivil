@@ -540,7 +540,10 @@ export type ContractorBill = typeof contractorBillsTable.$inferSelect;
 
 export const billDeductionsTable = pgTable("bill_deductions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  billId: varchar("bill_id").notNull().references(() => contractorBillsTable.id, { onDelete: "cascade" }),
+  // billId references either contractor_bills.id or labour_contractor_bills.id (disambiguated by billKind).
+  // No FK constraint: Postgres cannot reference two tables; cleanup is enforced at the application layer.
+  billId: varchar("bill_id").notNull(),
+  billKind: varchar("bill_kind", { length: 16 }).notNull().default("contractor"),
   deductionType: varchar("deduction_type", { length: 32 }).notNull(),
   description: varchar("description", { length: 256 }).notNull(),
   rate: numeric("rate", { precision: 6, scale: 3 }).notNull().default("0"),
@@ -685,7 +688,10 @@ export const advanceLedgerTable = pgTable("advance_ledger", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
   workOrderId: varchar("work_order_id").references(() => workOrderEstimatesTable.id, { onDelete: "set null" }),
+  contractorId: varchar("contractor_id").references(() => vendorsTable.id, { onDelete: "set null" }),
   billId: varchar("bill_id").references(() => contractorBillsTable.id, { onDelete: "set null" }),
+  labourContractorBillId: varchar("labour_contractor_bill_id")
+    .references((): any => labourContractorBillsTable.id, { onDelete: "set null" }),
   transactionType: varchar("transaction_type", { length: 32 }).notNull(),
   amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
   balance: numeric("balance", { precision: 18, scale: 2 }).notNull().default("0"),
@@ -1512,6 +1518,9 @@ export const labourContractorBillsTable = pgTable("labour_contractor_bills", {
   verifiedHeadcount: integer("verified_headcount"),
   verifiedDays: numeric("verified_days", { precision: 10, scale: 2 }),
   verifiedAmount: numeric("verified_amount", { precision: 18, scale: 2 }),
+  grossAmount: numeric("gross_amount", { precision: 18, scale: 2 }),
+  totalDeductions: numeric("total_deductions", { precision: 18, scale: 2 }),
+  netPayable: numeric("net_payable", { precision: 18, scale: 2 }),
   discrepancyNotes: text("discrepancy_notes"),
   status: varchar("status", { length: 16 }).notNull().default("draft"),
   submittedById: varchar("submitted_by_id").references(() => usersTable.id, { onDelete: "set null" }),

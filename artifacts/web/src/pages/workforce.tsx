@@ -1816,6 +1816,24 @@ function ContractorBillTab({ projectId }: { projectId: string }) {
                     </ul>
                   </div>
                 )}
+                {detail.deductions?.length > 0 && (
+                  <div className="rounded p-3 text-xs bg-slate-50 border border-slate-200">
+                    <div className="font-semibold mb-2">Deductions Applied</div>
+                    <div className="space-y-1">
+                      {detail.deductions.map((d: any) => (
+                        <div key={d.id} className="flex justify-between gap-2">
+                          <span className="truncate" title={d.legalRef ?? ""}>{d.description}</span>
+                          <span className="font-mono whitespace-nowrap">− {fmtCur(d.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="border-t mt-2 pt-2 space-y-0.5">
+                      <div className="flex justify-between"><span>Gross (verified)</span><span className="font-mono">{fmtCur(detail.grossAmount ?? detail.verifiedAmount ?? 0)}</span></div>
+                      <div className="flex justify-between text-rose-700"><span>Total deductions</span><span className="font-mono">− {fmtCur(detail.totalDeductions ?? 0)}</span></div>
+                      <div className="flex justify-between font-semibold text-green-800"><span>Net payable</span><span className="font-mono">{fmtCur(detail.netPayable ?? 0)}</span></div>
+                    </div>
+                  </div>
+                )}
                 {detail.vouchers?.length > 0 && (
                   <div className="rounded p-3 text-xs bg-green-50 border border-green-200 text-green-900">
                     <div className="font-semibold mb-1">Payment Vouchers</div>
