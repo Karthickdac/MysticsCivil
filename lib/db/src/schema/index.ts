@@ -21,4 +21,5 @@ export type {
   Ncr, NcrStatus, HiraEntry, JsaEntry,
   SafetyPermit, PermitType, PpeIssue, PpeType,
   Incident, IncidentClassification,
+  QualityTest, IsCodeTestType, LabourContractorBill, ContractorBillWorkforceStatus,
 } from "./ocms";

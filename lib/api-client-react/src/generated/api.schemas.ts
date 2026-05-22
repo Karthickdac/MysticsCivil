@@ -1331,6 +1331,126 @@ export interface AgingReport {
   '>90': AgingReport90;
 }
 
+export interface Worker {
+  id: string;
+  projectId: string;
+  contractorId?: string | null;
+  workerCode: string;
+  name: string;
+  trade: string;
+  skillLevel: string;
+  aadhaarNumber?: string | null;
+  pfNumber?: string | null;
+  esiNumber?: string | null;
+  dailyRate?: string;
+  status: string;
+  createdAt?: string;
+}
+
+export interface WorkerInput {
+  name: string;
+  trade: string;
+  skillLevel: string;
+  aadhaarNumber?: string;
+  pfNumber?: string;
+  esiNumber?: string;
+  dailyRate: number;
+  contractorId?: string;
+}
+
+export type PayrollPeriodStatus = typeof PayrollPeriodStatus[keyof typeof PayrollPeriodStatus];
+
+
+export const PayrollPeriodStatus = {
+  draft: 'draft',
+  computed: 'computed',
+  approved: 'approved',
+  paid: 'paid',
+} as const;
+
+export interface PayrollPeriod {
+  id: string;
+  projectId: string;
+  fromDate: string;
+  toDate: string;
+  status: PayrollPeriodStatus;
+  totalGross?: string | null;
+  totalNet?: string | null;
+  totalEpf?: string | null;
+  totalEsi?: string | null;
+  approvedById?: string | null;
+  createdAt?: string;
+}
+
+export type SafetyDashboardRecentIncidentsItem = { [key: string]: unknown };
+
+export type SafetyDashboardHighRisksItem = { [key: string]: unknown };
+
+export interface SafetyDashboard {
+  openPermits: number;
+  activePermits: number;
+  openNcrs: number;
+  openIncidents: number;
+  totalWorkers: number;
+  ppeCompliancePct: number;
+  recentIncidents?: SafetyDashboardRecentIncidentsItem[];
+  highRisks?: SafetyDashboardHighRisksItem[];
+}
+
+export interface QualityTest {
+  id: string;
+  projectId: string;
+  irId?: string | null;
+  itpItemId?: string | null;
+  testType: string;
+  isCodeRef?: string | null;
+  sampleId?: string | null;
+  sampleLocation?: string | null;
+  sampleDate?: string | null;
+  testDate?: string | null;
+  labName?: string | null;
+  testUnit?: string | null;
+  testValue?: string | null;
+  minAcceptable?: string | null;
+  maxAcceptable?: string | null;
+  passed?: boolean | null;
+  remarks?: string | null;
+  createdAt: string;
+}
+
+export type LabourContractorBillStatus = typeof LabourContractorBillStatus[keyof typeof LabourContractorBillStatus];
+
+
+export const LabourContractorBillStatus = {
+  draft: 'draft',
+  submitted: 'submitted',
+  under_review: 'under_review',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface LabourContractorBill {
+  id: string;
+  projectId: string;
+  contractorId?: string | null;
+  periodId?: string | null;
+  billNumber: string;
+  periodFrom: string;
+  periodTo: string;
+  claimedHeadcount?: number;
+  claimedDays?: string;
+  claimedAmount: string;
+  verifiedHeadcount?: number | null;
+  verifiedDays?: string | null;
+  verifiedAmount?: string | null;
+  discrepancyNotes?: string | null;
+  status: LabourContractorBillStatus;
+  approvedById?: string | null;
+  approvedAt?: string | null;
+  rejectionReason?: string | null;
+  createdAt?: string;
+}
+
 export type AuthorizationSessionHeaderParameter = string;
 
 export type BeginBrowserLoginParams = {
@@ -1875,4 +1995,115 @@ year?: string;
 };
 
 export type GetReconciliation200 = { [key: string]: unknown };
+
+export type ListWorkersParams = {
+status?: string;
+trade?: string;
+};
+
+export type GetWorker200 = { [key: string]: unknown };
+
+export type UpdateWorkerBody = { [key: string]: unknown };
+
+export type ListAttendanceParams = {
+workerId?: string;
+};
+
+export type ListAttendance200Item = { [key: string]: unknown };
+
+export type RecordAttendanceBody = { [key: string]: unknown };
+
+export type RecordAttendance201 = { [key: string]: unknown };
+
+export type BulkRecordAttendanceBodyEntriesItem = { [key: string]: unknown };
+
+export type BulkRecordAttendanceBody = {
+  entries?: BulkRecordAttendanceBodyEntriesItem[];
+};
+
+export type BulkRecordAttendance201 = { [key: string]: unknown };
+
+export type ApproveOt200 = { [key: string]: unknown };
+
+export type CreatePayrollPeriodBody = { [key: string]: unknown };
+
+export type ListPayrollLines200Item = { [key: string]: unknown };
+
+export type GetEpfExport200 = { [key: string]: unknown };
+
+export type GetEsiExport200 = { [key: string]: unknown };
+
+export type GetStatutorySummary200 = { [key: string]: unknown };
+
+export type ListItps200Item = { [key: string]: unknown };
+
+export type CreateItpBody = { [key: string]: unknown };
+
+export type CreateItp201 = { [key: string]: unknown };
+
+export type GetItp200 = { [key: string]: unknown };
+
+export type ApproveItp200 = { [key: string]: unknown };
+
+export type ListInspectionRequests200Item = { [key: string]: unknown };
+
+export type CreateInspectionRequestBody = { [key: string]: unknown };
+
+export type CreateInspectionRequest201 = { [key: string]: unknown };
+
+export type RecordInspectionResultBody = { [key: string]: unknown };
+
+export type RecordInspectionResult200 = { [key: string]: unknown };
+
+export type ListNcrs200Item = { [key: string]: unknown };
+
+export type CreateNcrBody = { [key: string]: unknown };
+
+export type CreateNcr201 = { [key: string]: unknown };
+
+export type AddNcrActionBody = { [key: string]: unknown };
+
+export type AddNcrAction201 = { [key: string]: unknown };
+
+export type ListSafetyPermits200Item = { [key: string]: unknown };
+
+export type CreateSafetyPermitBody = { [key: string]: unknown };
+
+export type CreateSafetyPermit201 = { [key: string]: unknown };
+
+export type ListHira200Item = { [key: string]: unknown };
+
+export type CreateHiraEntryBody = { [key: string]: unknown };
+
+export type CreateHiraEntry201 = { [key: string]: unknown };
+
+export type ListJsa200Item = { [key: string]: unknown };
+
+export type CreateJsaEntryBody = { [key: string]: unknown };
+
+export type CreateJsaEntry201 = { [key: string]: unknown };
+
+export type ListPpeIssues200Item = { [key: string]: unknown };
+
+export type CreatePpeIssueBody = { [key: string]: unknown };
+
+export type CreatePpeIssue201 = { [key: string]: unknown };
+
+export type ListIncidents200Item = { [key: string]: unknown };
+
+export type CreateIncidentBody = { [key: string]: unknown };
+
+export type CreateIncident201 = { [key: string]: unknown };
+
+export type ListQualityTestsParams = {
+testType?: string;
+};
+
+export type CreateQualityTestBody = { [key: string]: unknown };
+
+export type CreateLabourContractorBillBody = { [key: string]: unknown };
+
+export type GetLabourContractorBill200 = { [key: string]: unknown };
+
+export type UpdateLabourContractorBillBody = { [key: string]: unknown };
 

@@ -1445,4 +1445,73 @@ export const incidentActionsTable = pgTable("incident_actions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Quality Tests (IS-code based material testing register)
+export const IS_CODE_TEST_TYPES = ["concrete_cube_7","concrete_cube_14","concrete_cube_28","tensile","sieve_analysis","proctor","water_absorption","compression_brick","cbr"] as const;
+export type IsCodeTestType = (typeof IS_CODE_TEST_TYPES)[number];
+
+// IS code limits lookup (simplified — key tests)
+export const IS_CODE_LIMITS: Record<string, { ref: string; unit: string; minValue?: number; maxValue?: number }> = {
+  concrete_cube_7:   { ref: "IS 456:2000 Cl 15.4",   unit: "N/mm²", minValue: 16 },
+  concrete_cube_14:  { ref: "IS 456:2000 Cl 15.4",   unit: "N/mm²", minValue: 22 },
+  concrete_cube_28:  { ref: "IS 456:2000 Cl 15.4",   unit: "N/mm²", minValue: 25 },
+  tensile:           { ref: "IS 1786:2008",           unit: "N/mm²", minValue: 500 },
+  sieve_analysis:    { ref: "IS 383:2016 Zone II",    unit: "% FM",  minValue: 2.6, maxValue: 3.2 },
+  proctor:           { ref: "IS 2720 Part 7",         unit: "kN/m³", minValue: 18 },
+  water_absorption:  { ref: "IS 1077:1992 Cl 8",     unit: "%",     maxValue: 20 },
+  compression_brick: { ref: "IS 1077:1992 Cl 7.1",   unit: "N/mm²", minValue: 3.5 },
+  cbr:               { ref: "IRC 37:2012",            unit: "%",     minValue: 8 },
+};
+
+export const qualityTestsTable = pgTable("quality_tests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  irId: varchar("ir_id").references(() => inspectionRequestsTable.id, { onDelete: "set null" }),
+  itpItemId: varchar("itp_item_id").references(() => itpItemsTable.id, { onDelete: "set null" }),
+  testType: varchar("test_type", { length: 32 }).notNull(),
+  isCodeRef: varchar("is_code_ref", { length: 128 }),
+  sampleId: varchar("sample_id", { length: 32 }),
+  sampleLocation: varchar("sample_location", { length: 256 }),
+  sampleDate: timestamp("sample_date", { withTimezone: true }),
+  testDate: timestamp("test_date", { withTimezone: true }),
+  labName: varchar("lab_name", { length: 128 }),
+  testUnit: varchar("test_unit", { length: 16 }),
+  testValue: numeric("test_value", { precision: 14, scale: 4 }),
+  minAcceptable: numeric("min_acceptable", { precision: 14, scale: 4 }),
+  maxAcceptable: numeric("max_acceptable", { precision: 14, scale: 4 }),
+  passed: boolean("passed"),
+  remarks: text("remarks"),
+  conductedById: varchar("conducted_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type QualityTest = typeof qualityTestsTable.$inferSelect;
+
+// Labour Contractor Bill (contractor submission → attendance cross-verification → PM approval)
+export const CONTRACTOR_BILL_STATUSES = ["draft","submitted","under_review","approved","rejected"] as const;
+export type ContractorBillWorkforceStatus = (typeof CONTRACTOR_BILL_STATUSES)[number];
+
+export const labourContractorBillsTable = pgTable("labour_contractor_bills", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  contractorId: varchar("contractor_id").references(() => vendorsTable.id, { onDelete: "set null" }),
+  periodId: varchar("period_id").references(() => payrollPeriodsTable.id, { onDelete: "set null" }),
+  billNumber: varchar("bill_number", { length: 32 }).notNull(),
+  periodFrom: timestamp("period_from", { withTimezone: true }).notNull(),
+  periodTo: timestamp("period_to", { withTimezone: true }).notNull(),
+  claimedHeadcount: integer("claimed_headcount").notNull().default(0),
+  claimedDays: numeric("claimed_days", { precision: 10, scale: 2 }).notNull().default("0"),
+  claimedAmount: numeric("claimed_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  verifiedHeadcount: integer("verified_headcount"),
+  verifiedDays: numeric("verified_days", { precision: 10, scale: 2 }),
+  verifiedAmount: numeric("verified_amount", { precision: 18, scale: 2 }),
+  discrepancyNotes: text("discrepancy_notes"),
+  status: varchar("status", { length: 16 }).notNull().default("draft"),
+  submittedById: varchar("submitted_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  approvedById: varchar("approved_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  rejectionReason: text("rejection_reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type LabourContractorBill = typeof labourContractorBillsTable.$inferSelect;
+
 export const _zUserRole = z.enum(USER_ROLES);

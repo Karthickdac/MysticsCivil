@@ -22,6 +22,7 @@ tags:
   - name: Dashboard
   - name: Financial
   - name: SupplyChain
+  - name: Workforce
 paths:
   /healthz:
     get:
@@ -2445,6 +2446,362 @@ paths:
         - { in: query, name: year, schema: { type: string } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  # ── Workforce ────────────────────────────────────────────────────────────────
+  /projects/{projectId}/workers:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectIdParam' }
+    get:
+      operationId: listWorkers
+      tags: [Workforce]
+      parameters:
+        - { in: query, name: status, schema: { type: string } }
+        - { in: query, name: trade, schema: { type: string } }
+      responses:
+        "200":
+          description: Workers list
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Worker' } } } }
+    post:
+      operationId: createWorker
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/WorkerInput' } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Worker' } } } }
+
+  /workers/{workerId}:
+    parameters:
+      - { in: path, name: workerId, required: true, schema: { type: string } }
+    get:
+      operationId: getWorker
+      tags: [Workforce]
+      responses:
+        "200": { description: Worker detail, content: { application/json: { schema: { type: object } } } }
+    patch:
+      operationId: updateWorker
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Worker' } } } }
+
+  /projects/{projectId}/attendance:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectIdParam' }
+    get:
+      operationId: listAttendance
+      tags: [Workforce]
+      parameters:
+        - { in: query, name: workerId, schema: { type: string } }
+      responses:
+        "200": { description: Attendance records, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: recordAttendance
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /projects/{projectId}/attendance/bulk:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectIdParam' }
+    post:
+      operationId: bulkRecordAttendance
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { entries: { type: array, items: { type: object } } } } } } }
+      responses:
+        "201": { description: Bulk inserted, content: { application/json: { schema: { type: object } } } }
+
+  /attendance/{recordId}/approve-ot:
+    parameters:
+      - { in: path, name: recordId, required: true, schema: { type: string } }
+    patch:
+      operationId: approveOt
+      tags: [Workforce]
+      responses:
+        "200": { description: OT approved, content: { application/json: { schema: { type: object } } } }
+
+  /projects/{projectId}/payroll-periods:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectIdParam' }
+    get:
+      operationId: listPayrollPeriods
+      tags: [Workforce]
+      responses:
+        "200": { description: Payroll periods, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/PayrollPeriod' } } } } }
+    post:
+      operationId: createPayrollPeriod
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/PayrollPeriod' } } } }
+
+  /payroll-periods/{periodId}/compute:
+    parameters:
+      - { in: path, name: periodId, required: true, schema: { type: string } }
+    post:
+      operationId: computePayroll
+      tags: [Workforce]
+      responses:
+        "200": { description: Payroll computed, content: { application/json: { schema: { $ref: '#/components/schemas/PayrollPeriod' } } } }
+
+  /payroll-periods/{periodId}/approve:
+    parameters:
+      - { in: path, name: periodId, required: true, schema: { type: string } }
+    post:
+      operationId: approvePayroll
+      tags: [Workforce]
+      responses:
+        "200": { description: Approved, content: { application/json: { schema: { $ref: '#/components/schemas/PayrollPeriod' } } } }
+
+  /payroll-periods/{periodId}/lines:
+    parameters:
+      - { in: path, name: periodId, required: true, schema: { type: string } }
+    get:
+      operationId: listPayrollLines
+      tags: [Workforce]
+      responses:
+        "200": { description: Payroll lines, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+
+  /payroll-periods/{periodId}/epf-export:
+    parameters:
+      - { in: path, name: periodId, required: true, schema: { type: string } }
+    get:
+      operationId: getEpfExport
+      tags: [Workforce]
+      responses:
+        "200": { description: EPF challan data, content: { application/json: { schema: { type: object } } } }
+
+  /payroll-periods/{periodId}/esi-export:
+    parameters:
+      - { in: path, name: periodId, required: true, schema: { type: string } }
+    get:
+      operationId: getEsiExport
+      tags: [Workforce]
+      responses:
+        "200": { description: ESI challan data, content: { application/json: { schema: { type: object } } } }
+
+  /payroll-periods/{periodId}/statutory-summary:
+    parameters:
+      - { in: path, name: periodId, required: true, schema: { type: string } }
+    get:
+      operationId: getStatutorySummary
+      tags: [Workforce]
+      responses:
+        "200": { description: Statutory summary, content: { application/json: { schema: { type: object } } } }
+
+  /projects/{projectId}/itps:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectIdParam' }
+    get:
+      operationId: listItps
+      tags: [Workforce]
+      responses:
+        "200": { description: ITPs, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createItp
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /itps/{itpId}:
+    parameters:
+      - { in: path, name: itpId, required: true, schema: { type: string } }
+    get:
+      operationId: getItp
+      tags: [Workforce]
+      responses:
+        "200": { description: ITP with items, content: { application/json: { schema: { type: object } } } }
+
+  /itps/{itpId}/approve:
+    parameters:
+      - { in: path, name: itpId, required: true, schema: { type: string } }
+    post:
+      operationId: approveItp
+      tags: [Workforce]
+      responses:
+        "200": { description: Approved, content: { application/json: { schema: { type: object } } } }
+
+  /projects/{projectId}/inspection-requests:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectIdParam' }
+    get:
+      operationId: listInspectionRequests
+      tags: [Workforce]
+      responses:
+        "200": { description: Inspection requests, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createInspectionRequest
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /inspection-requests/{irId}/record:
+    parameters:
+      - { in: path, name: irId, required: true, schema: { type: string } }
+    post:
+      operationId: recordInspectionResult
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "200": { description: Recorded, content: { application/json: { schema: { type: object } } } }
+
+  /projects/{projectId}/ncrs:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectIdParam' }
+    get:
+      operationId: listNcrs
+      tags: [Workforce]
+      responses:
+        "200": { description: NCRs, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createNcr
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /ncrs/{ncrId}/actions:
+    parameters:
+      - { in: path, name: ncrId, required: true, schema: { type: string } }
+    post:
+      operationId: addNcrAction
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /projects/{projectId}/safety-permits:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectIdParam' }
+    get:
+      operationId: listSafetyPermits
+      tags: [Workforce]
+      responses:
+        "200": { description: Permits, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createSafetyPermit
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /projects/{projectId}/hira:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectIdParam' }
+    get:
+      operationId: listHira
+      tags: [Workforce]
+      responses:
+        "200": { description: HIRA entries, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createHiraEntry
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /projects/{projectId}/jsa:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectIdParam' }
+    get:
+      operationId: listJsa
+      tags: [Workforce]
+      responses:
+        "200": { description: JSA entries, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createJsaEntry
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /projects/{projectId}/ppe-issues:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectIdParam' }
+    get:
+      operationId: listPpeIssues
+      tags: [Workforce]
+      responses:
+        "200": { description: PPE issues, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createPpeIssue
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /projects/{projectId}/incidents:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectIdParam' }
+    get:
+      operationId: listIncidents
+      tags: [Workforce]
+      responses:
+        "200": { description: Incidents, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createIncident
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /projects/{projectId}/safety-dashboard:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectIdParam' }
+    get:
+      operationId: getSafetyDashboard
+      tags: [Workforce]
+      responses:
+        "200": { description: Safety dashboard, content: { application/json: { schema: { $ref: '#/components/schemas/SafetyDashboard' } } } }
+
+  /projects/{projectId}/quality-tests:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectIdParam' }
+    get:
+      operationId: listQualityTests
+      tags: [Workforce]
+      parameters:
+        - { in: query, name: testType, schema: { type: string } }
+      responses:
+        "200": { description: Quality tests, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/QualityTest' } } } } }
+    post:
+      operationId: createQualityTest
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/QualityTest' } } } }
+
+  /projects/{projectId}/labour-contractor-bills:
+    parameters:
+      - { $ref: '#/components/parameters/ProjectIdParam' }
+    get:
+      operationId: listLabourContractorBills
+      tags: [Workforce]
+      responses:
+        "200": { description: Labour contractor bills, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/LabourContractorBill' } } } } }
+    post:
+      operationId: createLabourContractorBill
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/LabourContractorBill' } } } }
+
+  /labour-contractor-bills/{billId}:
+    parameters:
+      - { in: path, name: billId, required: true, schema: { type: string } }
+    get:
+      operationId: getLabourContractorBill
+      tags: [Workforce]
+      responses:
+        "200": { description: Bill with cross-verification, content: { application/json: { schema: { type: object } } } }
+    patch:
+      operationId: updateLabourContractorBill
+      tags: [Workforce]
+      requestBody: { required: true, content: { application/json: { schema: { type: object } } } }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/LabourContractorBill' } } } }
+
 components:
   parameters:
     AuthorizationSessionHeader:
@@ -3648,3 +4005,110 @@ components:
             amount: { type: number }
             bills: { type: array, items: { type: object } }
 
+
+    Worker:
+      type: object
+      required: [id, projectId, name, workerCode, trade, skillLevel, status]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        contractorId: { type: string, nullable: true }
+        workerCode: { type: string }
+        name: { type: string }
+        trade: { type: string }
+        skillLevel: { type: string }
+        aadhaarNumber: { type: string, nullable: true }
+        pfNumber: { type: string, nullable: true }
+        esiNumber: { type: string, nullable: true }
+        dailyRate: { type: string }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    WorkerInput:
+      type: object
+      required: [name, trade, skillLevel, dailyRate]
+      properties:
+        name: { type: string }
+        trade: { type: string }
+        skillLevel: { type: string }
+        aadhaarNumber: { type: string }
+        pfNumber: { type: string }
+        esiNumber: { type: string }
+        dailyRate: { type: number }
+        contractorId: { type: string }
+
+    PayrollPeriod:
+      type: object
+      required: [id, projectId, fromDate, toDate, status]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        fromDate: { type: string, format: date-time }
+        toDate: { type: string, format: date-time }
+        status: { type: string, enum: [draft, computed, approved, paid] }
+        totalGross: { type: string, nullable: true }
+        totalNet: { type: string, nullable: true }
+        totalEpf: { type: string, nullable: true }
+        totalEsi: { type: string, nullable: true }
+        approvedById: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    SafetyDashboard:
+      type: object
+      required: [openPermits, activePermits, openNcrs, openIncidents, totalWorkers, ppeCompliancePct]
+      properties:
+        openPermits: { type: integer }
+        activePermits: { type: integer }
+        openNcrs: { type: integer }
+        openIncidents: { type: integer }
+        totalWorkers: { type: integer }
+        ppeCompliancePct: { type: number }
+        recentIncidents: { type: array, items: { type: object } }
+        highRisks: { type: array, items: { type: object } }
+
+    QualityTest:
+      type: object
+      required: [id, projectId, testType, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        irId: { type: string, nullable: true }
+        itpItemId: { type: string, nullable: true }
+        testType: { type: string }
+        isCodeRef: { type: string, nullable: true }
+        sampleId: { type: string, nullable: true }
+        sampleLocation: { type: string, nullable: true }
+        sampleDate: { type: string, format: date-time, nullable: true }
+        testDate: { type: string, format: date-time, nullable: true }
+        labName: { type: string, nullable: true }
+        testUnit: { type: string, nullable: true }
+        testValue: { type: string, nullable: true }
+        minAcceptable: { type: string, nullable: true }
+        maxAcceptable: { type: string, nullable: true }
+        passed: { type: boolean, nullable: true }
+        remarks: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    LabourContractorBill:
+      type: object
+      required: [id, projectId, billNumber, periodFrom, periodTo, claimedAmount, status]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        contractorId: { type: string, nullable: true }
+        periodId: { type: string, nullable: true }
+        billNumber: { type: string }
+        periodFrom: { type: string, format: date-time }
+        periodTo: { type: string, format: date-time }
+        claimedHeadcount: { type: integer }
+        claimedDays: { type: string }
+        claimedAmount: { type: string }
+        verifiedHeadcount: { type: integer, nullable: true }
+        verifiedDays: { type: string, nullable: true }
+        verifiedAmount: { type: string, nullable: true }
+        discrepancyNotes: { type: string, nullable: true }
+        status: { type: string, enum: [draft, submitted, under_review, approved, rejected] }
+        approvedById: { type: string, nullable: true }
+        approvedAt: { type: string, format: date-time, nullable: true }
+        rejectionReason: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }

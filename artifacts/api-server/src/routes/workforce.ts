@@ -8,6 +8,7 @@ import {
   ncrsTable, ncrActionsTable,
   safetyPermitsTable, hiraEntriesTable, jsaEntriesTable,
   ppeIssuesTable, incidentsTable, incidentActionsTable,
+  qualityTestsTable, labourContractorBillsTable,
   projectsTable, userProfilesTable,
 } from "@workspace/db";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
@@ -138,10 +139,45 @@ router.post("/projects/:projectId/attendance", requireAuth, async (req: Request,
 router.patch("/attendance/:recordId/approve-ot", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
   const [rec] = await db.select().from(attendanceRecordsTable).where(eq(attendanceRecordsTable.id, req.params.recordId));
   if (!rec) { res.status(404).json({ error: "Not found" }); return; }
+  // Enforce project/org scope — critical authz check
+  if (await denyIfNoProjectAccess(req, res, rec.projectId)) return;
   const [updated] = await db.update(attendanceRecordsTable)
     .set({ otApproved: true, otApprovedById: req.user?.id ?? null })
     .where(eq(attendanceRecordsTable.id, rec.id)).returning();
   res.json(updated);
+});
+
+// Bulk attendance entry (site engineer submits daily muster roll)
+router.post("/projects/:projectId/attendance/bulk", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const { entries } = req.body ?? {};
+  if (!Array.isArray(entries) || entries.length === 0) { res.status(400).json({ error: "entries array required" }); return; }
+  const inserted = [];
+  for (const b of entries) {
+    if (!b.workerId || !b.attendanceDate) continue;
+    const markIn = b.markInTime ? new Date(b.markInTime) : null;
+    const markOut = b.markOutTime ? new Date(b.markOutTime) : null;
+    let hoursWorked = 0;
+    let overtimeHours = 0;
+    if (markIn && markOut) {
+      const totalHours = (markOut.getTime() - markIn.getTime()) / 3600000;
+      hoursWorked = Math.min(totalHours, 9);
+      overtimeHours = Math.max(0, totalHours - 9);
+    }
+    const [row] = await db.insert(attendanceRecordsTable).values({
+      projectId: req.params.projectId, workerId: b.workerId,
+      attendanceDate: new Date(b.attendanceDate),
+      markInTime: markIn, markOutTime: markOut,
+      gpsLat: b.gpsLat ? String(b.gpsLat) : null,
+      gpsLng: b.gpsLng ? String(b.gpsLng) : null,
+      withinGeofence: b.withinGeofence ?? true,
+      hoursWorked: String(Math.round(hoursWorked * 100) / 100),
+      overtimeHours: String(Math.round(overtimeHours * 100) / 100),
+      remarks: b.remarks ?? null,
+    }).returning();
+    inserted.push(row);
+  }
+  res.status(201).json({ inserted: inserted.length, records: inserted });
 });
 
 // ─── PAYROLL ──────────────────────────────────────────────────────────────────
@@ -680,6 +716,209 @@ router.get("/projects/:projectId/safety-dashboard", requireAuth, async (req: Req
     recentIncidents,
     highRisks,
   });
+});
+
+// ─── STATUTORY EXPORTS ────────────────────────────────────────────────────────
+router.get("/payroll-periods/:periodId/epf-export", requireAuth, async (req: Request, res: Response) => {
+  const [period] = await db.select().from(payrollPeriodsTable).where(eq(payrollPeriodsTable.id, req.params.periodId));
+  if (!period) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, period.projectId)) return;
+  const lines = await db.select().from(payrollLinesTable).where(eq(payrollLinesTable.periodId, period.id));
+  const workers = await db.select().from(workersTable).where(eq(workersTable.projectId, period.projectId));
+  const workerMap = Object.fromEntries(workers.map(w => [w.id, w]));
+  const data = lines.map(l => {
+    const w = workerMap[l.workerId] ?? {};
+    const wages = n(l.basicWages);
+    const epfWage = Math.min(wages, 15000);
+    const epfEmployee = n(l.epfEmployee);
+    const epfEmployer = n(l.epfEmployer);
+    const epfAdmin = Math.round(epfWage * 0.005 * 100) / 100;
+    return {
+      workerCode: (w as any).workerCode, name: (w as any).name,
+      pfNumber: (w as any).pfNumber ?? "—", aadhaar: (w as any).aadhaarNumber ?? "—",
+      wages: wages.toFixed(2), epfWage: epfWage.toFixed(2),
+      epfEmployee: epfEmployee.toFixed(2), epfEmployer: epfEmployer.toFixed(2),
+      epfAdmin: epfAdmin.toFixed(2),
+      totalEpf: (epfEmployee + epfEmployer + epfAdmin).toFixed(2),
+    };
+  });
+  const totals = data.reduce((acc, r) => ({
+    wages: acc.wages + parseFloat(r.wages),
+    epfEmployee: acc.epfEmployee + parseFloat(r.epfEmployee),
+    epfEmployer: acc.epfEmployer + parseFloat(r.epfEmployer),
+    epfAdmin: acc.epfAdmin + parseFloat(r.epfAdmin),
+    totalEpf: acc.totalEpf + parseFloat(r.totalEpf),
+  }), { wages: 0, epfEmployee: 0, epfEmployer: 0, epfAdmin: 0, totalEpf: 0 });
+  res.json({ period, rows: data, totals });
+});
+
+router.get("/payroll-periods/:periodId/esi-export", requireAuth, async (req: Request, res: Response) => {
+  const [period] = await db.select().from(payrollPeriodsTable).where(eq(payrollPeriodsTable.id, req.params.periodId));
+  if (!period) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, period.projectId)) return;
+  const lines = await db.select().from(payrollLinesTable).where(eq(payrollLinesTable.periodId, period.id));
+  const workers = await db.select().from(workersTable).where(eq(workersTable.projectId, period.projectId));
+  const workerMap = Object.fromEntries(workers.map(w => [w.id, w]));
+  const data = lines.map(l => {
+    const w = workerMap[l.workerId] ?? {};
+    const gross = n(l.grossWages);
+    const esiWage = Math.min(gross, 21000);
+    return {
+      workerCode: (w as any).workerCode, name: (w as any).name,
+      esiNumber: (w as any).esiNumber ?? "—",
+      grossWages: gross.toFixed(2), esiWage: esiWage.toFixed(2),
+      esiEmployee: n(l.esiEmployee).toFixed(2),
+      esiEmployer: n(l.esiEmployer).toFixed(2),
+      totalEsi: (n(l.esiEmployee) + n(l.esiEmployer)).toFixed(2),
+    };
+  });
+  const totals = data.reduce((acc, r) => ({
+    esiEmployee: acc.esiEmployee + parseFloat(r.esiEmployee),
+    esiEmployer: acc.esiEmployer + parseFloat(r.esiEmployer),
+    totalEsi: acc.totalEsi + parseFloat(r.totalEsi),
+  }), { esiEmployee: 0, esiEmployer: 0, totalEsi: 0 });
+  res.json({ period, rows: data, totals });
+});
+
+router.get("/payroll-periods/:periodId/statutory-summary", requireAuth, async (req: Request, res: Response) => {
+  const [period] = await db.select().from(payrollPeriodsTable).where(eq(payrollPeriodsTable.id, req.params.periodId));
+  if (!period) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, period.projectId)) return;
+  const lines = await db.select().from(payrollLinesTable).where(eq(payrollLinesTable.periodId, period.id));
+  const agg = lines.reduce((acc, l) => ({
+    epfEmployee: acc.epfEmployee + n(l.epfEmployee),
+    epfEmployer: acc.epfEmployer + n(l.epfEmployer),
+    esiEmployee: acc.esiEmployee + n(l.esiEmployee),
+    esiEmployer: acc.esiEmployer + n(l.esiEmployer),
+    pt: acc.pt + n(l.pt), lwf: acc.lwf + n(l.lwf),
+    tds: acc.tds + n(l.tdsOnWages), netWages: acc.netWages + n(l.netWages),
+  }), { epfEmployee: 0, epfEmployer: 0, esiEmployee: 0, esiEmployer: 0, pt: 0, lwf: 0, tds: 0, netWages: 0 });
+  res.json({ period, workerCount: lines.length, ...agg });
+});
+
+// ─── QUALITY TESTS ────────────────────────────────────────────────────────────
+router.get("/projects/:projectId/quality-tests", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const { testType } = req.query as Record<string, string>;
+  let cond: any = eq(qualityTestsTable.projectId, req.params.projectId);
+  if (testType) cond = and(cond, eq(qualityTestsTable.testType, testType));
+  const rows = await db.select().from(qualityTestsTable).where(cond)
+    .orderBy(desc(qualityTestsTable.testDate));
+  res.json(rows);
+});
+
+router.post("/projects/:projectId/quality-tests", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const b = req.body ?? {};
+  if (!b.testType) { res.status(400).json({ error: "testType required" }); return; }
+  // Auto-populate IS code limits from lookup
+  const { IS_CODE_LIMITS } = await import("@workspace/db");
+  const limit = (IS_CODE_LIMITS as any)[b.testType] ?? {};
+  const testValue = b.testValue !== undefined ? n(b.testValue) : null;
+  const minVal = b.minAcceptable !== undefined ? n(b.minAcceptable) : limit.minValue ?? null;
+  const maxVal = b.maxAcceptable !== undefined ? n(b.maxAcceptable) : limit.maxValue ?? null;
+  let passed: boolean | null = null;
+  if (testValue !== null) {
+    if (minVal !== null && maxVal !== null) passed = testValue >= minVal && testValue <= maxVal;
+    else if (minVal !== null) passed = testValue >= minVal;
+    else if (maxVal !== null) passed = testValue <= maxVal;
+  }
+  const count = await db.select({ c: sql`count(*)` }).from(qualityTestsTable)
+    .where(eq(qualityTestsTable.projectId, req.params.projectId));
+  const seq = Number(count[0]?.c ?? 0) + 1;
+  const [row] = await db.insert(qualityTestsTable).values({
+    projectId: req.params.projectId, testType: b.testType,
+    isCodeRef: b.isCodeRef ?? limit.ref ?? null,
+    sampleId: b.sampleId ?? `S-${String(seq).padStart(4, "0")}`,
+    sampleLocation: b.sampleLocation ?? null,
+    sampleDate: b.sampleDate ? new Date(b.sampleDate) : null,
+    testDate: b.testDate ? new Date(b.testDate) : new Date(),
+    labName: b.labName ?? null,
+    testUnit: b.testUnit ?? limit.unit ?? null,
+    testValue: testValue !== null ? String(testValue) : null,
+    minAcceptable: minVal !== null ? String(minVal) : null,
+    maxAcceptable: maxVal !== null ? String(maxVal) : null,
+    passed, remarks: b.remarks ?? null,
+    irId: b.irId ?? null, itpItemId: b.itpItemId ?? null,
+    conductedById: req.user?.id ?? null,
+  }).returning();
+  res.status(201).json(row);
+});
+
+// ─── LABOUR CONTRACTOR BILLS ──────────────────────────────────────────────────
+router.get("/projects/:projectId/labour-contractor-bills", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const rows = await db.select().from(labourContractorBillsTable)
+    .where(eq(labourContractorBillsTable.projectId, req.params.projectId))
+    .orderBy(desc(labourContractorBillsTable.createdAt));
+  res.json(rows);
+});
+
+router.post("/projects/:projectId/labour-contractor-bills", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const b = req.body ?? {};
+  if (!b.periodFrom || !b.periodTo || !b.claimedAmount) { res.status(400).json({ error: "periodFrom, periodTo, claimedAmount required" }); return; }
+  const count = await db.select({ c: sql`count(*)` }).from(labourContractorBillsTable)
+    .where(eq(labourContractorBillsTable.projectId, req.params.projectId));
+  const seq = Number(count[0]?.c ?? 0) + 1;
+  const [row] = await db.insert(labourContractorBillsTable).values({
+    projectId: req.params.projectId,
+    billNumber: b.billNumber ?? `LCB-${String(seq).padStart(4, "0")}`,
+    contractorId: b.contractorId ?? null, periodId: b.periodId ?? null,
+    periodFrom: new Date(b.periodFrom), periodTo: new Date(b.periodTo),
+    claimedHeadcount: b.claimedHeadcount ?? 0,
+    claimedDays: String(n(b.claimedDays)), claimedAmount: String(n(b.claimedAmount)),
+    submittedById: req.user?.id ?? null, status: "submitted", submittedAt: new Date(),
+  }).returning();
+  res.status(201).json(row);
+});
+
+// Cross-verify: compare claimed with attendance-derived figures
+router.get("/labour-contractor-bills/:billId", requireAuth, async (req: Request, res: Response) => {
+  const [bill] = await db.select().from(labourContractorBillsTable).where(eq(labourContractorBillsTable.id, req.params.billId));
+  if (!bill) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, bill.projectId)) return;
+  // Compute verified figures from attendance
+  const attRecords = await db.select().from(attendanceRecordsTable)
+    .where(and(
+      eq(attendanceRecordsTable.projectId, bill.projectId),
+      sql`attendance_date >= ${bill.periodFrom.toISOString()} AND attendance_date <= ${bill.periodTo.toISOString()}`
+    ));
+  const workerDays: Record<string, number> = {};
+  for (const a of attRecords) {
+    if (n(a.hoursWorked) >= 4) workerDays[a.workerId] = (workerDays[a.workerId] ?? 0) + 1;
+  }
+  const verifiedHeadcount = Object.keys(workerDays).length;
+  const verifiedDays = Object.values(workerDays).reduce((s, d) => s + d, 0);
+  const workers = await db.select().from(workersTable).where(
+    inArray(workersTable.id, Object.keys(workerDays).length > 0 ? Object.keys(workerDays) : ["_none_"])
+  );
+  const verifiedAmount = workers.reduce((s, w) => s + (workerDays[w.id] ?? 0) * n(w.dailyRate), 0);
+  const discrepancy = n(bill.claimedAmount) - verifiedAmount;
+  res.json({
+    ...bill,
+    verification: { verifiedHeadcount, verifiedDays, verifiedAmount: Math.round(verifiedAmount * 100) / 100, discrepancy: Math.round(discrepancy * 100) / 100, workerBreakdown: Object.entries(workerDays).map(([wid, days]) => ({ workerId: wid, presentDays: days })) },
+  });
+});
+
+router.patch("/labour-contractor-bills/:billId", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
+  const b = req.body ?? {};
+  const [bill] = await db.select().from(labourContractorBillsTable).where(eq(labourContractorBillsTable.id, req.params.billId));
+  if (!bill) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, bill.projectId)) return;
+  const patch: Record<string, any> = {};
+  if (b.status !== undefined) {
+    patch.status = b.status;
+    if (b.status === "approved") { patch.approvedById = req.user?.id ?? null; patch.approvedAt = new Date(); }
+  }
+  if (b.verifiedHeadcount !== undefined) patch.verifiedHeadcount = b.verifiedHeadcount;
+  if (b.verifiedDays !== undefined) patch.verifiedDays = String(n(b.verifiedDays));
+  if (b.verifiedAmount !== undefined) patch.verifiedAmount = String(n(b.verifiedAmount));
+  if (b.discrepancyNotes !== undefined) patch.discrepancyNotes = b.discrepancyNotes;
+  if (b.rejectionReason !== undefined) patch.rejectionReason = b.rejectionReason;
+  const [updated] = await db.update(labourContractorBillsTable).set(patch)
+    .where(eq(labourContractorBillsTable.id, bill.id)).returning();
+  res.json(updated);
 });
 
 export default router;

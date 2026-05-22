@@ -3053,3 +3053,556 @@ export const GetReconciliationResponse = zod.object({
 }).passthrough()
 
 
+export const ListWorkersParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListWorkersQueryParams = zod.object({
+  "status": zod.coerce.string().optional(),
+  "trade": zod.coerce.string().optional()
+})
+
+export const ListWorkersResponseItem = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "contractorId": zod.string().nullish(),
+  "workerCode": zod.string(),
+  "name": zod.string(),
+  "trade": zod.string(),
+  "skillLevel": zod.string(),
+  "aadhaarNumber": zod.string().nullish(),
+  "pfNumber": zod.string().nullish(),
+  "esiNumber": zod.string().nullish(),
+  "dailyRate": zod.string().optional(),
+  "status": zod.string(),
+  "createdAt": zod.coerce.date().optional()
+})
+export const ListWorkersResponse = zod.array(ListWorkersResponseItem)
+
+
+export const CreateWorkerParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateWorkerBody = zod.object({
+  "name": zod.string(),
+  "trade": zod.string(),
+  "skillLevel": zod.string(),
+  "aadhaarNumber": zod.string().optional(),
+  "pfNumber": zod.string().optional(),
+  "esiNumber": zod.string().optional(),
+  "dailyRate": zod.number(),
+  "contractorId": zod.string().optional()
+})
+
+
+export const GetWorkerParams = zod.object({
+  "workerId": zod.coerce.string()
+})
+
+export const GetWorkerResponse = zod.object({
+
+}).passthrough()
+
+
+export const UpdateWorkerParams = zod.object({
+  "workerId": zod.coerce.string()
+})
+
+export const UpdateWorkerBody = zod.object({
+
+}).passthrough()
+
+export const UpdateWorkerResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "contractorId": zod.string().nullish(),
+  "workerCode": zod.string(),
+  "name": zod.string(),
+  "trade": zod.string(),
+  "skillLevel": zod.string(),
+  "aadhaarNumber": zod.string().nullish(),
+  "pfNumber": zod.string().nullish(),
+  "esiNumber": zod.string().nullish(),
+  "dailyRate": zod.string().optional(),
+  "status": zod.string(),
+  "createdAt": zod.coerce.date().optional()
+})
+
+
+export const ListAttendanceParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListAttendanceQueryParams = zod.object({
+  "workerId": zod.coerce.string().optional()
+})
+
+export const ListAttendanceResponseItem = zod.object({
+
+}).passthrough()
+export const ListAttendanceResponse = zod.array(ListAttendanceResponseItem)
+
+
+export const RecordAttendanceParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const RecordAttendanceBody = zod.object({
+
+}).passthrough()
+
+
+export const BulkRecordAttendanceParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const BulkRecordAttendanceBody = zod.object({
+  "entries": zod.array(zod.object({
+
+}).passthrough()).optional()
+})
+
+
+export const ApproveOtParams = zod.object({
+  "recordId": zod.coerce.string()
+})
+
+export const ApproveOtResponse = zod.object({
+
+}).passthrough()
+
+
+export const ListPayrollPeriodsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListPayrollPeriodsResponseItem = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "fromDate": zod.coerce.date(),
+  "toDate": zod.coerce.date(),
+  "status": zod.enum(['draft', 'computed', 'approved', 'paid']),
+  "totalGross": zod.string().nullish(),
+  "totalNet": zod.string().nullish(),
+  "totalEpf": zod.string().nullish(),
+  "totalEsi": zod.string().nullish(),
+  "approvedById": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional()
+})
+export const ListPayrollPeriodsResponse = zod.array(ListPayrollPeriodsResponseItem)
+
+
+export const CreatePayrollPeriodParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreatePayrollPeriodBody = zod.object({
+
+}).passthrough()
+
+
+export const ComputePayrollParams = zod.object({
+  "periodId": zod.coerce.string()
+})
+
+export const ComputePayrollResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "fromDate": zod.coerce.date(),
+  "toDate": zod.coerce.date(),
+  "status": zod.enum(['draft', 'computed', 'approved', 'paid']),
+  "totalGross": zod.string().nullish(),
+  "totalNet": zod.string().nullish(),
+  "totalEpf": zod.string().nullish(),
+  "totalEsi": zod.string().nullish(),
+  "approvedById": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional()
+})
+
+
+export const ApprovePayrollParams = zod.object({
+  "periodId": zod.coerce.string()
+})
+
+export const ApprovePayrollResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "fromDate": zod.coerce.date(),
+  "toDate": zod.coerce.date(),
+  "status": zod.enum(['draft', 'computed', 'approved', 'paid']),
+  "totalGross": zod.string().nullish(),
+  "totalNet": zod.string().nullish(),
+  "totalEpf": zod.string().nullish(),
+  "totalEsi": zod.string().nullish(),
+  "approvedById": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional()
+})
+
+
+export const ListPayrollLinesParams = zod.object({
+  "periodId": zod.coerce.string()
+})
+
+export const ListPayrollLinesResponseItem = zod.object({
+
+}).passthrough()
+export const ListPayrollLinesResponse = zod.array(ListPayrollLinesResponseItem)
+
+
+export const GetEpfExportParams = zod.object({
+  "periodId": zod.coerce.string()
+})
+
+export const GetEpfExportResponse = zod.object({
+
+}).passthrough()
+
+
+export const GetEsiExportParams = zod.object({
+  "periodId": zod.coerce.string()
+})
+
+export const GetEsiExportResponse = zod.object({
+
+}).passthrough()
+
+
+export const GetStatutorySummaryParams = zod.object({
+  "periodId": zod.coerce.string()
+})
+
+export const GetStatutorySummaryResponse = zod.object({
+
+}).passthrough()
+
+
+export const ListItpsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListItpsResponseItem = zod.object({
+
+}).passthrough()
+export const ListItpsResponse = zod.array(ListItpsResponseItem)
+
+
+export const CreateItpParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateItpBody = zod.object({
+
+}).passthrough()
+
+
+export const GetItpParams = zod.object({
+  "itpId": zod.coerce.string()
+})
+
+export const GetItpResponse = zod.object({
+
+}).passthrough()
+
+
+export const ApproveItpParams = zod.object({
+  "itpId": zod.coerce.string()
+})
+
+export const ApproveItpResponse = zod.object({
+
+}).passthrough()
+
+
+export const ListInspectionRequestsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListInspectionRequestsResponseItem = zod.object({
+
+}).passthrough()
+export const ListInspectionRequestsResponse = zod.array(ListInspectionRequestsResponseItem)
+
+
+export const CreateInspectionRequestParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateInspectionRequestBody = zod.object({
+
+}).passthrough()
+
+
+export const RecordInspectionResultParams = zod.object({
+  "irId": zod.coerce.string()
+})
+
+export const RecordInspectionResultBody = zod.object({
+
+}).passthrough()
+
+export const RecordInspectionResultResponse = zod.object({
+
+}).passthrough()
+
+
+export const ListNcrsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListNcrsResponseItem = zod.object({
+
+}).passthrough()
+export const ListNcrsResponse = zod.array(ListNcrsResponseItem)
+
+
+export const CreateNcrParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateNcrBody = zod.object({
+
+}).passthrough()
+
+
+export const AddNcrActionParams = zod.object({
+  "ncrId": zod.coerce.string()
+})
+
+export const AddNcrActionBody = zod.object({
+
+}).passthrough()
+
+
+export const ListSafetyPermitsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListSafetyPermitsResponseItem = zod.object({
+
+}).passthrough()
+export const ListSafetyPermitsResponse = zod.array(ListSafetyPermitsResponseItem)
+
+
+export const CreateSafetyPermitParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateSafetyPermitBody = zod.object({
+
+}).passthrough()
+
+
+export const ListHiraParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListHiraResponseItem = zod.object({
+
+}).passthrough()
+export const ListHiraResponse = zod.array(ListHiraResponseItem)
+
+
+export const CreateHiraEntryParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateHiraEntryBody = zod.object({
+
+}).passthrough()
+
+
+export const ListJsaParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListJsaResponseItem = zod.object({
+
+}).passthrough()
+export const ListJsaResponse = zod.array(ListJsaResponseItem)
+
+
+export const CreateJsaEntryParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateJsaEntryBody = zod.object({
+
+}).passthrough()
+
+
+export const ListPpeIssuesParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListPpeIssuesResponseItem = zod.object({
+
+}).passthrough()
+export const ListPpeIssuesResponse = zod.array(ListPpeIssuesResponseItem)
+
+
+export const CreatePpeIssueParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreatePpeIssueBody = zod.object({
+
+}).passthrough()
+
+
+export const ListIncidentsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListIncidentsResponseItem = zod.object({
+
+}).passthrough()
+export const ListIncidentsResponse = zod.array(ListIncidentsResponseItem)
+
+
+export const CreateIncidentParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateIncidentBody = zod.object({
+
+}).passthrough()
+
+
+export const GetSafetyDashboardParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const GetSafetyDashboardResponse = zod.object({
+  "openPermits": zod.number(),
+  "activePermits": zod.number(),
+  "openNcrs": zod.number(),
+  "openIncidents": zod.number(),
+  "totalWorkers": zod.number(),
+  "ppeCompliancePct": zod.number(),
+  "recentIncidents": zod.array(zod.object({
+
+}).passthrough()).optional(),
+  "highRisks": zod.array(zod.object({
+
+}).passthrough()).optional()
+})
+
+
+export const ListQualityTestsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListQualityTestsQueryParams = zod.object({
+  "testType": zod.coerce.string().optional()
+})
+
+export const ListQualityTestsResponseItem = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "irId": zod.string().nullish(),
+  "itpItemId": zod.string().nullish(),
+  "testType": zod.string(),
+  "isCodeRef": zod.string().nullish(),
+  "sampleId": zod.string().nullish(),
+  "sampleLocation": zod.string().nullish(),
+  "sampleDate": zod.coerce.date().nullish(),
+  "testDate": zod.coerce.date().nullish(),
+  "labName": zod.string().nullish(),
+  "testUnit": zod.string().nullish(),
+  "testValue": zod.string().nullish(),
+  "minAcceptable": zod.string().nullish(),
+  "maxAcceptable": zod.string().nullish(),
+  "passed": zod.boolean().nullish(),
+  "remarks": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListQualityTestsResponse = zod.array(ListQualityTestsResponseItem)
+
+
+export const CreateQualityTestParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateQualityTestBody = zod.object({
+
+}).passthrough()
+
+
+export const ListLabourContractorBillsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListLabourContractorBillsResponseItem = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "contractorId": zod.string().nullish(),
+  "periodId": zod.string().nullish(),
+  "billNumber": zod.string(),
+  "periodFrom": zod.coerce.date(),
+  "periodTo": zod.coerce.date(),
+  "claimedHeadcount": zod.number().optional(),
+  "claimedDays": zod.string().optional(),
+  "claimedAmount": zod.string(),
+  "verifiedHeadcount": zod.number().nullish(),
+  "verifiedDays": zod.string().nullish(),
+  "verifiedAmount": zod.string().nullish(),
+  "discrepancyNotes": zod.string().nullish(),
+  "status": zod.enum(['draft', 'submitted', 'under_review', 'approved', 'rejected']),
+  "approvedById": zod.string().nullish(),
+  "approvedAt": zod.coerce.date().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional()
+})
+export const ListLabourContractorBillsResponse = zod.array(ListLabourContractorBillsResponseItem)
+
+
+export const CreateLabourContractorBillParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateLabourContractorBillBody = zod.object({
+
+}).passthrough()
+
+
+export const GetLabourContractorBillParams = zod.object({
+  "billId": zod.coerce.string()
+})
+
+export const GetLabourContractorBillResponse = zod.object({
+
+}).passthrough()
+
+
+export const UpdateLabourContractorBillParams = zod.object({
+  "billId": zod.coerce.string()
+})
+
+export const UpdateLabourContractorBillBody = zod.object({
+
+}).passthrough()
+
+export const UpdateLabourContractorBillResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "contractorId": zod.string().nullish(),
+  "periodId": zod.string().nullish(),
+  "billNumber": zod.string(),
+  "periodFrom": zod.coerce.date(),
+  "periodTo": zod.coerce.date(),
+  "claimedHeadcount": zod.number().optional(),
+  "claimedDays": zod.string().optional(),
+  "claimedAmount": zod.string(),
+  "verifiedHeadcount": zod.number().nullish(),
+  "verifiedDays": zod.string().nullish(),
+  "verifiedAmount": zod.string().nullish(),
+  "discrepancyNotes": zod.string().nullish(),
+  "status": zod.enum(['draft', 'submitted', 'under_review', 'approved', 'rejected']),
+  "approvedById": zod.string().nullish(),
+  "approvedAt": zod.coerce.date().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date().optional()
+})
+
+
