@@ -11,7 +11,7 @@ import {
   wastageLogsTable, rateContractsTable,
   projectsTable, userProfilesTable,
 } from "@workspace/db";
-import { eq, and, desc, asc, sql, gte, lte } from "drizzle-orm";
+import { eq, and, desc, asc, sql, gte, lte, inArray } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { n, d, dReq } from "../lib/serialize";
 
@@ -231,6 +231,14 @@ router.patch("/vendors/:vendorId", requireAuth, requireRole(...ROLE_GROUPS.OWNER
   const b = req.body ?? {};
   const [v] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, req.params.vendorId));
   if (!v) { res.status(404).json({ error: "Not found" }); return; }
+  // Org-level access guard for vendor write operations
+  if (v.organisationId) {
+    const [profile] = await db.select({ organisationId: userProfilesTable.organisationId })
+      .from(userProfilesTable).where(eq(userProfilesTable.userId, req.user!.id));
+    if (profile?.organisationId && profile.organisationId !== v.organisationId) {
+      res.status(403).json({ error: "Forbidden" }); return;
+    }
+  }
   const patch: Record<string, any> = {};
   const fields = ["name","code","contactPerson","email","phone","address","city","state","pincode","gstNumber","pan","msmeCategory","msmeNumber","bankName","accountNumber","ifscCode","notes"];
   for (const f of fields) if (b[f] !== undefined) patch[f] = b[f];
@@ -251,6 +259,15 @@ router.get("/vendors/:vendorId/documents", requireAuth, async (req: Request, res
 
 router.post("/vendors/:vendorId/documents", requireAuth, async (req: Request, res: Response) => {
   const b = req.body ?? {};
+  const [vendorCheck] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, req.params.vendorId));
+  if (!vendorCheck) { res.status(404).json({ error: "Vendor not found" }); return; }
+  if (vendorCheck.organisationId) {
+    const [profile] = await db.select({ organisationId: userProfilesTable.organisationId })
+      .from(userProfilesTable).where(eq(userProfilesTable.userId, req.user!.id));
+    if (profile?.organisationId && profile.organisationId !== vendorCheck.organisationId) {
+      res.status(403).json({ error: "Forbidden" }); return;
+    }
+  }
   const [doc] = await db.insert(vendorDocumentsTable).values({
     vendorId: req.params.vendorId, documentType: b.documentType ?? "other",
     documentUrl: b.documentUrl ?? null, fileName: b.fileName ?? null,
@@ -380,6 +397,9 @@ router.get("/material-indents/:indentId", requireAuth, async (req: Request, res:
 });
 
 router.get("/material-indents/:indentId/items", requireAuth, async (req: Request, res: Response) => {
+  const [indent] = await db.select().from(materialIndentsTable).where(eq(materialIndentsTable.id, req.params.indentId));
+  if (!indent) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, indent.projectId)) return;
   const items = await db.select().from(indentItemsTable).where(eq(indentItemsTable.indentId, req.params.indentId));
   res.json(items.map(sIndentItem));
 });
@@ -387,7 +407,9 @@ router.get("/material-indents/:indentId/items", requireAuth, async (req: Request
 router.post("/material-indents/:indentId/items", requireAuth, async (req: Request, res: Response) => {
   const b = req.body ?? {};
   if (!b.itemName || !b.requiredQty) { res.status(400).json({ error: "itemName, requiredQty required" }); return; }
-  // Fetch available stock if inventoryItemId provided
+  const [indent] = await db.select().from(materialIndentsTable).where(eq(materialIndentsTable.id, req.params.indentId));
+  if (!indent) { res.status(404).json({ error: "Indent not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, indent.projectId)) return;
   let availableStock = 0;
   if (b.inventoryItemId) {
     const [inv] = await db.select({ currentStock: inventoryItemsTable.currentStock })
@@ -407,6 +429,7 @@ router.post("/material-indents/:indentId/items", requireAuth, async (req: Reques
 router.post("/material-indents/:indentId/submit", requireAuth, async (req: Request, res: Response) => {
   const [indent] = await db.select().from(materialIndentsTable).where(eq(materialIndentsTable.id, req.params.indentId));
   if (!indent || indent.status !== "draft") { res.status(409).json({ error: "Only draft indents can be submitted" }); return; }
+  if (await denyIfNoProjectAccess(req, res, indent.projectId)) return;
   const [updated] = await db.update(materialIndentsTable).set({ status: "submitted" })
     .where(eq(materialIndentsTable.id, indent.id)).returning();
   res.json(sIndent(updated));
@@ -416,7 +439,7 @@ router.post("/material-indents/:indentId/approve", requireAuth, requireRole(...R
   const b = req.body ?? {};
   const [indent] = await db.select().from(materialIndentsTable).where(eq(materialIndentsTable.id, req.params.indentId));
   if (!indent || indent.status !== "submitted") { res.status(409).json({ error: "Only submitted indents can be approved" }); return; }
-  // Optionally update approved qty on items
+  if (await denyIfNoProjectAccess(req, res, indent.projectId)) return;
   if (Array.isArray(b.items)) {
     for (const it of b.items) {
       if (it.id && it.approvedQty !== undefined) {
@@ -435,6 +458,7 @@ router.post("/material-indents/:indentId/query", requireAuth, requireRole(...ROL
   const b = req.body ?? {};
   const [indent] = await db.select().from(materialIndentsTable).where(eq(materialIndentsTable.id, req.params.indentId));
   if (!indent || indent.status !== "submitted") { res.status(409).json({ error: "Only submitted indents can be queried" }); return; }
+  if (await denyIfNoProjectAccess(req, res, indent.projectId)) return;
   const [updated] = await db.update(materialIndentsTable).set({ status: "queried", queryRemarks: b.remarks ?? null })
     .where(eq(materialIndentsTable.id, indent.id)).returning();
   res.json(sIndent(updated));
@@ -485,6 +509,9 @@ router.get("/rfqs/:rfqId", requireAuth, async (req: Request, res: Response) => {
 router.post("/rfqs/:rfqId/items", requireAuth, async (req: Request, res: Response) => {
   const b = req.body ?? {};
   if (!b.itemName) { res.status(400).json({ error: "itemName required" }); return; }
+  const [rfqCheck] = await db.select().from(rfqsTable).where(eq(rfqsTable.id, req.params.rfqId));
+  if (!rfqCheck) { res.status(404).json({ error: "RFQ not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, rfqCheck.projectId)) return;
   const [item] = await db.insert(rfqItemsTable).values({
     rfqId: req.params.rfqId, itemName: b.itemName, unit: b.unit ?? "nos",
     requiredQty: String(n(b.requiredQty ?? 0)), specification: b.specification ?? null,
@@ -496,6 +523,9 @@ router.post("/rfqs/:rfqId/items", requireAuth, async (req: Request, res: Respons
 router.post("/rfqs/:rfqId/vendors", requireAuth, async (req: Request, res: Response) => {
   const b = req.body ?? {};
   if (!b.vendorId) { res.status(400).json({ error: "vendorId required" }); return; }
+  const [rfqCheck] = await db.select().from(rfqsTable).where(eq(rfqsTable.id, req.params.rfqId));
+  if (!rfqCheck) { res.status(404).json({ error: "RFQ not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, rfqCheck.projectId)) return;
   const [row] = await db.insert(rfqVendorsTable).values({
     rfqId: req.params.rfqId, vendorId: b.vendorId, sentAt: new Date(),
   }).returning();
@@ -505,6 +535,9 @@ router.post("/rfqs/:rfqId/vendors", requireAuth, async (req: Request, res: Respo
 router.post("/rfqs/:rfqId/responses", requireAuth, async (req: Request, res: Response) => {
   const b = req.body ?? {};
   if (!b.vendorId || b.unitRate === undefined) { res.status(400).json({ error: "vendorId, unitRate required" }); return; }
+  const [rfqCheck] = await db.select().from(rfqsTable).where(eq(rfqsTable.id, req.params.rfqId));
+  if (!rfqCheck) { res.status(404).json({ error: "RFQ not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, rfqCheck.projectId)) return;
   const [row] = await db.insert(rfqResponsesTable).values({
     rfqId: req.params.rfqId, vendorId: b.vendorId, rfqItemId: b.rfqItemId ?? null,
     unitRate: String(n(b.unitRate)), gstRate: String(n(b.gstRate ?? 18)),
@@ -521,6 +554,7 @@ router.post("/rfqs/:rfqId/responses", requireAuth, async (req: Request, res: Res
 router.get("/rfqs/:rfqId/comparison", requireAuth, async (req: Request, res: Response) => {
   const [rfq] = await db.select().from(rfqsTable).where(eq(rfqsTable.id, req.params.rfqId));
   if (!rfq) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, rfq.projectId)) return;
   const [items, responses] = await Promise.all([
     db.select().from(rfqItemsTable).where(eq(rfqItemsTable.rfqId, rfq.id)),
     db.select().from(rfqResponsesTable).where(eq(rfqResponsesTable.rfqId, rfq.id)),
@@ -595,12 +629,16 @@ router.post("/projects/:projectId/purchase-orders", requireAuth, requireRole(...
 router.get("/purchase-orders/:poId", requireAuth, async (req: Request, res: Response) => {
   const [po] = await db.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.poId));
   if (!po) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, po.projectId)) return;
   const items = await db.select().from(poItemsTable).where(eq(poItemsTable.poId, po.id));
   res.json({ ...sPo(po), items: items.map(sPoItem) });
 });
 
 router.get("/purchase-orders/:poId/items", requireAuth, async (req: Request, res: Response) => {
-  const items = await db.select().from(poItemsTable).where(eq(poItemsTable.poId, req.params.poId));
+  const [po] = await db.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.poId));
+  if (!po) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, po.projectId)) return;
+  const items = await db.select().from(poItemsTable).where(eq(poItemsTable.poId, po.id));
   res.json(items.map(sPoItem));
 });
 
@@ -609,6 +647,9 @@ router.post("/purchase-orders/:poId/items", requireAuth, async (req: Request, re
   if (!b.itemName || b.orderedQty === undefined || b.unitRate === undefined) {
     res.status(400).json({ error: "itemName, orderedQty, unitRate required" }); return;
   }
+  const [poCheck] = await db.select().from(purchaseOrdersTable).where(eq(purchaseOrdersTable.id, req.params.poId));
+  if (!poCheck) { res.status(404).json({ error: "PO not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, poCheck.projectId)) return;
   const orderedQty = n(b.orderedQty);
   const unitRate = n(b.unitRate);
   const gstRate = n(b.gstRate ?? 18);
@@ -690,22 +731,42 @@ router.post("/projects/:projectId/grns", requireAuth, async (req: Request, res: 
 router.get("/grns/:grnId", requireAuth, async (req: Request, res: Response) => {
   const [grn] = await db.select().from(grnsTable).where(eq(grnsTable.id, req.params.grnId));
   if (!grn) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, grn.projectId)) return;
   const items = await db.select().from(grnItemsTable).where(eq(grnItemsTable.grnId, grn.id));
   res.json({ ...sGrn(grn), items: items.map(sGrnItem) });
 });
 
 router.post("/grns/:grnId/items", requireAuth, async (req: Request, res: Response) => {
   const b = req.body ?? {};
-  if (!b.itemName || b.receivedQty === undefined) { res.status(400).json({ error: "itemName, receivedQty required" }); return; }
+  if (b.receivedQty === undefined) { res.status(400).json({ error: "receivedQty required" }); return; }
+  const [grn] = await db.select().from(grnsTable).where(eq(grnsTable.id, req.params.grnId));
+  if (!grn) { res.status(404).json({ error: "GRN not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, grn.projectId)) return;
+  // Infer itemName, unit, orderedQty, inventoryItemId from poItemId when not explicitly provided
+  let itemName = b.itemName ?? null;
+  let unit = b.unit ?? "nos";
+  let orderedQty = n(b.orderedQty ?? 0);
+  let inventoryItemId = b.inventoryItemId ?? null;
+  let unitRate = n(b.unitRate ?? 0);
+  if (b.poItemId && (!itemName || !b.unit || !b.unitRate)) {
+    const [poi] = await db.select().from(poItemsTable).where(eq(poItemsTable.id, b.poItemId));
+    if (poi) {
+      if (!itemName) itemName = poi.itemName;
+      if (!b.unit) unit = poi.unit ?? "nos";
+      if (!b.orderedQty) orderedQty = n(poi.orderedQty);
+      if (!inventoryItemId) inventoryItemId = poi.inventoryItemId ?? null;
+      if (!b.unitRate) unitRate = n(poi.unitRate);
+    }
+  }
+  if (!itemName) { res.status(400).json({ error: "itemName required (or provide poItemId to infer)" }); return; }
   const receivedQty = n(b.receivedQty);
   const acceptedQty = n(b.acceptedQty ?? receivedQty);
-  const rejectedQty = receivedQty - acceptedQty;
+  const rejectedQty = Math.max(0, receivedQty - acceptedQty);
   const [item] = await db.insert(grnItemsTable).values({
     grnId: req.params.grnId, poItemId: b.poItemId ?? null,
-    inventoryItemId: b.inventoryItemId ?? null, itemName: b.itemName,
-    unit: b.unit ?? "nos", orderedQty: String(n(b.orderedQty ?? 0)),
+    inventoryItemId, itemName, unit, orderedQty: String(orderedQty),
     receivedQty: String(receivedQty), acceptedQty: String(acceptedQty),
-    rejectedQty: String(rejectedQty), unitRate: String(n(b.unitRate ?? 0)),
+    rejectedQty: String(rejectedQty), unitRate: String(unitRate),
     batchNumber: b.batchNumber ?? null, gradeSpecification: b.gradeSpecification ?? null,
     condition: b.condition ?? "good", qcHold: b.qcHold ?? false, remarks: b.remarks ?? null,
   }).returning();
@@ -967,6 +1028,15 @@ router.post("/projects/:projectId/stock-issues", requireAuth, async (req: Reques
       const [inv] = await db.select().from(inventoryItemsTable)
         .where(eq(inventoryItemsTable.id, it.inventoryItemId ?? ""));
       if (!inv) continue;
+      // Validate: cannot issue more than current stock
+      const currentStock = n(inv.currentStock);
+      if (issuedQty > currentStock + 0.001) {
+        res.status(400).json({
+          error: `Insufficient stock for ${inv.itemName}: requested ${issuedQty} ${inv.unit} but only ${currentStock} ${inv.unit} available`,
+          itemName: inv.itemName, available: currentStock, requested: issuedQty,
+        });
+        return;
+      }
       const rate = n(inv.avgRate);
       const amount = Math.round(issuedQty * rate * 100) / 100;
       await db.insert(issueItemsTable).values({
@@ -974,7 +1044,7 @@ router.post("/projects/:projectId/stock-issues", requireAuth, async (req: Reques
         indentItemId: it.indentItemId ?? null, itemName: inv.itemName,
         unit: inv.unit, issuedQty: String(issuedQty), rate: String(rate), amount: String(amount),
       });
-      const newStock = Math.max(0, n(inv.currentStock) - issuedQty);
+      const newStock = currentStock - issuedQty;
       await db.update(inventoryItemsTable).set({
         currentStock: String(newStock),
         isReorderTriggered: newStock <= n(inv.minStockLevel),
@@ -987,18 +1057,29 @@ router.post("/projects/:projectId/stock-issues", requireAuth, async (req: Reques
         narration: `Issue ${b.issueNumber} — ${inv.itemName}`, createdById: req.user?.id ?? null,
       });
     }
-    // Mark indent as fulfilled only if all approved items have been fully issued
+    // Mark indent as fulfilled when ALL approved items have been cumulatively issued
+    // (checks all historical issue_items + current request, not just current request)
     if (b.indentId) {
       const [indentRow] = await db.select().from(materialIndentsTable)
         .where(eq(materialIndentsTable.id, b.indentId));
       if (indentRow?.status === "approved") {
         const indentItems = await db.select().from(indentItemsTable)
           .where(eq(indentItemsTable.indentId, b.indentId));
+        const indentItemIds = indentItems.map(ii => ii.id).filter(Boolean);
+        // Get all previously issued quantities for these indent items
+        const historicalIssues = indentItemIds.length > 0
+          ? await db.select().from(issueItemsTable)
+              .where(inArray(issueItemsTable.indentItemId, indentItemIds))
+          : [];
         const isFullyFulfilled = indentItems.every(ii => {
           const approvedQty = n(ii.approvedQty ?? ii.requiredQty);
-          const issuedForItem = b.items?.find((it: any) => it.indentItemId === ii.id);
-          const issuedQtyForItem = n(issuedForItem?.issuedQty ?? 0);
-          return issuedQtyForItem >= approvedQty - 0.01;
+          // Sum all historical issue amounts for this indent item
+          const historicalTotal = historicalIssues
+            .filter(h => h.indentItemId === ii.id)
+            .reduce((s, h) => s + n(h.issuedQty), 0);
+          // Add what was just issued in this request (if indentItemId was linked)
+          const currentReqQty = n(b.items?.find((it: any) => it.indentItemId === ii.id)?.issuedQty ?? 0);
+          return historicalTotal + currentReqQty >= approvedQty - 0.01;
         });
         if (isFullyFulfilled) {
           await db.update(materialIndentsTable).set({ status: "fulfilled" })
