@@ -1730,13 +1730,29 @@ function ContractorBillTab({ projectId }: { projectId: string }) {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Payroll Period</Label>
-                  <Select value={form.periodId??""} onValueChange={v=>f("periodId",v)}>
-                    <SelectTrigger><SelectValue placeholder={(periods as any[]).length ? "Select period" : "No periods available"} /></SelectTrigger>
-                    <SelectContent>{(periods as any[]).map((p:any)=><SelectItem key={p.id} value={p.id}>{fmtDate(p.startDate)} → {fmtDate(p.endDate)}</SelectItem>)}</SelectContent>
+                  <Label>Payroll Period <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Select
+                    value={form.periodId ?? ""}
+                    onValueChange={v => {
+                      const p = (periods as any[]).find((x: any) => x.id === v);
+                      setForm(prev => ({
+                        ...prev,
+                        periodId: v,
+                        periodFrom: p?.startDate ? String(p.startDate).slice(0, 10) : prev.periodFrom,
+                        periodTo: p?.endDate ? String(p.endDate).slice(0, 10) : prev.periodTo,
+                      }));
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder={(periods as any[]).length ? "Select period (locks payroll lines on approval)" : "No periods — bill will not lock payroll lines"} /></SelectTrigger>
+                    <SelectContent>{(periods as any[]).map((p: any) => <SelectItem key={p.id} value={p.id}>{fmtDate(p.startDate)} → {fmtDate(p.endDate)}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </div>
+              {!(vendors as any[]).length && (
+                <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded p-2">
+                  No contractors found. Add a vendor in <span className="font-medium">Supply Chain → Vendors</span> before submitting a labour bill.
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1"><Label>Period From</Label><Input type="date" value={form.periodFrom??""} onChange={e=>f("periodFrom",e.target.value)} /></div>
                 <div className="space-y-1"><Label>Period To</Label><Input type="date" value={form.periodTo??""} onChange={e=>f("periodTo",e.target.value)} /></div>
@@ -1747,7 +1763,7 @@ function ContractorBillTab({ projectId }: { projectId: string }) {
               </div>
               <div className="space-y-1"><Label>Claimed Amount (₹)</Label><Input type="number" step="0.01" value={form.claimedAmount??""} onChange={e=>f("claimedAmount",e.target.value)} /></div>
             </div>
-            <Button className="w-full" disabled={!form.contractorId || !form.periodId || !form.periodFrom || !form.periodTo || !form.claimedAmount || create.isPending} onClick={() => create.mutate(form)}>{create.isPending ? "Submitting…" : "Submit Bill"}</Button>
+            <Button className="w-full" disabled={!form.contractorId || !form.periodFrom || !form.periodTo || !form.claimedAmount || create.isPending} onClick={() => create.mutate(form)}>{create.isPending ? "Submitting…" : "Submit Bill"}</Button>
           </DialogContent>
         </Dialog>
       </div>
