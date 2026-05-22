@@ -15,10 +15,12 @@ export default function Projects() {
           <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
           <p className="text-muted-foreground mt-1">Manage and track all construction projects.</p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          New Project
-        </Button>
+        <Link href="/projects/new">
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            New Project
+          </Button>
+        </Link>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -37,10 +39,12 @@ export default function Projects() {
             <Building2 className="mx-auto h-12 w-12 text-muted-foreground" />
             <h3 className="mt-4 text-lg font-medium">No projects</h3>
             <p className="mt-2 text-sm text-muted-foreground">Get started by creating a new project.</p>
-            <Button className="mt-4">
-              <Plus className="mr-2 h-4 w-4" />
-              New Project
-            </Button>
+            <Link href="/projects/new">
+              <Button className="mt-4">
+                <Plus className="mr-2 h-4 w-4" />
+                New Project
+              </Button>
+            </Link>
           </div>
         ) : (
           projects?.map((project) => (

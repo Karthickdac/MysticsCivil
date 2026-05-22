@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, approvalsTable, projectsTable, usersTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { dReq, d } from "../lib/serialize";
 
 const router: IRouter = Router();
@@ -59,6 +59,7 @@ router.get("/approvals", requireAuth, async (_req, res: Response) => {
 router.post(
   "/approvals/:approvalId/resolve",
   requireAuth,
+  requireRole(...ROLE_GROUPS.OWNER_PM_FINANCE),
   async (req: Request, res: Response) => {
     const b = req.body ?? {};
     if (b.decision !== "approved" && b.decision !== "rejected") {

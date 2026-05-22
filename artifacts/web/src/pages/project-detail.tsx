@@ -38,6 +38,20 @@ export default function ProjectDetail() {
 
   const { project, health, cost, miniGantt, activityStatusCounts, recentPhotos, pendingActions, nextMilestone } = data;
 
+  const ganttBounds = (() => {
+    const dates: number[] = [];
+    for (const a of miniGantt) {
+      if (a.plannedStart) dates.push(new Date(a.plannedStart).getTime());
+      if (a.plannedEnd) dates.push(new Date(a.plannedEnd).getTime());
+      if (a.actualStart) dates.push(new Date(a.actualStart).getTime());
+      if (a.actualEnd) dates.push(new Date(a.actualEnd).getTime());
+    }
+    if (dates.length === 0) return null;
+    const min = Math.min(...dates);
+    const max = Math.max(...dates);
+    return { min, max, span: Math.max(1, max - min) };
+  })();
+
   const statusColors: Record<string, string> = {
     not_started: "bg-slate-200 text-slate-700",
     on_track: "bg-emerald-100 text-emerald-800",
@@ -219,7 +233,81 @@ export default function ProjectDetail() {
               </CardContent>
             </Card>
 
-            {/* Panel 5: Next Milestone */}
+            {/* Panel 5: Mini Gantt */}
+            <Card className="lg:col-span-3">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold">Schedule — Top Activities (Mini Gantt)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!ganttBounds || miniGantt.length === 0 ? (
+                  <div className="text-sm text-muted-foreground text-center py-8">No scheduled activities yet.</div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-[10px] uppercase text-muted-foreground tracking-wide">
+                      <span>{new Date(ganttBounds.min).toLocaleDateString("en-IN", { month: "short", year: "2-digit" })}</span>
+                      <span>{new Date(ganttBounds.max).toLocaleDateString("en-IN", { month: "short", year: "2-digit" })}</span>
+                    </div>
+                    {miniGantt.map((a) => {
+                      const ps = a.plannedStart ? new Date(a.plannedStart).getTime() : null;
+                      const pe = a.plannedEnd ? new Date(a.plannedEnd).getTime() : null;
+                      const as = a.actualStart ? new Date(a.actualStart).getTime() : null;
+                      const ae = a.actualEnd ? new Date(a.actualEnd).getTime() : null;
+                      const pos = (t: number) => ((t - ganttBounds.min) / ganttBounds.span) * 100;
+                      return (
+                        <div key={a.activityId} className="grid grid-cols-12 gap-2 items-center text-xs">
+                          <div className="col-span-4 truncate">
+                            <span className="font-mono text-muted-foreground mr-2">{a.code}</span>{a.name}
+                          </div>
+                          <div className="col-span-8 relative h-6 bg-slate-100 rounded">
+                            {ps !== null && pe !== null && (
+                              <div className="absolute top-0.5 h-2 bg-slate-300 rounded" style={{ left: `${pos(ps)}%`, width: `${Math.max(1, pos(pe) - pos(ps))}%` }} title="Planned" />
+                            )}
+                            {as !== null && (
+                              <div
+                                className={`absolute bottom-0.5 h-2 rounded ${a.status === "delayed" ? "bg-rose-500" : a.status === "at_risk" ? "bg-amber-500" : a.status === "completed" ? "bg-blue-500" : "bg-emerald-500"}`}
+                                style={{ left: `${pos(as)}%`, width: `${Math.max(1, pos(ae ?? Date.now()) - pos(as))}%` }}
+                                title="Actual"
+                              />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className="flex gap-4 pt-2 text-[10px] text-muted-foreground">
+                      <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-slate-300 rounded" /> Planned</span>
+                      <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-emerald-500 rounded" /> Actual on-track</span>
+                      <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-amber-500 rounded" /> At risk</span>
+                      <span className="flex items-center gap-1"><span className="inline-block w-3 h-2 bg-rose-500 rounded" /> Delayed</span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Panel 6: Photo Timeline Wall */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="text-base font-semibold flex items-center gap-2"><Camera className="h-4 w-4" /> Recent Site Photos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {recentPhotos.length === 0 ? (
+                  <div className="text-sm text-muted-foreground text-center py-8">No photos uploaded yet.</div>
+                ) : (
+                  <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                    {recentPhotos.map((p: any) => (
+                      <div key={p.id} className="aspect-square rounded overflow-hidden bg-muted relative group">
+                        <img src={p.url} alt={p.caption ?? ""} className="w-full h-full object-cover group-hover:scale-105 transition" loading="lazy" />
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent text-white text-[10px] px-1.5 py-1 opacity-0 group-hover:opacity-100 transition">
+                          {p.caption || "—"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Panel 7: Next Milestone */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base font-semibold">Next Milestone</CardTitle>

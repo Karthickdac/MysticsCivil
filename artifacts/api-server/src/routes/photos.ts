@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, sitePhotosTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { serializePhoto } from "../lib/serialize";
 
 const router: IRouter = Router();
@@ -22,6 +22,7 @@ router.get(
 router.post(
   "/projects/:projectId/photos",
   requireAuth,
+  requireRole(...ROLE_GROUPS.SITE_WRITE),
   async (req: Request, res: Response) => {
     const b = req.body ?? {};
     if (!b.url) {

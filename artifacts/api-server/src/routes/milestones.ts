@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, milestonesTable } from "@workspace/db";
 import { eq, asc } from "drizzle-orm";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { serializeMilestone } from "../lib/serialize";
 
 const router: IRouter = Router();
@@ -33,6 +33,7 @@ router.get(
 router.post(
   "/projects/:projectId/milestones",
   requireAuth,
+  requireRole(...ROLE_GROUPS.OWNER_PM),
   async (req: Request, res: Response) => {
     const b = req.body ?? {};
     if (!b.name || !b.targetDate) {
@@ -47,7 +48,7 @@ router.post(
   },
 );
 
-router.patch("/milestones/:milestoneId", requireAuth, async (req: Request, res: Response) => {
+router.patch("/milestones/:milestoneId", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
   const [row] = await db
     .update(milestonesTable)
     .set(parseBody(req.body ?? {}) as any)

@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, organisationsTable } from "@workspace/db";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { serializeOrg } from "../lib/serialize";
 
 const router: IRouter = Router();
@@ -10,7 +10,7 @@ router.get("/organisations", requireAuth, async (_req, res: Response) => {
   res.json(rows.map(serializeOrg));
 });
 
-router.post("/organisations", requireAuth, async (req: Request, res: Response) => {
+router.post("/organisations", requireAuth, requireRole(...ROLE_GROUPS.ADMIN), async (req: Request, res: Response) => {
   const b = req.body ?? {};
   if (!b.name || typeof b.name !== "string") {
     res.status(400).json({ error: "name is required" });

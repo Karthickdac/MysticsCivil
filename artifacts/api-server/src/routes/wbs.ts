@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, wbsActivitiesTable } from "@workspace/db";
 import { eq, asc } from "drizzle-orm";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { serializeWbs } from "../lib/serialize";
 
 const router: IRouter = Router();
@@ -41,6 +41,7 @@ router.get("/projects/:projectId/wbs", requireAuth, async (req: Request, res: Re
 router.post(
   "/projects/:projectId/wbs",
   requireAuth,
+  requireRole(...ROLE_GROUPS.OWNER_PM_QS),
   async (req: Request, res: Response) => {
     const b = req.body ?? {};
     if (!b.code || !b.name) {
@@ -55,7 +56,7 @@ router.post(
   },
 );
 
-router.patch("/wbs/:activityId", requireAuth, async (req: Request, res: Response) => {
+router.patch("/wbs/:activityId", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM_QS), async (req: Request, res: Response) => {
   const [row] = await db
     .update(wbsActivitiesTable)
     .set(parseBody(req.body ?? {}) as any)
@@ -68,7 +69,7 @@ router.patch("/wbs/:activityId", requireAuth, async (req: Request, res: Response
   res.json(serializeWbs(row));
 });
 
-router.delete("/wbs/:activityId", requireAuth, async (req: Request, res: Response) => {
+router.delete("/wbs/:activityId", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
   await db.delete(wbsActivitiesTable).where(eq(wbsActivitiesTable.id, req.params.activityId));
   res.status(204).end();
 });

@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, projectsTable } from "@workspace/db";
+import { db, projectsTable, milestonesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { serializeProject } from "../lib/serialize";
 
 const router: IRouter = Router();
@@ -36,16 +36,33 @@ router.get("/projects", requireAuth, async (_req, res: Response) => {
   res.json(rows.map(serializeProject));
 });
 
-router.post("/projects", requireAuth, async (req: Request, res: Response) => {
+router.post("/projects", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
   const b = req.body ?? {};
   if (!b.organisationId || !b.code || !b.name) {
     res.status(400).json({ error: "organisationId, code, name required" });
     return;
   }
-  const [row] = await db
-    .insert(projectsTable)
-    .values(parseProjectBody(b) as any)
-    .returning();
+  const row = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(projectsTable)
+      .values(parseProjectBody(b) as any)
+      .returning();
+    if (Array.isArray(b.milestones) && b.milestones.length) {
+      await tx.insert(milestonesTable).values(
+        b.milestones
+          .filter((m: any) => m && m.name && m.targetDate)
+          .map((m: any, idx: number) => ({
+            projectId: created.id,
+            name: String(m.name),
+            description: m.description ? String(m.description) : null,
+            targetDate: new Date(m.targetDate),
+            status: "pending",
+            sortOrder: idx,
+          })),
+      );
+    }
+    return created;
+  });
   res.status(201).json(serializeProject(row));
 });
 
@@ -61,7 +78,7 @@ router.get("/projects/:projectId", requireAuth, async (req: Request, res: Respon
   res.json(serializeProject(row));
 });
 
-router.patch("/projects/:projectId", requireAuth, async (req: Request, res: Response) => {
+router.patch("/projects/:projectId", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
   const update = parseProjectBody(req.body ?? {});
   const [row] = await db
     .update(projectsTable)
@@ -75,7 +92,7 @@ router.patch("/projects/:projectId", requireAuth, async (req: Request, res: Resp
   res.json(serializeProject(row));
 });
 
-router.delete("/projects/:projectId", requireAuth, async (req: Request, res: Response) => {
+router.delete("/projects/:projectId", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
   await db.delete(projectsTable).where(eq(projectsTable.id, req.params.projectId));
   res.status(204).end();
 });

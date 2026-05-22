@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, issuesTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { serializeIssue } from "../lib/serialize";
 
 const router: IRouter = Router();
@@ -22,6 +22,7 @@ router.get(
 router.post(
   "/projects/:projectId/issues",
   requireAuth,
+  requireRole(...ROLE_GROUPS.SITE_WRITE),
   async (req: Request, res: Response) => {
     const b = req.body ?? {};
     if (!b.title) {
@@ -45,7 +46,7 @@ router.post(
   },
 );
 
-router.patch("/issues/:issueId", requireAuth, async (req: Request, res: Response) => {
+router.patch("/issues/:issueId", requireAuth, requireRole(...ROLE_GROUPS.SITE_WRITE), async (req: Request, res: Response) => {
   const b = req.body ?? {};
   const update: Record<string, unknown> = {};
   for (const k of ["title", "description", "severity", "status", "assignedToId"]) {

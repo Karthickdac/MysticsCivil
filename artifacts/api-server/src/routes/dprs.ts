@@ -9,7 +9,7 @@ import {
   approvalsTable,
 } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { serializeDpr, serializePhoto } from "../lib/serialize";
 
 const router: IRouter = Router();
@@ -165,18 +165,9 @@ router.post("/dprs/:dprId/submit", requireAuth, async (req: Request, res: Respon
   res.json(serializeDpr(dpr));
 });
 
-router.post("/dprs/:dprId/approve", requireAuth, async (req: Request, res: Response) => {
+router.post("/dprs/:dprId/approve", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
   const b = req.body ?? {};
   const approve = b.approve !== false;
-
-  const [profile] = await db
-    .select({ role: usersTable.role })
-    .from(usersTable)
-    .where(eq(usersTable.id, req.user!.id));
-  if (!profile || (profile.role !== "pm" && profile.role !== "owner")) {
-    res.status(403).json({ error: "Only PM or Owner can approve DPRs" });
-    return;
-  }
 
   try {
     const result = await db.transaction(async (tx) => {
