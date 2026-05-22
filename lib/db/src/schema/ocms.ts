@@ -1132,6 +1132,7 @@ export const workersTable = pgTable("workers", {
   otRate: numeric("ot_rate", { precision: 12, scale: 2 }).notNull().default("0"),
   bocwRegNumber: varchar("bocw_reg_number", { length: 32 }),
   pfNumber: varchar("pf_number", { length: 32 }),
+  uan: varchar("uan", { length: 12 }),
   esiNumber: varchar("esi_number", { length: 32 }),
   bankName: varchar("bank_name", { length: 64 }),
   accountNumber: varchar("account_number", { length: 32 }),

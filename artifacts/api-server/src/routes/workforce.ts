@@ -10,8 +10,9 @@ import {
   ppeIssuesTable, incidentsTable, incidentActionsTable,
   qualityTestsTable, labourContractorBillsTable,
   paymentVouchersTable,
-  projectsTable, userProfilesTable,
+  projectsTable, userProfilesTable, organisationsTable,
 } from "@workspace/db";
+import { buildTablePdf, buildWageSlipPdf, buildMultiWageSlipPdf, type WageSlipData } from "../lib/payrollPdf";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 
@@ -786,6 +787,7 @@ router.get("/payroll-periods/:periodId/epf-export", requireAuth, async (req: Req
     const epfAdmin = Math.round(epfWage * 0.005 * 100) / 100;
     return {
       workerCode: (w as any).workerCode, name: (w as any).name,
+      uan: (w as any).uan ?? "—",
       pfNumber: (w as any).pfNumber ?? "—", aadhaar: (w as any).aadhaarNumber ?? "—",
       wages: wages.toFixed(2), epfWage: epfWage.toFixed(2),
       epfEmployee: epfEmployee.toFixed(2), epfEmployer: epfEmployer.toFixed(2),
@@ -829,6 +831,229 @@ router.get("/payroll-periods/:periodId/esi-export", requireAuth, async (req: Req
     totalEsi: acc.totalEsi + parseFloat(r.totalEsi),
   }), { esiEmployee: 0, esiEmployer: 0, totalEsi: 0 });
   res.json({ period, rows: data, totals });
+});
+
+// ─── Form A — BOCW Register of Workers ────────────────────────────────────────
+router.get("/payroll-periods/:periodId/form-a", requireAuth, async (req: Request, res: Response) => {
+  const [period] = await db.select().from(payrollPeriodsTable).where(eq(payrollPeriodsTable.id, req.params.periodId));
+  if (!period) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, period.projectId)) return;
+  const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, period.projectId));
+  const [org] = project?.organisationId
+    ? await db.select().from(organisationsTable).where(eq(organisationsTable.id, project.organisationId))
+    : [null as any];
+  const lines = await db.select().from(payrollLinesTable).where(eq(payrollLinesTable.periodId, period.id));
+  const workers = await db.select().from(workersTable).where(eq(workersTable.projectId, period.projectId));
+  const wmap = Object.fromEntries(workers.map(w => [w.id, w]));
+  const rows = lines.map((l, i) => {
+    const w: any = wmap[l.workerId] ?? {};
+    return {
+      sno: String(i + 1),
+      workerCode: w.workerCode ?? "—",
+      name: w.name ?? "—",
+      gender: w.gender ?? "—",
+      aadhaar: w.aadhaarNumber ?? "—",
+      trade: w.trade ?? "—",
+      skillLevel: w.skillLevel ?? "—",
+      bocwReg: w.bocwRegNumber ?? "—",
+      state: w.state ?? "—",
+      dailyRate: n(w.dailyRate).toFixed(2),
+      presentDays: n(l.presentDays).toFixed(1),
+    };
+  });
+  const bytes = await buildTablePdf({
+    title: "FORM A — REGISTER OF BUILDING WORKERS",
+    subtitle: `${org?.name ?? ""} · ${project?.name ?? ""} · Period: ${period.periodName} (${period.fromDate.toISOString().slice(0,10)} → ${period.toDate.toISOString().slice(0,10)}) · Building and Other Construction Workers (RE&CS) Act, 1996 — Rule 234`,
+    landscape: true,
+    columns: [
+      { header: "S.No", key: "sno", width: 32, align: "center" },
+      { header: "Code", key: "workerCode", width: 60 },
+      { header: "Name", key: "name", width: 130 },
+      { header: "Gender", key: "gender", width: 50, align: "center" },
+      { header: "Aadhaar", key: "aadhaar", width: 90 },
+      { header: "Trade", key: "trade", width: 70 },
+      { header: "Skill", key: "skillLevel", width: 75 },
+      { header: "BOCW Reg.", key: "bocwReg", width: 80 },
+      { header: "Home State", key: "state", width: 80 },
+      { header: "Daily Rate", key: "dailyRate", width: 60, align: "right" },
+      { header: "Days Worked", key: "presentDays", width: 60, align: "right" },
+    ],
+    rows,
+    footer: `Generated ${new Date().toISOString()} · Total workers: ${rows.length}`,
+  });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="form-a-bocw-${period.id.slice(0,8)}.pdf"`);
+  res.end(Buffer.from(bytes));
+});
+
+// ─── Form XVI — Wage Register (Contract Labour Rules, 1971) ───────────────────
+router.get("/payroll-periods/:periodId/form-xvi", requireAuth, async (req: Request, res: Response) => {
+  const [period] = await db.select().from(payrollPeriodsTable).where(eq(payrollPeriodsTable.id, req.params.periodId));
+  if (!period) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, period.projectId)) return;
+  const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, period.projectId));
+  const [org] = project?.organisationId
+    ? await db.select().from(organisationsTable).where(eq(organisationsTable.id, project.organisationId))
+    : [null as any];
+  const lines = await db.select().from(payrollLinesTable).where(eq(payrollLinesTable.periodId, period.id));
+  const workers = await db.select().from(workersTable).where(eq(workersTable.projectId, period.projectId));
+  const wmap = Object.fromEntries(workers.map(w => [w.id, w]));
+  const rows = lines.map((l, i) => {
+    const w: any = wmap[l.workerId] ?? {};
+    return {
+      sno: String(i + 1),
+      workerCode: w.workerCode ?? "—",
+      name: w.name ?? "—",
+      days: n(l.presentDays).toFixed(1),
+      ot: n(l.otHours).toFixed(1),
+      basic: n(l.basicWages).toFixed(2),
+      otAmt: n(l.otAmount).toFixed(2),
+      gross: n(l.grossWages).toFixed(2),
+      epf: n(l.epfEmployee).toFixed(2),
+      esi: n(l.esiEmployee).toFixed(2),
+      pt: n(l.pt).toFixed(2),
+      lwf: n(l.lwf).toFixed(2),
+      tds: n(l.tdsOnWages).toFixed(2),
+      adv: n(l.advanceDeduction).toFixed(2),
+      totDed: n(l.totalDeductions).toFixed(2),
+      net: n(l.netWages).toFixed(2),
+    };
+  });
+  const totals = lines.reduce((acc, l) => ({
+    basic: acc.basic + n(l.basicWages), otAmt: acc.otAmt + n(l.otAmount),
+    gross: acc.gross + n(l.grossWages), epf: acc.epf + n(l.epfEmployee),
+    esi: acc.esi + n(l.esiEmployee), pt: acc.pt + n(l.pt), lwf: acc.lwf + n(l.lwf),
+    tds: acc.tds + n(l.tdsOnWages), adv: acc.adv + n(l.advanceDeduction),
+    totDed: acc.totDed + n(l.totalDeductions), net: acc.net + n(l.netWages),
+  }), { basic: 0, otAmt: 0, gross: 0, epf: 0, esi: 0, pt: 0, lwf: 0, tds: 0, adv: 0, totDed: 0, net: 0 });
+  const totalsRow: Record<string, string> = {
+    sno: "", workerCode: "", name: "TOTAL", days: "", ot: "",
+    basic: totals.basic.toFixed(2), otAmt: totals.otAmt.toFixed(2), gross: totals.gross.toFixed(2),
+    epf: totals.epf.toFixed(2), esi: totals.esi.toFixed(2), pt: totals.pt.toFixed(2),
+    lwf: totals.lwf.toFixed(2), tds: totals.tds.toFixed(2), adv: totals.adv.toFixed(2),
+    totDed: totals.totDed.toFixed(2), net: totals.net.toFixed(2),
+  };
+  const bytes = await buildTablePdf({
+    title: "FORM XVI — REGISTER OF WAGES",
+    subtitle: `${org?.name ?? ""} · ${project?.name ?? ""} · Period: ${period.periodName} (${period.fromDate.toISOString().slice(0,10)} → ${period.toDate.toISOString().slice(0,10)}) · Contract Labour (R&A) Central Rules, 1971 — Rule 78(2)(a)`,
+    landscape: true,
+    columns: [
+      { header: "S.No", key: "sno", width: 26, align: "center" },
+      { header: "Code", key: "workerCode", width: 48 },
+      { header: "Worker Name", key: "name", width: 110 },
+      { header: "Days", key: "days", width: 32, align: "right" },
+      { header: "OT Hr", key: "ot", width: 32, align: "right" },
+      { header: "Basic", key: "basic", width: 56, align: "right" },
+      { header: "OT Amt", key: "otAmt", width: 50, align: "right" },
+      { header: "Gross", key: "gross", width: 60, align: "right" },
+      { header: "EPF", key: "epf", width: 46, align: "right" },
+      { header: "ESI", key: "esi", width: 46, align: "right" },
+      { header: "PT", key: "pt", width: 36, align: "right" },
+      { header: "LWF", key: "lwf", width: 36, align: "right" },
+      { header: "TDS", key: "tds", width: 46, align: "right" },
+      { header: "Adv.", key: "adv", width: 46, align: "right" },
+      { header: "Total Ded.", key: "totDed", width: 60, align: "right" },
+      { header: "Net Wages", key: "net", width: 64, align: "right" },
+    ],
+    rows,
+    totalsRow,
+    footer: `Generated ${new Date().toISOString()} · Workers: ${rows.length} · Net disbursement INR ${totals.net.toFixed(2)}`,
+  });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="form-xvi-wage-register-${period.id.slice(0,8)}.pdf"`);
+  res.end(Buffer.from(bytes));
+});
+
+// ─── Individual / bulk wage slips ────────────────────────────────────────────
+async function buildWageSlipsForPeriod(periodId: string, workerIdFilter?: string): Promise<{
+  data: WageSlipData[]; period: typeof payrollPeriodsTable.$inferSelect;
+}> {
+  const [period] = await db.select().from(payrollPeriodsTable).where(eq(payrollPeriodsTable.id, periodId));
+  if (!period) throw new Error("Period not found");
+  const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, period.projectId));
+  const [org] = project?.organisationId
+    ? await db.select().from(organisationsTable).where(eq(organisationsTable.id, project.organisationId))
+    : [null as any];
+  let lineCond: any = eq(payrollLinesTable.periodId, period.id);
+  if (workerIdFilter) lineCond = and(lineCond, eq(payrollLinesTable.workerId, workerIdFilter));
+  const lines = await db.select().from(payrollLinesTable).where(lineCond);
+  const workerIds = lines.map(l => l.workerId);
+  const workers = workerIds.length
+    ? await db.select().from(workersTable).where(inArray(workersTable.id, workerIds))
+    : [];
+  const wmap = Object.fromEntries(workers.map(w => [w.id, w]));
+  const existing = await db.select().from(wageSlipsTable).where(eq(wageSlipsTable.periodId, period.id));
+  const slipMap = Object.fromEntries(existing.map(s => [s.workerId, s]));
+  const fromDate = period.fromDate.toISOString().slice(0, 10);
+  const toDate = period.toDate.toISOString().slice(0, 10);
+  const data: WageSlipData[] = [];
+  for (const l of lines) {
+    const w: any = wmap[l.workerId] ?? {};
+    let slip = slipMap[l.workerId];
+    if (!slip) {
+      const slipNumber = `WS-${period.id.slice(0,4).toUpperCase()}-${(w.workerCode ?? l.workerId.slice(0,6)).toString()}`;
+      const [created] = await db.insert(wageSlipsTable).values({
+        periodId: period.id, workerId: l.workerId, slipNumber,
+      }).returning();
+      slip = created;
+    }
+    data.push({
+      organisationName: org?.name ?? "Organisation",
+      projectName: project?.name ?? "Project",
+      periodName: period.periodName,
+      fromDate, toDate,
+      slipNumber: slip.slipNumber,
+      issuedAt: slip.issuedAt.toISOString().slice(0, 10),
+      worker: {
+        workerCode: w.workerCode ?? "—", name: w.name ?? "—",
+        trade: w.trade ?? "—", skillLevel: w.skillLevel ?? "—",
+        aadhaar: w.aadhaarNumber ?? "—",
+        pfNumber: w.pfNumber ?? "—", esiNumber: w.esiNumber ?? "—",
+        uan: w.uan ?? "",
+        bankName: w.bankName ?? "—", accountNumber: w.accountNumber ?? "—",
+        ifscCode: w.ifscCode ?? "—",
+        dailyRate: n(w.dailyRate),
+      },
+      earnings: {
+        presentDays: n(l.presentDays), otHours: n(l.otHours),
+        basicWages: n(l.basicWages), otAmount: n(l.otAmount),
+        grossWages: n(l.grossWages),
+      },
+      deductions: {
+        epfEmployee: n(l.epfEmployee), esiEmployee: n(l.esiEmployee),
+        pt: n(l.pt), lwf: n(l.lwf), tds: n(l.tdsOnWages),
+        advance: n(l.advanceDeduction), total: n(l.totalDeductions),
+      },
+      netPayable: n(l.netWages),
+    });
+  }
+  return { data, period };
+}
+
+// Bulk: all wage slips for a period (one PDF, one slip per page)
+router.get("/payroll-periods/:periodId/wage-slips", requireAuth, async (req: Request, res: Response) => {
+  const [period] = await db.select().from(payrollPeriodsTable).where(eq(payrollPeriodsTable.id, req.params.periodId));
+  if (!period) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, period.projectId)) return;
+  const { data } = await buildWageSlipsForPeriod(period.id);
+  if (data.length === 0) { res.status(404).json({ error: "No payroll lines to issue slips for" }); return; }
+  const bytes = await buildMultiWageSlipPdf(data);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="wage-slips-${period.id.slice(0,8)}.pdf"`);
+  res.end(Buffer.from(bytes));
+});
+
+// Single worker wage slip
+router.get("/payroll-periods/:periodId/wage-slips/:workerId", requireAuth, async (req: Request, res: Response) => {
+  const [period] = await db.select().from(payrollPeriodsTable).where(eq(payrollPeriodsTable.id, req.params.periodId));
+  if (!period) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, period.projectId)) return;
+  const { data } = await buildWageSlipsForPeriod(period.id, req.params.workerId);
+  if (data.length === 0) { res.status(404).json({ error: "No payroll line for that worker" }); return; }
+  const bytes = await buildWageSlipPdf(data[0]);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="wage-slip-${data[0].slipNumber}.pdf"`);
+  res.end(Buffer.from(bytes));
 });
 
 router.get("/payroll-periods/:periodId/statutory-summary", requireAuth, async (req: Request, res: Response) => {

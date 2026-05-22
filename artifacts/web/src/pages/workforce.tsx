@@ -1350,11 +1350,15 @@ function MaterialTestingTab({ projectId }: { projectId: string }) {
 
 // ─── Statutory Exports Tab ────────────────────────────────────────────────────
 function StatutoryExportsTab({ projectId }: { projectId: string }) {
+  const { toast } = useToast();
   const [periodId, setPeriodId] = useState<string>("");
   const { data: periods = [] } = useQuery({ queryKey: ["payroll", projectId], queryFn: () => api(`/projects/${projectId}/payroll-periods`), enabled: !!projectId });
   const { data: epf } = useQuery({ queryKey: ["epf-export", periodId], queryFn: () => api(`/payroll-periods/${periodId}/epf-export`), enabled: !!periodId });
   const { data: esi } = useQuery({ queryKey: ["esi-export", periodId], queryFn: () => api(`/payroll-periods/${periodId}/esi-export`), enabled: !!periodId });
   const { data: summary } = useQuery({ queryKey: ["stat-summary", periodId], queryFn: () => api(`/payroll-periods/${periodId}/statutory-summary`), enabled: !!periodId });
+  const { data: lines = [] } = useQuery({ queryKey: ["payroll-lines-stat", periodId], queryFn: () => api(`/payroll-periods/${periodId}/lines`), enabled: !!periodId });
+  const { data: workers = [] } = useQuery({ queryKey: ["workers", projectId], queryFn: () => api(`/projects/${projectId}/workers`), enabled: !!projectId });
+  const workerMap = Object.fromEntries((workers as any[]).map(w => [w.id, w]));
 
   const downloadCsv = (rows: any[], filename: string) => {
     if (!rows?.length) return;
@@ -1363,6 +1367,28 @@ function StatutoryExportsTab({ projectId }: { projectId: string }) {
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+  };
+
+  const downloadExcel = async (rows: any[], filename: string, sheetName: string) => {
+    if (!rows?.length) return;
+    const XLSX = await import("xlsx");
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, filename);
+  };
+
+  const downloadPdf = async (path: string, filename: string) => {
+    try {
+      const r = await fetch(`${API}${path}`, { credentials: "include" });
+      if (!r.ok) { toast({ title: "Download failed", description: await r.text(), variant: "destructive" }); return; }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast({ title: "Download failed", description: e?.message ?? String(e), variant: "destructive" });
+    }
   };
 
   return (
@@ -1378,6 +1404,19 @@ function StatutoryExportsTab({ projectId }: { projectId: string }) {
               </Select>
             </div>
           </div>
+          {periodId && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-4">
+              <Button size="sm" variant="outline" onClick={() => downloadPdf(`/payroll-periods/${periodId}/form-a`, `form-a-bocw-${periodId.slice(0,8)}.pdf`)}>
+                <FileText className="h-3 w-3 mr-1.5" />Form A — BOCW Register (PDF)
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => downloadPdf(`/payroll-periods/${periodId}/form-xvi`, `form-xvi-wages-${periodId.slice(0,8)}.pdf`)}>
+                <FileText className="h-3 w-3 mr-1.5" />Form XVI — Wage Register (PDF)
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => downloadPdf(`/payroll-periods/${periodId}/wage-slips`, `wage-slips-${periodId.slice(0,8)}.pdf`)}>
+                <FileText className="h-3 w-3 mr-1.5" />All Wage Slips (PDF)
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1394,15 +1433,19 @@ function StatutoryExportsTab({ projectId }: { projectId: string }) {
         <Card>
           <CardHeader className="pb-2 flex flex-row justify-between items-center">
             <CardTitle className="text-sm">EPF Challan — ECR Format</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => downloadCsv(epf.rows, `epf_${periodId}.csv`)}><Download className="h-3 w-3 mr-1" />Export CSV</Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => downloadCsv(epf.rows, `epf_${periodId}.csv`)}><Download className="h-3 w-3 mr-1" />CSV</Button>
+              <Button size="sm" variant="outline" onClick={() => downloadExcel(epf.rows, `epf_${periodId}.xlsx`, "EPF")}><Download className="h-3 w-3 mr-1" />Excel</Button>
+            </div>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-muted/50"><tr>{["Code","Name","PF No.","Aadhaar","Wages","EPF Wage","EE 12%","ER 8.33%","Admin 0.5%","Total"].map(h=><th key={h} className="px-2 py-1.5 text-left">{h}</th>)}</tr></thead>
+              <thead className="bg-muted/50"><tr>{["Code","Name","UAN","PF No.","Aadhaar","Wages","EPF Wage","EE 12%","ER 8.33%","Admin 0.5%","Total"].map(h=><th key={h} className="px-2 py-1.5 text-left">{h}</th>)}</tr></thead>
               <tbody>
                 {epf.rows.map((r: any, i: number) => (
                   <tr key={i} className="border-t">
                     <td className="px-2 py-1.5 font-mono">{r.workerCode}</td><td className="px-2 py-1.5">{r.name}</td>
+                    <td className="px-2 py-1.5 font-mono">{r.uan ?? "—"}</td>
                     <td className="px-2 py-1.5 font-mono">{r.pfNumber}</td><td className="px-2 py-1.5 font-mono">{r.aadhaar}</td>
                     <td className="px-2 py-1.5 text-right">₹{r.wages}</td><td className="px-2 py-1.5 text-right">₹{r.epfWage}</td>
                     <td className="px-2 py-1.5 text-right">₹{r.epfEmployee}</td><td className="px-2 py-1.5 text-right">₹{r.epfEmployer}</td>
@@ -1410,7 +1453,7 @@ function StatutoryExportsTab({ projectId }: { projectId: string }) {
                   </tr>
                 ))}
                 {epf.totals && <tr className="border-t-2 font-semibold bg-muted/30">
-                  <td colSpan={4} className="px-2 py-1.5">TOTAL</td>
+                  <td colSpan={5} className="px-2 py-1.5">TOTAL</td>
                   <td className="px-2 py-1.5 text-right">₹{epf.totals.wages.toFixed(2)}</td><td></td>
                   <td className="px-2 py-1.5 text-right">₹{epf.totals.epfEmployee.toFixed(2)}</td>
                   <td className="px-2 py-1.5 text-right">₹{epf.totals.epfEmployer.toFixed(2)}</td>
@@ -1427,7 +1470,10 @@ function StatutoryExportsTab({ projectId }: { projectId: string }) {
         <Card>
           <CardHeader className="pb-2 flex flex-row justify-between items-center">
             <CardTitle className="text-sm">ESI Contribution — Form 6</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => downloadCsv(esi.rows, `esi_${periodId}.csv`)}><Download className="h-3 w-3 mr-1" />Export CSV</Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => downloadCsv(esi.rows, `esi_${periodId}.csv`)}><Download className="h-3 w-3 mr-1" />CSV</Button>
+              <Button size="sm" variant="outline" onClick={() => downloadExcel(esi.rows, `esi_${periodId}.xlsx`, "ESI")}><Download className="h-3 w-3 mr-1" />Excel</Button>
+            </div>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -1442,6 +1488,43 @@ function StatutoryExportsTab({ projectId }: { projectId: string }) {
                     <td className="px-2 py-1.5 text-right font-semibold">₹{r.totalEsi}</td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+
+      {(lines as any[]).length > 0 && (
+        <Card>
+          <CardHeader className="pb-2 flex flex-row justify-between items-center">
+            <CardTitle className="text-sm">Individual Wage Slips</CardTitle>
+            <Button size="sm" variant="outline" onClick={() => downloadPdf(`/payroll-periods/${periodId}/wage-slips`, `wage-slips-${periodId.slice(0,8)}.pdf`)}>
+              <Download className="h-3 w-3 mr-1" />Bulk PDF
+            </Button>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/50"><tr>{["Code","Worker","Days","Gross","Deductions","Net Pay","Slip"].map(h=><th key={h} className="px-2 py-1.5 text-left">{h}</th>)}</tr></thead>
+              <tbody>
+                {(lines as any[]).map((l) => {
+                  const w: any = workerMap[l.workerId] ?? {};
+                  return (
+                    <tr key={l.id} className="border-t">
+                      <td className="px-2 py-1.5 font-mono">{w.workerCode ?? "—"}</td>
+                      <td className="px-2 py-1.5">{w.name ?? "—"}</td>
+                      <td className="px-2 py-1.5 text-right">{l.presentDays}</td>
+                      <td className="px-2 py-1.5 text-right">{fmtCur(parseFloat(l.grossWages))}</td>
+                      <td className="px-2 py-1.5 text-right text-red-600">{fmtCur(parseFloat(l.totalDeductions))}</td>
+                      <td className="px-2 py-1.5 text-right font-semibold text-green-700">{fmtCur(parseFloat(l.netWages))}</td>
+                      <td className="px-2 py-1.5">
+                        <Button size="sm" variant="ghost" className="h-7 px-2"
+                          onClick={() => downloadPdf(`/payroll-periods/${periodId}/wage-slips/${l.workerId}`, `wage-slip-${w.workerCode ?? l.workerId.slice(0,6)}.pdf`)}>
+                          <Download className="h-3 w-3 mr-1" />Slip
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </CardContent>
