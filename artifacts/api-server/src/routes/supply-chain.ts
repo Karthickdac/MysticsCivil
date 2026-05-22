@@ -673,7 +673,7 @@ router.post("/grns/:grnId/submit", requireAuth, async (req: Request, res: Respon
   const grnItems = await db.select().from(grnItemsTable).where(eq(grnItemsTable.grnId, grn.id));
   const qcHoldCount = grnItems.filter(i => i.qcHold).length;
 
-  // 3-way match: compare GRN quantities vs PO quantities
+  // 3-way match: compare total received vs ordered (partial receipt is OK; over-delivery is a mismatch)
   let matchStatus = "matched";
   const matchNotes: string[] = [];
   if (grn.poId) {
@@ -681,13 +681,22 @@ router.post("/grns/:grnId/submit", requireAuth, async (req: Request, res: Respon
     for (const gi of grnItems) {
       const poi = poItems.find(p => p.id === gi.poItemId);
       if (poi) {
-        const qtyDiff = Math.abs(n(gi.receivedQty) - n(poi.orderedQty) + n(poi.receivedQty));
+        // Only flag over-delivery — partial receipts are legitimate
+        const totalReceived = n(poi.receivedQty) + n(gi.receivedQty);
+        const overDelivery = totalReceived - n(poi.orderedQty);
+        if (overDelivery > 0.01) {
+          matchStatus = "qty_mismatch";
+          matchNotes.push(`${gi.itemName}: over-delivered by ${overDelivery.toFixed(2)} ${gi.unit ?? ""}`);
+        }
         const rateDiff = Math.abs(n(gi.unitRate) - n(poi.unitRate));
-        if (qtyDiff > 0.01) { matchStatus = "qty_mismatch"; matchNotes.push(`${gi.itemName}: qty mismatch`); }
-        else if (rateDiff > 0.01) { matchStatus = "rate_mismatch"; matchNotes.push(`${gi.itemName}: rate mismatch`); }
-        // Update PO item received qty
+        if (rateDiff > 0.01 && matchStatus === "matched") {
+          matchStatus = "rate_mismatch";
+          matchNotes.push(`${gi.itemName}: rate mismatch (PO ₹${n(poi.unitRate)} vs GRN ₹${n(gi.unitRate)})`);
+        }
+        // Update PO item with this GRN's accepted qty (accepted only — qc-hold items excluded)
+        const acceptedNow = n(gi.qcHold ? 0 : gi.acceptedQty);
         await db.update(poItemsTable)
-          .set({ receivedQty: String(n(poi.receivedQty) + n(gi.acceptedQty)) })
+          .set({ receivedQty: String(n(poi.receivedQty) + acceptedNow) })
           .where(eq(poItemsTable.id, poi.id));
       }
     }
@@ -731,6 +740,89 @@ router.post("/grns/:grnId/submit", requireAuth, async (req: Request, res: Respon
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// QC RESULT HELPER — pass releases stock + ledger; fail marks rejected + debit note
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function applyQcResult(projectId: string, grnItemId: string, result: "pass" | "fail", userId: string | null) {
+  const [grnItem] = await db.select().from(grnItemsTable).where(eq(grnItemsTable.id, grnItemId));
+  if (!grnItem || !grnItem.qcHold) return; // already processed or not on hold
+
+  if (result === "pass") {
+    // Release to stock: use WAC update identical to GRN submit flow
+    if (grnItem.inventoryItemId) {
+      const [inv] = await db.select().from(inventoryItemsTable).where(eq(inventoryItemsTable.id, grnItem.inventoryItemId));
+      if (inv) {
+        const addedQty = n(grnItem.acceptedQty);
+        const newStock = n(inv.currentStock) + addedQty;
+        const oldValue = n(inv.currentStock) * n(inv.avgRate);
+        const addedValue = addedQty * n(grnItem.unitRate);
+        const newAvgRate = newStock > 0 ? (oldValue + addedValue) / newStock : n(grnItem.unitRate);
+        await db.update(inventoryItemsTable).set({
+          currentStock: String(newStock),
+          avgRate: String(Math.round(newAvgRate * 10000) / 10000),
+          lastPurchaseRate: String(n(grnItem.unitRate)),
+          isReorderTriggered: false,
+        }).where(eq(inventoryItemsTable.id, grnItem.inventoryItemId));
+        // Write stock ledger entry for QC release
+        await db.insert(stockLedgerTable).values({
+          projectId, inventoryItemId: grnItem.inventoryItemId, storeId: null,
+          transactionType: "grn_receipt", entityType: "grn_item", entityId: grnItem.id,
+          qty: String(addedQty), rate: String(n(grnItem.unitRate)),
+          amount: String(Math.round(addedQty * n(grnItem.unitRate) * 100) / 100),
+          balanceQty: String(newStock),
+          narration: `QC pass — ${grnItem.itemName} released from hold`,
+          createdById: userId,
+        });
+        // Update PO received qty for the released qty (was skipped at GRN submit)
+        if (grnItem.poItemId) {
+          const [poi] = await db.select().from(poItemsTable).where(eq(poItemsTable.id, grnItem.poItemId));
+          if (poi) {
+            await db.update(poItemsTable)
+              .set({ receivedQty: String(n(poi.receivedQty) + addedQty) })
+              .where(eq(poItemsTable.id, poi.id));
+          }
+        }
+      }
+    }
+    // Clear QC hold flag on GRN item
+    await db.update(grnItemsTable).set({ qcHold: false }).where(eq(grnItemsTable.id, grnItemId));
+  } else {
+    // Fail: zero out accepted qty, mark rejected, flag debit note required
+    // Material was never added to stock (held), so no stock reversal needed
+    const receivedQty = n(grnItem.receivedQty);
+    await db.update(grnItemsTable).set({
+      acceptedQty: "0",
+      rejectedQty: String(receivedQty),
+      condition: "rejected",
+      qcHold: false, // hold resolved — definitively rejected
+      remarks: (grnItem.remarks ? grnItem.remarks + " | " : "") + "QC FAIL — pending debit note",
+    }).where(eq(grnItemsTable.id, grnItemId));
+    // Write a zero-qty ledger entry for traceability
+    if (grnItem.inventoryItemId) {
+      await db.insert(stockLedgerTable).values({
+        projectId, inventoryItemId: grnItem.inventoryItemId, storeId: null,
+        transactionType: "material_return", entityType: "grn_item", entityId: grnItem.id,
+        qty: "0", rate: String(n(grnItem.unitRate)), amount: "0",
+        balanceQty: "0", // balance unchanged — item never entered stock
+        narration: `QC fail — ${grnItem.itemName} rejected, debit note required (qty ${receivedQty})`,
+        createdById: userId,
+      });
+    }
+  }
+
+  // If all QC holds on the parent GRN are now resolved, move GRN to accepted
+  const [grn] = await db.select().from(grnsTable).where(eq(grnsTable.id, grnItem.grnId));
+  if (grn && grn.status === "qc_pending") {
+    const remainingHolds = await db.select().from(grnItemsTable)
+      .where(and(eq(grnItemsTable.grnId, grn.id), eq(grnItemsTable.qcHold, true)));
+    if (remainingHolds.length === 0) {
+      await db.update(grnsTable).set({ status: "accepted", qcHoldCount: 0 })
+        .where(eq(grnsTable.id, grn.id));
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MATERIAL TESTS
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -755,9 +847,9 @@ router.post("/projects/:projectId/material-tests", requireAuth, async (req: Requ
     unit: b.unit ?? null, testedById: req.user?.id ?? null,
     remarks: b.remarks ?? null, testResult: b.testResult ?? "pending",
   }).returning();
-  // If failed, release QC hold on GRN item
-  if (b.testResult === "pass" && b.grnItemId) {
-    await db.update(grnItemsTable).set({ qcHold: false }).where(eq(grnItemsTable.id, b.grnItemId));
+  // If result already known at creation time, apply pass/fail side-effects
+  if (b.grnItemId && (b.testResult === "pass" || b.testResult === "fail")) {
+    await applyQcResult(req.params.projectId, b.grnItemId, b.testResult, req.user?.id ?? null);
   }
   res.status(201).json(sTest(row));
 });
@@ -766,6 +858,9 @@ router.patch("/material-tests/:testId", requireAuth, async (req: Request, res: R
   const b = req.body ?? {};
   const [test] = await db.select().from(materialTestsTable).where(eq(materialTestsTable.id, req.params.testId));
   if (!test) { res.status(404).json({ error: "Not found" }); return; }
+  if (test.testResult !== "pending" && b.testResult && b.testResult !== test.testResult) {
+    res.status(409).json({ error: "Test result already finalised" }); return;
+  }
   const patch: Record<string, any> = {};
   if (b.testResult !== undefined) patch.testResult = b.testResult;
   if (b.actualValue !== undefined) patch.actualValue = String(n(b.actualValue));
@@ -773,9 +868,9 @@ router.patch("/material-tests/:testId", requireAuth, async (req: Request, res: R
   if (b.remarks !== undefined) patch.remarks = b.remarks;
   if (b.debitNoteIssued !== undefined) patch.debitNoteIssued = b.debitNoteIssued;
   const [updated] = await db.update(materialTestsTable).set(patch).where(eq(materialTestsTable.id, test.id)).returning();
-  // Update inventory and GRN item based on result
-  if (b.testResult === "pass" && test.grnItemId) {
-    await db.update(grnItemsTable).set({ qcHold: false }).where(eq(grnItemsTable.id, test.grnItemId));
+  // Apply pass/fail side-effects only when transitioning from pending
+  if (test.testResult === "pending" && test.grnItemId && (b.testResult === "pass" || b.testResult === "fail")) {
+    await applyQcResult(test.projectId, test.grnItemId, b.testResult, req.user?.id ?? null);
   }
   res.json(sTest(updated));
 });
