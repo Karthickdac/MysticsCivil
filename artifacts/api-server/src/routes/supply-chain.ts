@@ -202,12 +202,28 @@ router.use("/projects/:projectId", requireAuth, async (req: Request, res: Respon
 // VENDORS
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Resolve caller's org. Returns null for admins (no org filter), or org id for
+// all other users. Sends 403 if a non-admin has no org and returns undefined.
+async function resolveCallerOrg(req: Request, res: Response): Promise<string | null | undefined> {
+  if (req.userRole === "admin") return null;
+  const [profile] = await db.select({ organisationId: userProfilesTable.organisationId })
+    .from(userProfilesTable).where(eq(userProfilesTable.userId, req.user!.id));
+  if (!profile?.organisationId) { res.status(403).json({ error: "Forbidden" }); return undefined; }
+  return profile.organisationId;
+}
+
 router.get("/vendors", requireAuth, async (req: Request, res: Response) => {
-  const { status, orgId } = req.query as Record<string, string>;
-  let q = db.select().from(vendorsTable) as any;
-  if (status) q = q.where(eq(vendorsTable.status, status));
-  else if (orgId) q = q.where(eq(vendorsTable.organisationId, orgId));
-  const rows = await q.orderBy(desc(vendorsTable.createdAt));
+  const { status } = req.query as Record<string, string>;
+  const callerOrg = await resolveCallerOrg(req, res);
+  if (callerOrg === undefined) return;
+  // Always scope to caller's org (non-admins); ignore client-supplied orgId.
+  const conds: any[] = [];
+  if (callerOrg) conds.push(eq(vendorsTable.organisationId, callerOrg));
+  if (status) conds.push(eq(vendorsTable.status, status));
+  const where = conds.length === 0 ? undefined : conds.length === 1 ? conds[0] : and(...conds);
+  const rows = where
+    ? await db.select().from(vendorsTable).where(where).orderBy(desc(vendorsTable.createdAt))
+    : await db.select().from(vendorsTable).orderBy(desc(vendorsTable.createdAt));
   res.json(rows.map(sv));
 });
 
@@ -230,6 +246,11 @@ router.post("/vendors", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async
 router.get("/vendors/:vendorId", requireAuth, async (req: Request, res: Response) => {
   const [v] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, req.params.vendorId));
   if (!v) { res.status(404).json({ error: "Not found" }); return; }
+  const callerOrg = await resolveCallerOrg(req, res);
+  if (callerOrg === undefined) return;
+  if (callerOrg && v.organisationId && v.organisationId !== callerOrg) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
   res.json(sv(v));
 });
 
@@ -258,6 +279,13 @@ router.patch("/vendors/:vendorId", requireAuth, requireRole(...ROLE_GROUPS.OWNER
 });
 
 router.get("/vendors/:vendorId/documents", requireAuth, async (req: Request, res: Response) => {
+  const [vendorCheck] = await db.select().from(vendorsTable).where(eq(vendorsTable.id, req.params.vendorId));
+  if (!vendorCheck) { res.status(404).json({ error: "Vendor not found" }); return; }
+  const callerOrg = await resolveCallerOrg(req, res);
+  if (callerOrg === undefined) return;
+  if (callerOrg && vendorCheck.organisationId && vendorCheck.organisationId !== callerOrg) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
   const docs = await db.select().from(vendorDocumentsTable)
     .where(eq(vendorDocumentsTable.vendorId, req.params.vendorId));
   res.json(docs.map(d => ({ id: d.id, vendorId: d.vendorId, documentType: d.documentType, documentUrl: d.documentUrl ?? null, fileName: d.fileName ?? null, verified: d.verified, createdAt: dReq(d.createdAt) })));
