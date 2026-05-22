@@ -1,0 +1,685 @@
+import { Router, type IRouter, type Request, type Response } from "express";
+import { db } from "@workspace/db";
+import {
+  workersTable, workerDocumentsTable, attendanceRecordsTable,
+  payrollPeriodsTable, payrollLinesTable, wageSlipsTable,
+  epfEntriesTable, esiEntriesTable,
+  itpsTable, itpItemsTable, inspectionRequestsTable, inspectionChecklistsTable,
+  ncrsTable, ncrActionsTable,
+  safetyPermitsTable, hiraEntriesTable, jsaEntriesTable,
+  ppeIssuesTable, incidentsTable, incidentActionsTable,
+  projectsTable, userProfilesTable,
+} from "@workspace/db";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
+
+const router: IRouter = Router();
+
+const n = (v: any): number => {
+  const x = parseFloat(String(v ?? 0));
+  return isNaN(x) ? 0 : x;
+};
+const d = (v: any) => (v ? new Date(v).toISOString() : null);
+
+// ─── Access guard ─────────────────────────────────────────────────────────────
+async function denyIfNoProjectAccess(req: Request, res: Response, projectId: string): Promise<boolean> {
+  const userId = req.user?.id;
+  if (!userId) { res.status(401).json({ error: "Unauthenticated" }); return true; }
+  if (req.userRole === "admin") return false;
+  const [profile] = await db.select({ organisationId: userProfilesTable.organisationId })
+    .from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
+  if (!profile?.organisationId) { res.status(403).json({ error: "Forbidden" }); return true; }
+  const [project] = await db.select({ organisationId: projectsTable.organisationId })
+    .from(projectsTable).where(eq(projectsTable.id, projectId));
+  if (!project) { res.status(404).json({ error: "Project not found" }); return true; }
+  if (project.organisationId !== profile.organisationId) { res.status(403).json({ error: "Forbidden" }); return true; }
+  return false;
+}
+
+router.use("/projects/:projectId/workers", requireAuth, async (req, res, next) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  next();
+});
+
+// ─── WORKERS ──────────────────────────────────────────────────────────────────
+router.get("/projects/:projectId/workers", requireAuth, async (req: Request, res: Response) => {
+  const { contractorId, status, trade } = req.query as Record<string, string>;
+  let cond: any = eq(workersTable.projectId, req.params.projectId);
+  if (contractorId) cond = and(cond, eq(workersTable.contractorId, contractorId));
+  if (status) cond = and(cond, eq(workersTable.status, status));
+  if (trade) cond = and(cond, eq(workersTable.trade, trade));
+  const rows = await db.select().from(workersTable).where(cond).orderBy(workersTable.name);
+  res.json(rows);
+});
+
+router.post("/projects/:projectId/workers", requireAuth, async (req: Request, res: Response) => {
+  const b = req.body ?? {};
+  if (!b.name || !b.trade) { res.status(400).json({ error: "name, trade required" }); return; }
+  const count = await db.select({ c: sql`count(*)` }).from(workersTable)
+    .where(eq(workersTable.projectId, req.params.projectId));
+  const seq = Number(count[0]?.c ?? 0) + 1;
+  const [row] = await db.insert(workersTable).values({
+    projectId: req.params.projectId,
+    workerCode: b.workerCode ?? `WRK-${String(seq).padStart(4, "0")}`,
+    name: b.name, trade: b.trade ?? "helper",
+    skillLevel: b.skillLevel ?? "unskilled",
+    dailyRate: String(n(b.dailyRate)), otRate: String(n(b.otRate)),
+    aadhaarNumber: b.aadhaarNumber ?? null, phone: b.phone ?? null,
+    gender: b.gender ?? null, state: b.state ?? null,
+    bocwRegNumber: b.bocwRegNumber ?? null,
+    pfNumber: b.pfNumber ?? null, esiNumber: b.esiNumber ?? null,
+    bankName: b.bankName ?? null, accountNumber: b.accountNumber ?? null,
+    ifscCode: b.ifscCode ?? null, contractorId: b.contractorId ?? null,
+    registeredById: req.user?.id ?? null,
+  }).returning();
+  res.status(201).json(row);
+});
+
+router.get("/workers/:workerId", requireAuth, async (req: Request, res: Response) => {
+  const [w] = await db.select().from(workersTable).where(eq(workersTable.id, req.params.workerId));
+  if (!w) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, w.projectId)) return;
+  const docs = await db.select().from(workerDocumentsTable).where(eq(workerDocumentsTable.workerId, w.id));
+  res.json({ ...w, documents: docs });
+});
+
+router.patch("/workers/:workerId", requireAuth, async (req: Request, res: Response) => {
+  const b = req.body ?? {};
+  const [w] = await db.select().from(workersTable).where(eq(workersTable.id, req.params.workerId));
+  if (!w) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, w.projectId)) return;
+  const fields = ["name","trade","skillLevel","phone","gender","state","bocwRegNumber","pfNumber","esiNumber","bankName","accountNumber","ifscCode","status","contractorId"];
+  const patch: Record<string, any> = {};
+  for (const f of fields) if (b[f] !== undefined) patch[f] = b[f];
+  if (b.dailyRate !== undefined) patch.dailyRate = String(n(b.dailyRate));
+  if (b.otRate !== undefined) patch.otRate = String(n(b.otRate));
+  const [updated] = await db.update(workersTable).set(patch).where(eq(workersTable.id, w.id)).returning();
+  res.json(updated);
+});
+
+// ─── ATTENDANCE ────────────────────────────────────────────────────────────────
+router.get("/projects/:projectId/attendance", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const { workerId, date } = req.query as Record<string, string>;
+  let cond: any = eq(attendanceRecordsTable.projectId, req.params.projectId);
+  if (workerId) cond = and(cond, eq(attendanceRecordsTable.workerId, workerId));
+  const rows = await db.select().from(attendanceRecordsTable).where(cond)
+    .orderBy(desc(attendanceRecordsTable.attendanceDate));
+  res.json(rows);
+});
+
+router.post("/projects/:projectId/attendance", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const b = req.body ?? {};
+  if (!b.workerId || !b.attendanceDate) { res.status(400).json({ error: "workerId, attendanceDate required" }); return; }
+  const markIn = b.markInTime ? new Date(b.markInTime) : null;
+  const markOut = b.markOutTime ? new Date(b.markOutTime) : null;
+  let hoursWorked = 0;
+  let overtimeHours = 0;
+  if (markIn && markOut) {
+    const totalHours = (markOut.getTime() - markIn.getTime()) / 3600000;
+    hoursWorked = Math.min(totalHours, 9);
+    overtimeHours = Math.max(0, totalHours - 9);
+  }
+  const [row] = await db.insert(attendanceRecordsTable).values({
+    projectId: req.params.projectId, workerId: b.workerId,
+    attendanceDate: new Date(b.attendanceDate),
+    markInTime: markIn, markOutTime: markOut,
+    gpsLat: b.gpsLat ? String(b.gpsLat) : null,
+    gpsLng: b.gpsLng ? String(b.gpsLng) : null,
+    withinGeofence: b.withinGeofence ?? true,
+    hoursWorked: String(Math.round(hoursWorked * 100) / 100),
+    overtimeHours: String(Math.round(overtimeHours * 100) / 100),
+    remarks: b.remarks ?? null,
+  }).returning();
+  res.status(201).json(row);
+});
+
+router.patch("/attendance/:recordId/approve-ot", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
+  const [rec] = await db.select().from(attendanceRecordsTable).where(eq(attendanceRecordsTable.id, req.params.recordId));
+  if (!rec) { res.status(404).json({ error: "Not found" }); return; }
+  const [updated] = await db.update(attendanceRecordsTable)
+    .set({ otApproved: true, otApprovedById: req.user?.id ?? null })
+    .where(eq(attendanceRecordsTable.id, rec.id)).returning();
+  res.json(updated);
+});
+
+// ─── PAYROLL ──────────────────────────────────────────────────────────────────
+router.get("/projects/:projectId/payroll-periods", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const rows = await db.select().from(payrollPeriodsTable)
+    .where(eq(payrollPeriodsTable.projectId, req.params.projectId))
+    .orderBy(desc(payrollPeriodsTable.fromDate));
+  res.json(rows);
+});
+
+router.post("/projects/:projectId/payroll-periods", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const b = req.body ?? {};
+  if (!b.periodName || !b.fromDate || !b.toDate) { res.status(400).json({ error: "periodName, fromDate, toDate required" }); return; }
+  const [row] = await db.insert(payrollPeriodsTable).values({
+    projectId: req.params.projectId, periodName: b.periodName,
+    periodType: b.periodType ?? "monthly",
+    fromDate: new Date(b.fromDate), toDate: new Date(b.toDate),
+  }).returning();
+  res.status(201).json(row);
+});
+
+// Compute payroll: auto-calc EPF/ESI/PT from attendance data
+router.post("/payroll-periods/:periodId/compute", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
+  const [period] = await db.select().from(payrollPeriodsTable).where(eq(payrollPeriodsTable.id, req.params.periodId));
+  if (!period || period.status !== "draft") { res.status(409).json({ error: "Only draft periods can be computed" }); return; }
+  if (await denyIfNoProjectAccess(req, res, period.projectId)) return;
+
+  // Fetch all workers for this project
+  const workers = await db.select().from(workersTable)
+    .where(and(eq(workersTable.projectId, period.projectId), eq(workersTable.status, "active")));
+
+  // Fetch attendance in period
+  const attendances = await db.select().from(attendanceRecordsTable)
+    .where(and(
+      eq(attendanceRecordsTable.projectId, period.projectId),
+      sql`attendance_date >= ${period.fromDate.toISOString()} AND attendance_date <= ${period.toDate.toISOString()}`
+    ));
+
+  // Delete existing lines
+  await db.delete(payrollLinesTable).where(eq(payrollLinesTable.periodId, period.id));
+
+  let totalGross = 0, totalDeductions = 0, totalNet = 0;
+  for (const w of workers) {
+    const wAtt = attendances.filter(a => a.workerId === w.id);
+    const presentDays = wAtt.filter(a => n(a.hoursWorked) >= 4).length;
+    const approvedOt = wAtt.filter(a => a.otApproved).reduce((s, a) => s + n(a.overtimeHours), 0);
+    const dailyRate = n(w.dailyRate);
+    const otRate = n(w.otRate) || dailyRate * 1.5 / 9;
+    const basicWages = Math.round(presentDays * dailyRate * 100) / 100;
+    const otAmount = Math.round(approvedOt * otRate * 100) / 100;
+    const grossWages = basicWages + otAmount;
+    // EPF: employee 12%, employer 12% of basic (capped at ₹15000)
+    const epfWage = Math.min(basicWages, 15000);
+    const epfEmployee = Math.round(epfWage * 0.12 * 100) / 100;
+    const epfEmployer = Math.round(epfWage * 0.12 * 100) / 100;
+    // ESI: employee 0.75%, employer 3.25% (capped at ₹21000/month)
+    const esiWage = Math.min(grossWages, 21000);
+    const esiEmployee = Math.round(esiWage * 0.0075 * 100) / 100;
+    const esiEmployer = Math.round(esiWage * 0.0325 * 100) / 100;
+    // PT: state-wise simplified (₹200 if salary > 15000)
+    const pt = grossWages > 15000 ? 200 : grossWages > 10000 ? 150 : 0;
+    const lwf = 10; // simplified fixed LWF contribution
+    const totalDed = epfEmployee + esiEmployee + pt + lwf;
+    const netWages = Math.max(0, grossWages - totalDed);
+
+    await db.insert(payrollLinesTable).values({
+      periodId: period.id, workerId: w.id,
+      presentDays: String(presentDays), otHours: String(Math.round(approvedOt * 100) / 100),
+      basicWages: String(basicWages), otAmount: String(otAmount), grossWages: String(grossWages),
+      epfEmployee: String(epfEmployee), epfEmployer: String(epfEmployer),
+      esiEmployee: String(esiEmployee), esiEmployer: String(esiEmployer),
+      pt: String(pt), lwf: String(lwf),
+      totalDeductions: String(totalDed), netWages: String(netWages),
+    });
+
+    totalGross += grossWages;
+    totalDeductions += totalDed;
+    totalNet += netWages;
+  }
+
+  const [updated] = await db.update(payrollPeriodsTable).set({
+    totalGross: String(Math.round(totalGross * 100) / 100),
+    totalDeductions: String(Math.round(totalDeductions * 100) / 100),
+    totalNet: String(Math.round(totalNet * 100) / 100),
+    status: "computed",
+    processedById: req.user?.id ?? null, processedAt: new Date(),
+  }).where(eq(payrollPeriodsTable.id, period.id)).returning();
+  res.json(updated);
+});
+
+router.get("/payroll-periods/:periodId/lines", requireAuth, async (req: Request, res: Response) => {
+  const [period] = await db.select().from(payrollPeriodsTable).where(eq(payrollPeriodsTable.id, req.params.periodId));
+  if (!period) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, period.projectId)) return;
+  const lines = await db.select().from(payrollLinesTable)
+    .where(eq(payrollLinesTable.periodId, period.id));
+  res.json(lines);
+});
+
+router.post("/payroll-periods/:periodId/approve", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
+  const [period] = await db.select().from(payrollPeriodsTable).where(eq(payrollPeriodsTable.id, req.params.periodId));
+  if (!period || period.status !== "computed") { res.status(409).json({ error: "Period must be in computed state" }); return; }
+  if (await denyIfNoProjectAccess(req, res, period.projectId)) return;
+  const [updated] = await db.update(payrollPeriodsTable).set({ status: "approved" })
+    .where(eq(payrollPeriodsTable.id, period.id)).returning();
+  res.json(updated);
+});
+
+// ─── ITP ──────────────────────────────────────────────────────────────────────
+router.get("/projects/:projectId/itps", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const rows = await db.select().from(itpsTable)
+    .where(eq(itpsTable.projectId, req.params.projectId))
+    .orderBy(desc(itpsTable.createdAt));
+  res.json(rows);
+});
+
+router.post("/projects/:projectId/itps", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const b = req.body ?? {};
+  if (!b.title) { res.status(400).json({ error: "title required" }); return; }
+  const [row] = await db.insert(itpsTable).values({
+    projectId: req.params.projectId, title: b.title,
+    wbsActivityId: b.wbsActivityId ?? null, revision: b.revision ?? "0",
+    createdById: req.user?.id ?? null,
+  }).returning();
+  res.status(201).json(row);
+});
+
+router.get("/itps/:itpId", requireAuth, async (req: Request, res: Response) => {
+  const [itp] = await db.select().from(itpsTable).where(eq(itpsTable.id, req.params.itpId));
+  if (!itp) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, itp.projectId)) return;
+  const items = await db.select().from(itpItemsTable).where(eq(itpItemsTable.itpId, itp.id))
+    .orderBy(itpItemsTable.sequenceNo);
+  res.json({ ...itp, items });
+});
+
+router.post("/itps/:itpId/items", requireAuth, async (req: Request, res: Response) => {
+  const b = req.body ?? {};
+  const [itp] = await db.select().from(itpsTable).where(eq(itpsTable.id, req.params.itpId));
+  if (!itp) { res.status(404).json({ error: "ITP not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, itp.projectId)) return;
+  if (!b.activityDescription) { res.status(400).json({ error: "activityDescription required" }); return; }
+  const [row] = await db.insert(itpItemsTable).values({
+    itpId: itp.id, activityDescription: b.activityDescription,
+    checkPointType: b.checkPointType ?? "witness",
+    acceptanceCriteria: b.acceptanceCriteria ?? null,
+    referenceCode: b.referenceCode ?? null,
+    frequency: b.frequency ?? null,
+    responsible: b.responsible ?? null, inspector: b.inspector ?? null,
+    sequenceNo: b.sequenceNo ?? 1,
+  }).returning();
+  res.status(201).json(row);
+});
+
+router.post("/itps/:itpId/approve", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
+  const [itp] = await db.select().from(itpsTable).where(eq(itpsTable.id, req.params.itpId));
+  if (!itp || itp.status === "approved") { res.status(409).json({ error: "Already approved or not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, itp.projectId)) return;
+  const [updated] = await db.update(itpsTable).set({
+    status: "approved", approvedById: req.user?.id ?? null, approvedAt: new Date(),
+  }).where(eq(itpsTable.id, itp.id)).returning();
+  res.json(updated);
+});
+
+// ─── INSPECTION REQUESTS ──────────────────────────────────────────────────────
+router.get("/projects/:projectId/inspection-requests", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const { status } = req.query as Record<string, string>;
+  let cond: any = eq(inspectionRequestsTable.projectId, req.params.projectId);
+  if (status) cond = and(cond, eq(inspectionRequestsTable.status, status));
+  const rows = await db.select().from(inspectionRequestsTable).where(cond)
+    .orderBy(desc(inspectionRequestsTable.inspectionDate));
+  res.json(rows);
+});
+
+router.post("/projects/:projectId/inspection-requests", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const b = req.body ?? {};
+  if (!b.inspectionDate) { res.status(400).json({ error: "inspectionDate required" }); return; }
+  const count = await db.select({ c: sql`count(*)` }).from(inspectionRequestsTable)
+    .where(eq(inspectionRequestsTable.projectId, req.params.projectId));
+  const seq = Number(count[0]?.c ?? 0) + 1;
+  const [row] = await db.insert(inspectionRequestsTable).values({
+    projectId: req.params.projectId,
+    irNumber: b.irNumber ?? `IR-${String(seq).padStart(4, "0")}`,
+    itpItemId: b.itpItemId ?? null, raisedById: req.user?.id ?? null,
+    inspectionDate: new Date(b.inspectionDate),
+    location: b.location ?? null, notes: b.notes ?? null,
+    gpsLat: b.gpsLat ? String(b.gpsLat) : null,
+    gpsLng: b.gpsLng ? String(b.gpsLng) : null,
+  }).returning();
+  res.status(201).json(row);
+});
+
+router.get("/inspection-requests/:irId", requireAuth, async (req: Request, res: Response) => {
+  const [ir] = await db.select().from(inspectionRequestsTable).where(eq(inspectionRequestsTable.id, req.params.irId));
+  if (!ir) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, ir.projectId)) return;
+  const items = await db.select().from(inspectionChecklistsTable).where(eq(inspectionChecklistsTable.irId, ir.id));
+  res.json({ ...ir, checklist: items });
+});
+
+router.post("/inspection-requests/:irId/record", requireAuth, async (req: Request, res: Response) => {
+  const b = req.body ?? {};
+  const [ir] = await db.select().from(inspectionRequestsTable).where(eq(inspectionRequestsTable.id, req.params.irId));
+  if (!ir) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, ir.projectId)) return;
+  if (b.result === undefined) { res.status(400).json({ error: "result required (passed|failed)" }); return; }
+  // Insert checklist items
+  if (Array.isArray(b.checklist)) {
+    for (const c of b.checklist) {
+      await db.insert(inspectionChecklistsTable).values({
+        irId: ir.id, parameter: c.parameter ?? "check",
+        acceptanceCriteria: c.acceptanceCriteria ?? null,
+        observed: c.observed ?? null, passed: c.passed ?? null,
+        remarks: c.remarks ?? null,
+      });
+    }
+  }
+  const [updated] = await db.update(inspectionRequestsTable).set({
+    result: b.result, status: b.result === "passed" ? "passed" : "failed",
+    inspectedById: req.user?.id ?? null, inspectedAt: new Date(),
+    notes: b.notes ?? ir.notes,
+  }).where(eq(inspectionRequestsTable.id, ir.id)).returning();
+  res.json(updated);
+});
+
+// ─── NCR ──────────────────────────────────────────────────────────────────────
+router.get("/projects/:projectId/ncrs", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const { status } = req.query as Record<string, string>;
+  let cond: any = eq(ncrsTable.projectId, req.params.projectId);
+  if (status) cond = and(cond, eq(ncrsTable.status, status));
+  const rows = await db.select().from(ncrsTable).where(cond).orderBy(desc(ncrsTable.createdAt));
+  res.json(rows);
+});
+
+router.post("/projects/:projectId/ncrs", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const b = req.body ?? {};
+  if (!b.description) { res.status(400).json({ error: "description required" }); return; }
+  const count = await db.select({ c: sql`count(*)` }).from(ncrsTable)
+    .where(eq(ncrsTable.projectId, req.params.projectId));
+  const seq = Number(count[0]?.c ?? 0) + 1;
+  const [row] = await db.insert(ncrsTable).values({
+    projectId: req.params.projectId,
+    ncrNumber: b.ncrNumber ?? `NCR-${String(seq).padStart(4, "0")}`,
+    raisedById: req.user?.id ?? null, irId: b.irId ?? null,
+    trade: b.trade ?? null, description: b.description,
+    severity: b.severity ?? "minor", rootCause: b.rootCause ?? null,
+    wbsActivityId: b.wbsActivityId ?? null,
+  }).returning();
+  res.status(201).json(row);
+});
+
+router.get("/ncrs/:ncrId", requireAuth, async (req: Request, res: Response) => {
+  const [ncr] = await db.select().from(ncrsTable).where(eq(ncrsTable.id, req.params.ncrId));
+  if (!ncr) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, ncr.projectId)) return;
+  const actions = await db.select().from(ncrActionsTable).where(eq(ncrActionsTable.ncrId, ncr.id));
+  res.json({ ...ncr, actions });
+});
+
+router.patch("/ncrs/:ncrId", requireAuth, async (req: Request, res: Response) => {
+  const b = req.body ?? {};
+  const [ncr] = await db.select().from(ncrsTable).where(eq(ncrsTable.id, req.params.ncrId));
+  if (!ncr) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, ncr.projectId)) return;
+  const patch: Record<string, any> = {};
+  const fields = ["status","severity","rootCause","reworkCost"];
+  for (const f of fields) if (b[f] !== undefined) patch[f] = b[f];
+  if (b.status === "closed") patch.closedAt = new Date();
+  const [updated] = await db.update(ncrsTable).set(patch).where(eq(ncrsTable.id, ncr.id)).returning();
+  res.json(updated);
+});
+
+router.post("/ncrs/:ncrId/actions", requireAuth, async (req: Request, res: Response) => {
+  const b = req.body ?? {};
+  const [ncr] = await db.select().from(ncrsTable).where(eq(ncrsTable.id, req.params.ncrId));
+  if (!ncr) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, ncr.projectId)) return;
+  if (!b.description) { res.status(400).json({ error: "description required" }); return; }
+  const [row] = await db.insert(ncrActionsTable).values({
+    ncrId: ncr.id, actionType: b.actionType ?? "capa",
+    description: b.description, dueDate: b.dueDate ? new Date(b.dueDate) : null,
+    responsibleId: b.responsibleId ?? null,
+  }).returning();
+  // Update NCR status
+  if (b.actionType === "capa") {
+    await db.update(ncrsTable).set({ status: "capa_submitted" }).where(eq(ncrsTable.id, ncr.id));
+  } else if (b.actionType === "re_inspection") {
+    await db.update(ncrsTable).set({ status: "re_inspection" }).where(eq(ncrsTable.id, ncr.id));
+  }
+  res.status(201).json(row);
+});
+
+// ─── SAFETY PERMITS ───────────────────────────────────────────────────────────
+router.get("/projects/:projectId/safety-permits", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const { status, permitType } = req.query as Record<string, string>;
+  let cond: any = eq(safetyPermitsTable.projectId, req.params.projectId);
+  if (status) cond = and(cond, eq(safetyPermitsTable.status, status));
+  if (permitType) cond = and(cond, eq(safetyPermitsTable.permitType, permitType));
+  const rows = await db.select().from(safetyPermitsTable).where(cond)
+    .orderBy(desc(safetyPermitsTable.startDateTime));
+  res.json(rows);
+});
+
+router.post("/projects/:projectId/safety-permits", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const b = req.body ?? {};
+  if (!b.permitType || !b.workDescription || !b.startDateTime || !b.endDateTime) {
+    res.status(400).json({ error: "permitType, workDescription, startDateTime, endDateTime required" }); return;
+  }
+  const count = await db.select({ c: sql`count(*)` }).from(safetyPermitsTable)
+    .where(eq(safetyPermitsTable.projectId, req.params.projectId));
+  const seq = Number(count[0]?.c ?? 0) + 1;
+  const [row] = await db.insert(safetyPermitsTable).values({
+    projectId: req.params.projectId,
+    permitNumber: b.permitNumber ?? `PTW-${String(seq).padStart(4, "0")}`,
+    permitType: b.permitType, workDescription: b.workDescription,
+    location: b.location ?? null, startDateTime: new Date(b.startDateTime),
+    endDateTime: new Date(b.endDateTime), applicantId: req.user?.id ?? null,
+    hazards: b.hazards ?? null, precautions: b.precautions ?? null,
+  }).returning();
+  res.status(201).json(row);
+});
+
+router.patch("/safety-permits/:permitId", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), async (req: Request, res: Response) => {
+  const b = req.body ?? {};
+  const [permit] = await db.select().from(safetyPermitsTable).where(eq(safetyPermitsTable.id, req.params.permitId));
+  if (!permit) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, permit.projectId)) return;
+  const patch: Record<string, any> = {};
+  if (b.status !== undefined) {
+    patch.status = b.status;
+    if (b.status === "approved") { patch.approvedById = req.user?.id ?? null; patch.approvedAt = new Date(); }
+  }
+  const [updated] = await db.update(safetyPermitsTable).set(patch).where(eq(safetyPermitsTable.id, permit.id)).returning();
+  res.json(updated);
+});
+
+// ─── HIRA ─────────────────────────────────────────────────────────────────────
+router.get("/projects/:projectId/hira", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const rows = await db.select().from(hiraEntriesTable)
+    .where(eq(hiraEntriesTable.projectId, req.params.projectId))
+    .orderBy(desc(hiraEntriesTable.riskScore));
+  res.json(rows);
+});
+
+router.post("/projects/:projectId/hira", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const b = req.body ?? {};
+  if (!b.hazardDescription) { res.status(400).json({ error: "hazardDescription required" }); return; }
+  const likelihood = Math.min(5, Math.max(1, n(b.likelihood ?? 1)));
+  const severity = Math.min(5, Math.max(1, n(b.severity ?? 1)));
+  const riskScore = likelihood * severity;
+  const riskLevel = riskScore >= 20 ? "extreme" : riskScore >= 12 ? "high" : riskScore >= 6 ? "medium" : "low";
+  const resLikelihood = Math.min(5, Math.max(1, n(b.residualLikelihood ?? likelihood)));
+  const resSeverity = Math.min(5, Math.max(1, n(b.residualSeverity ?? severity)));
+  const residualRiskScore = resLikelihood * resSeverity;
+  const [row] = await db.insert(hiraEntriesTable).values({
+    projectId: req.params.projectId,
+    wbsActivityId: b.wbsActivityId ?? null,
+    hazardDescription: b.hazardDescription,
+    hazardCategory: b.hazardCategory ?? null,
+    likelihood, severity, riskScore, riskLevel,
+    controlMeasures: b.controlMeasures ?? null,
+    residualLikelihood: resLikelihood, residualSeverity: resSeverity,
+    residualRiskScore, createdById: req.user?.id ?? null,
+  }).returning();
+  res.status(201).json(row);
+});
+
+// ─── JSA ──────────────────────────────────────────────────────────────────────
+router.get("/projects/:projectId/jsa", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const rows = await db.select().from(jsaEntriesTable)
+    .where(eq(jsaEntriesTable.projectId, req.params.projectId))
+    .orderBy(desc(jsaEntriesTable.jsaDate));
+  res.json(rows);
+});
+
+router.post("/projects/:projectId/jsa", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const b = req.body ?? {};
+  if (!b.jsaDate) { res.status(400).json({ error: "jsaDate required" }); return; }
+  const [row] = await db.insert(jsaEntriesTable).values({
+    projectId: req.params.projectId,
+    wbsActivityId: b.wbsActivityId ?? null,
+    jsaDate: new Date(b.jsaDate),
+    preparedById: req.user?.id ?? null,
+    supervisorId: b.supervisorId ?? null,
+    workersPresent: b.workersPresent ?? 0,
+    steps: b.steps ?? [],
+    status: b.status ?? "draft",
+  }).returning();
+  res.status(201).json(row);
+});
+
+// ─── PPE ISSUES ───────────────────────────────────────────────────────────────
+router.get("/projects/:projectId/ppe-issues", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const { workerId } = req.query as Record<string, string>;
+  let cond: any = eq(ppeIssuesTable.projectId, req.params.projectId);
+  if (workerId) cond = and(cond, eq(ppeIssuesTable.workerId, workerId));
+  const rows = await db.select().from(ppeIssuesTable).where(cond)
+    .orderBy(desc(ppeIssuesTable.issuedDate));
+  res.json(rows);
+});
+
+router.post("/projects/:projectId/ppe-issues", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const b = req.body ?? {};
+  if (!b.workerId || !b.ppeType) { res.status(400).json({ error: "workerId, ppeType required" }); return; }
+  const [row] = await db.insert(ppeIssuesTable).values({
+    projectId: req.params.projectId, workerId: b.workerId, ppeType: b.ppeType,
+    issuedDate: b.issuedDate ? new Date(b.issuedDate) : new Date(),
+    returnedDate: b.returnedDate ? new Date(b.returnedDate) : null,
+    condition: b.condition ?? "new", issuedById: req.user?.id ?? null,
+  }).returning();
+  res.status(201).json(row);
+});
+
+// ─── INCIDENTS ────────────────────────────────────────────────────────────────
+router.get("/projects/:projectId/incidents", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const { status, classification } = req.query as Record<string, string>;
+  let cond: any = eq(incidentsTable.projectId, req.params.projectId);
+  if (status) cond = and(cond, eq(incidentsTable.status, status));
+  if (classification) cond = and(cond, eq(incidentsTable.classification, classification));
+  const rows = await db.select().from(incidentsTable).where(cond)
+    .orderBy(desc(incidentsTable.incidentDate));
+  res.json(rows);
+});
+
+router.post("/projects/:projectId/incidents", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const b = req.body ?? {};
+  if (!b.title || !b.incidentDate) { res.status(400).json({ error: "title, incidentDate required" }); return; }
+  const count = await db.select({ c: sql`count(*)` }).from(incidentsTable)
+    .where(eq(incidentsTable.projectId, req.params.projectId));
+  const seq = Number(count[0]?.c ?? 0) + 1;
+  const [row] = await db.insert(incidentsTable).values({
+    projectId: req.params.projectId,
+    incidentNumber: b.incidentNumber ?? `INC-${String(seq).padStart(4, "0")}`,
+    incidentDate: new Date(b.incidentDate), reportedById: req.user?.id ?? null,
+    classification: b.classification ?? "near_miss", title: b.title,
+    description: b.description ?? null, location: b.location ?? null,
+    injured: b.injured ?? null, lostDays: b.lostDays ?? 0,
+    rootCause: b.rootCause ?? null, immediateAction: b.immediateAction ?? null,
+  }).returning();
+  res.status(201).json(row);
+});
+
+router.get("/incidents/:incidentId", requireAuth, async (req: Request, res: Response) => {
+  const [inc] = await db.select().from(incidentsTable).where(eq(incidentsTable.id, req.params.incidentId));
+  if (!inc) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, inc.projectId)) return;
+  const actions = await db.select().from(incidentActionsTable).where(eq(incidentActionsTable.incidentId, inc.id));
+  res.json({ ...inc, actions });
+});
+
+router.patch("/incidents/:incidentId", requireAuth, async (req: Request, res: Response) => {
+  const b = req.body ?? {};
+  const [inc] = await db.select().from(incidentsTable).where(eq(incidentsTable.id, req.params.incidentId));
+  if (!inc) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, inc.projectId)) return;
+  const patch: Record<string, any> = {};
+  const fields = ["classification","rootCause","immediateAction","injured","lostDays","location"];
+  for (const f of fields) if (b[f] !== undefined) patch[f] = b[f];
+  if (b.status !== undefined) { patch.status = b.status; if (b.status === "closed") patch.closedAt = new Date(); }
+  const [updated] = await db.update(incidentsTable).set(patch).where(eq(incidentsTable.id, inc.id)).returning();
+  res.json(updated);
+});
+
+router.post("/incidents/:incidentId/actions", requireAuth, async (req: Request, res: Response) => {
+  const b = req.body ?? {};
+  const [inc] = await db.select().from(incidentsTable).where(eq(incidentsTable.id, req.params.incidentId));
+  if (!inc) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, inc.projectId)) return;
+  if (!b.actionDescription) { res.status(400).json({ error: "actionDescription required" }); return; }
+  const [row] = await db.insert(incidentActionsTable).values({
+    incidentId: inc.id, actionDescription: b.actionDescription,
+    responsibleId: b.responsibleId ?? null,
+    dueDate: b.dueDate ? new Date(b.dueDate) : null,
+  }).returning();
+  res.status(201).json(row);
+});
+
+// ─── SAFETY DASHBOARD ─────────────────────────────────────────────────────────
+router.get("/projects/:projectId/safety-dashboard", requireAuth, async (req: Request, res: Response) => {
+  if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
+  const pid = req.params.projectId;
+  const [
+    openPermits, activePermits, openNcrs, openIncidents,
+    workerCount, ppeIssuedCount
+  ] = await Promise.all([
+    db.select({ c: sql<number>`count(*)` }).from(safetyPermitsTable)
+      .where(and(eq(safetyPermitsTable.projectId, pid), eq(safetyPermitsTable.status, "pending"))),
+    db.select({ c: sql<number>`count(*)` }).from(safetyPermitsTable)
+      .where(and(eq(safetyPermitsTable.projectId, pid), eq(safetyPermitsTable.status, "active"))),
+    db.select({ c: sql<number>`count(*)` }).from(ncrsTable)
+      .where(and(eq(ncrsTable.projectId, pid), sql`status != 'closed'`)),
+    db.select({ c: sql<number>`count(*)` }).from(incidentsTable)
+      .where(and(eq(incidentsTable.projectId, pid), eq(incidentsTable.status, "open"))),
+    db.select({ c: sql<number>`count(*)` }).from(workersTable)
+      .where(and(eq(workersTable.projectId, pid), eq(workersTable.status, "active"))),
+    db.select({ c: sql<number>`count(distinct worker_id)` }).from(ppeIssuesTable)
+      .where(eq(ppeIssuesTable.projectId, pid)),
+  ]);
+  const totalWorkers = Number(workerCount[0]?.c ?? 0);
+  const ppeCompliant = Number(ppeIssuedCount[0]?.c ?? 0);
+  const ppeCompliancePct = totalWorkers > 0 ? Math.round((ppeCompliant / totalWorkers) * 100) : 0;
+  // Recent incidents
+  const recentIncidents = await db.select().from(incidentsTable)
+    .where(eq(incidentsTable.projectId, pid))
+    .orderBy(desc(incidentsTable.incidentDate)).limit(5);
+  // Extreme/high risk HIRA
+  const highRisks = await db.select().from(hiraEntriesTable)
+    .where(and(eq(hiraEntriesTable.projectId, pid), sql`risk_level in ('extreme','high')`))
+    .orderBy(desc(hiraEntriesTable.riskScore)).limit(5);
+
+  res.json({
+    openPermits: Number(openPermits[0]?.c ?? 0),
+    activePermits: Number(activePermits[0]?.c ?? 0),
+    openNcrs: Number(openNcrs[0]?.c ?? 0),
+    openIncidents: Number(openIncidents[0]?.c ?? 0),
+    totalWorkers,
+    ppeCompliancePct,
+    recentIncidents,
+    highRisks,
+  });
+});
+
+export default router;

@@ -14,4 +14,11 @@ export type {
   Grn, GrnItem, GrnStatus, MaterialTest, TestResult,
   Store, InventoryItem, StockLedger, StockIssue, WastageLog, RateContract,
   MaterialCategory, CostingMethod,
+  // Phase 5 — Workforce, Quality & Safety
+  Worker, WorkerTrade, AttendanceRecord,
+  PayrollPeriod, PayrollLine,
+  Itp, ItpItem, CheckpointType, InspectionRequest,
+  Ncr, NcrStatus, HiraEntry, JsaEntry,
+  SafetyPermit, PermitType, PpeIssue, PpeType,
+  Incident, IncidentClassification,
 } from "./ocms";

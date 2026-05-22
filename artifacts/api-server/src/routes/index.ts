@@ -17,6 +17,7 @@ import dsrRatesRouter from "./dsr-rates";
 import variationOrdersRouter from "./variation-orders";
 import financialRouter from "./financial";
 import supplyChainRouter from "./supply-chain";
+import workforceRouter from "./workforce";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(dsrRatesRouter);
 router.use(variationOrdersRouter);
 router.use(financialRouter);
 router.use(supplyChainRouter);
+router.use(workforceRouter);
 
 export default router;

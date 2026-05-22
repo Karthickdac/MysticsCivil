@@ -1104,4 +1104,345 @@ export const rateContractsTable = pgTable("rate_contracts", {
 });
 export type RateContract = typeof rateContractsTable.$inferSelect;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PHASE 5 — WORKFORCE, QUALITY & SAFETY
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const WORKER_TRADES = ["mason","carpenter","plumber","electrician","welder","painter","steel_fixer","helper","operator","driver","supervisor","other"] as const;
+export type WorkerTrade = (typeof WORKER_TRADES)[number];
+
+export const WORKER_SKILL_LEVELS = ["unskilled","semi_skilled","skilled","highly_skilled"] as const;
+export const WORKER_STATUSES = ["active","inactive","terminated"] as const;
+
+export const workersTable = pgTable("workers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  contractorId: varchar("contractor_id").references(() => vendorsTable.id, { onDelete: "set null" }),
+  workerCode: varchar("worker_code", { length: 32 }).notNull(),
+  name: varchar("name", { length: 128 }).notNull(),
+  aadhaarNumber: varchar("aadhaar_number", { length: 16 }),
+  phone: varchar("phone", { length: 16 }),
+  dob: timestamp("dob", { withTimezone: true }),
+  gender: varchar("gender", { length: 16 }),
+  trade: varchar("trade", { length: 32 }).notNull().default("helper"),
+  skillLevel: varchar("skill_level", { length: 32 }).notNull().default("unskilled"),
+  dailyRate: numeric("daily_rate", { precision: 12, scale: 2 }).notNull().default("0"),
+  otRate: numeric("ot_rate", { precision: 12, scale: 2 }).notNull().default("0"),
+  bocwRegNumber: varchar("bocw_reg_number", { length: 32 }),
+  pfNumber: varchar("pf_number", { length: 32 }),
+  esiNumber: varchar("esi_number", { length: 32 }),
+  bankName: varchar("bank_name", { length: 64 }),
+  accountNumber: varchar("account_number", { length: 32 }),
+  ifscCode: varchar("ifsc_code", { length: 16 }),
+  state: varchar("state", { length: 64 }),
+  status: varchar("status", { length: 16 }).notNull().default("active"),
+  registeredById: varchar("registered_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type Worker = typeof workersTable.$inferSelect;
+
+export const workerDocumentsTable = pgTable("worker_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workerId: varchar("worker_id").notNull().references(() => workersTable.id, { onDelete: "cascade" }),
+  documentType: varchar("document_type", { length: 32 }).notNull(),
+  documentUrl: varchar("document_url", { length: 512 }),
+  fileName: varchar("file_name", { length: 256 }),
+  verified: boolean("verified").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const attendanceRecordsTable = pgTable("attendance_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  workerId: varchar("worker_id").notNull().references(() => workersTable.id, { onDelete: "cascade" }),
+  attendanceDate: timestamp("attendance_date", { withTimezone: true }).notNull(),
+  markInTime: timestamp("mark_in_time", { withTimezone: true }),
+  markOutTime: timestamp("mark_out_time", { withTimezone: true }),
+  gpsLat: numeric("gps_lat", { precision: 10, scale: 7 }),
+  gpsLng: numeric("gps_lng", { precision: 10, scale: 7 }),
+  withinGeofence: boolean("within_geofence").notNull().default(true),
+  hoursWorked: numeric("hours_worked", { precision: 5, scale: 2 }).notNull().default("0"),
+  overtimeHours: numeric("overtime_hours", { precision: 5, scale: 2 }).notNull().default("0"),
+  otApproved: boolean("ot_approved").notNull().default(false),
+  otApprovedById: varchar("ot_approved_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  remarks: text("remarks"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type AttendanceRecord = typeof attendanceRecordsTable.$inferSelect;
+
+export const payrollPeriodsTable = pgTable("payroll_periods", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  periodName: varchar("period_name", { length: 64 }).notNull(),
+  periodType: varchar("period_type", { length: 16 }).notNull().default("monthly"),
+  fromDate: timestamp("from_date", { withTimezone: true }).notNull(),
+  toDate: timestamp("to_date", { withTimezone: true }).notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("draft"),
+  totalGross: numeric("total_gross", { precision: 18, scale: 2 }).notNull().default("0"),
+  totalDeductions: numeric("total_deductions", { precision: 18, scale: 2 }).notNull().default("0"),
+  totalNet: numeric("total_net", { precision: 18, scale: 2 }).notNull().default("0"),
+  processedById: varchar("processed_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type PayrollPeriod = typeof payrollPeriodsTable.$inferSelect;
+
+export const payrollLinesTable = pgTable("payroll_lines", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  periodId: varchar("period_id").notNull().references(() => payrollPeriodsTable.id, { onDelete: "cascade" }),
+  workerId: varchar("worker_id").notNull().references(() => workersTable.id, { onDelete: "cascade" }),
+  presentDays: numeric("present_days", { precision: 5, scale: 2 }).notNull().default("0"),
+  otHours: numeric("ot_hours", { precision: 5, scale: 2 }).notNull().default("0"),
+  basicWages: numeric("basic_wages", { precision: 14, scale: 2 }).notNull().default("0"),
+  otAmount: numeric("ot_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  grossWages: numeric("gross_wages", { precision: 14, scale: 2 }).notNull().default("0"),
+  epfEmployee: numeric("epf_employee", { precision: 12, scale: 2 }).notNull().default("0"),
+  epfEmployer: numeric("epf_employer", { precision: 12, scale: 2 }).notNull().default("0"),
+  esiEmployee: numeric("esi_employee", { precision: 12, scale: 2 }).notNull().default("0"),
+  esiEmployer: numeric("esi_employer", { precision: 12, scale: 2 }).notNull().default("0"),
+  pt: numeric("pt", { precision: 12, scale: 2 }).notNull().default("0"),
+  lwf: numeric("lwf", { precision: 12, scale: 2 }).notNull().default("0"),
+  tdsOnWages: numeric("tds_on_wages", { precision: 12, scale: 2 }).notNull().default("0"),
+  advanceDeduction: numeric("advance_deduction", { precision: 12, scale: 2 }).notNull().default("0"),
+  totalDeductions: numeric("total_deductions", { precision: 14, scale: 2 }).notNull().default("0"),
+  netWages: numeric("net_wages", { precision: 14, scale: 2 }).notNull().default("0"),
+  remarks: text("remarks"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type PayrollLine = typeof payrollLinesTable.$inferSelect;
+
+export const wageSlipsTable = pgTable("wage_slips", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  periodId: varchar("period_id").notNull().references(() => payrollPeriodsTable.id, { onDelete: "cascade" }),
+  workerId: varchar("worker_id").notNull().references(() => workersTable.id, { onDelete: "cascade" }),
+  slipNumber: varchar("slip_number", { length: 32 }).notNull(),
+  issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const epfEntriesTable = pgTable("epf_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  periodId: varchar("period_id").notNull().references(() => payrollPeriodsTable.id, { onDelete: "cascade" }),
+  workerId: varchar("worker_id").notNull().references(() => workersTable.id, { onDelete: "cascade" }),
+  wages: numeric("wages", { precision: 14, scale: 2 }).notNull().default("0"),
+  epfEmployee: numeric("epf_employee", { precision: 12, scale: 2 }).notNull().default("0"),
+  epfEmployer: numeric("epf_employer", { precision: 12, scale: 2 }).notNull().default("0"),
+  epfAdmin: numeric("epf_admin", { precision: 12, scale: 2 }).notNull().default("0"),
+  totalEpf: numeric("total_epf", { precision: 12, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const esiEntriesTable = pgTable("esi_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  periodId: varchar("period_id").notNull().references(() => payrollPeriodsTable.id, { onDelete: "cascade" }),
+  workerId: varchar("worker_id").notNull().references(() => workersTable.id, { onDelete: "cascade" }),
+  wages: numeric("wages", { precision: 14, scale: 2 }).notNull().default("0"),
+  esiEmployee: numeric("esi_employee", { precision: 12, scale: 2 }).notNull().default("0"),
+  esiEmployer: numeric("esi_employer", { precision: 12, scale: 2 }).notNull().default("0"),
+  totalEsi: numeric("total_esi", { precision: 12, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Quality — ITP
+export const CHECKPOINT_TYPES = ["hold","witness","review"] as const;
+export type CheckpointType = (typeof CHECKPOINT_TYPES)[number];
+
+export const itpsTable = pgTable("itps", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  wbsActivityId: varchar("wbs_activity_id").references(() => wbsActivitiesTable.id, { onDelete: "set null" }),
+  title: varchar("title", { length: 256 }).notNull(),
+  revision: varchar("revision", { length: 16 }).notNull().default("0"),
+  status: varchar("status", { length: 16 }).notNull().default("draft"),
+  approvedById: varchar("approved_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type Itp = typeof itpsTable.$inferSelect;
+
+export const itpItemsTable = pgTable("itp_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  itpId: varchar("itp_id").notNull().references(() => itpsTable.id, { onDelete: "cascade" }),
+  sequenceNo: integer("sequence_no").notNull().default(1),
+  activityDescription: varchar("activity_description", { length: 512 }).notNull(),
+  checkPointType: varchar("check_point_type", { length: 16 }).notNull().default("witness"),
+  acceptanceCriteria: text("acceptance_criteria"),
+  referenceCode: varchar("reference_code", { length: 64 }),
+  frequency: varchar("frequency", { length: 64 }),
+  responsible: varchar("responsible", { length: 64 }),
+  inspector: varchar("inspector", { length: 64 }),
+  status: varchar("status", { length: 16 }).notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type ItpItem = typeof itpItemsTable.$inferSelect;
+
+export const inspectionRequestsTable = pgTable("inspection_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  itpItemId: varchar("itp_item_id").references(() => itpItemsTable.id, { onDelete: "set null" }),
+  irNumber: varchar("ir_number", { length: 32 }).notNull(),
+  raisedById: varchar("raised_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  inspectionDate: timestamp("inspection_date", { withTimezone: true }).notNull(),
+  location: varchar("location", { length: 256 }),
+  status: varchar("status", { length: 16 }).notNull().default("pending"),
+  result: varchar("result", { length: 16 }),
+  inspectedById: varchar("inspected_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  inspectedAt: timestamp("inspected_at", { withTimezone: true }),
+  notes: text("notes"),
+  gpsLat: numeric("gps_lat", { precision: 10, scale: 7 }),
+  gpsLng: numeric("gps_lng", { precision: 10, scale: 7 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type InspectionRequest = typeof inspectionRequestsTable.$inferSelect;
+
+export const inspectionChecklistsTable = pgTable("inspection_checklists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  irId: varchar("ir_id").notNull().references(() => inspectionRequestsTable.id, { onDelete: "cascade" }),
+  parameter: varchar("parameter", { length: 256 }).notNull(),
+  acceptanceCriteria: text("acceptance_criteria"),
+  observed: text("observed"),
+  passed: boolean("passed"),
+  remarks: text("remarks"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const NCR_STATUSES = ["open","capa_submitted","re_inspection","closed"] as const;
+export type NcrStatus = (typeof NCR_STATUSES)[number];
+
+export const ncrsTable = pgTable("ncrs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  irId: varchar("ir_id").references(() => inspectionRequestsTable.id, { onDelete: "set null" }),
+  ncrNumber: varchar("ncr_number", { length: 32 }).notNull(),
+  raisedById: varchar("raised_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  trade: varchar("trade", { length: 32 }),
+  description: text("description").notNull(),
+  severity: varchar("severity", { length: 16 }).notNull().default("minor"),
+  rootCause: text("root_cause"),
+  status: varchar("status", { length: 16 }).notNull().default("open"),
+  reworkCost: numeric("rework_cost", { precision: 14, scale: 2 }).notNull().default("0"),
+  wbsActivityId: varchar("wbs_activity_id").references(() => wbsActivitiesTable.id, { onDelete: "set null" }),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type Ncr = typeof ncrsTable.$inferSelect;
+
+export const ncrActionsTable = pgTable("ncr_actions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ncrId: varchar("ncr_id").notNull().references(() => ncrsTable.id, { onDelete: "cascade" }),
+  actionType: varchar("action_type", { length: 32 }).notNull().default("capa"),
+  description: text("description").notNull(),
+  dueDate: timestamp("due_date", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  responsibleId: varchar("responsible_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Safety
+export const PERMIT_TYPES = ["hot_work","height","confined_space","electrical","excavation"] as const;
+export type PermitType = (typeof PERMIT_TYPES)[number];
+
+export const safetyPermitsTable = pgTable("safety_permits", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  permitType: varchar("permit_type", { length: 32 }).notNull(),
+  permitNumber: varchar("permit_number", { length: 32 }).notNull(),
+  workDescription: text("work_description").notNull(),
+  location: varchar("location", { length: 256 }),
+  startDateTime: timestamp("start_date_time", { withTimezone: true }).notNull(),
+  endDateTime: timestamp("end_date_time", { withTimezone: true }).notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("pending"),
+  applicantId: varchar("applicant_id").references(() => usersTable.id, { onDelete: "set null" }),
+  approvedById: varchar("approved_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  hazards: text("hazards"),
+  precautions: text("precautions"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type SafetyPermit = typeof safetyPermitsTable.$inferSelect;
+
+export const hiraEntriesTable = pgTable("hira_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  wbsActivityId: varchar("wbs_activity_id").references(() => wbsActivitiesTable.id, { onDelete: "set null" }),
+  hazardDescription: text("hazard_description").notNull(),
+  hazardCategory: varchar("hazard_category", { length: 64 }),
+  likelihood: integer("likelihood").notNull().default(1),
+  severity: integer("severity").notNull().default(1),
+  riskScore: integer("risk_score").notNull().default(1),
+  riskLevel: varchar("risk_level", { length: 16 }).notNull().default("low"),
+  controlMeasures: text("control_measures"),
+  residualLikelihood: integer("residual_likelihood").notNull().default(1),
+  residualSeverity: integer("residual_severity").notNull().default(1),
+  residualRiskScore: integer("residual_risk_score").notNull().default(1),
+  createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type HiraEntry = typeof hiraEntriesTable.$inferSelect;
+
+export const jsaEntriesTable = pgTable("jsa_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  wbsActivityId: varchar("wbs_activity_id").references(() => wbsActivitiesTable.id, { onDelete: "set null" }),
+  jsaDate: timestamp("jsa_date", { withTimezone: true }).notNull(),
+  preparedById: varchar("prepared_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  supervisorId: varchar("supervisor_id").references(() => usersTable.id, { onDelete: "set null" }),
+  workersPresent: integer("workers_present").notNull().default(0),
+  steps: jsonb("steps").notNull().default(sql`'[]'::jsonb`),
+  status: varchar("status", { length: 16 }).notNull().default("draft"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type JsaEntry = typeof jsaEntriesTable.$inferSelect;
+
+export const PPE_TYPES = ["helmet","vest","gloves","boots","harness","goggles","ear_protection","face_shield","respirator"] as const;
+export type PpeType = (typeof PPE_TYPES)[number];
+
+export const ppeIssuesTable = pgTable("ppe_issues", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  workerId: varchar("worker_id").notNull().references(() => workersTable.id, { onDelete: "cascade" }),
+  ppeType: varchar("ppe_type", { length: 32 }).notNull(),
+  issuedDate: timestamp("issued_date", { withTimezone: true }).notNull(),
+  returnedDate: timestamp("returned_date", { withTimezone: true }),
+  condition: varchar("condition", { length: 16 }).notNull().default("new"),
+  issuedById: varchar("issued_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type PpeIssue = typeof ppeIssuesTable.$inferSelect;
+
+export const INCIDENT_CLASSIFICATIONS = ["near_miss","first_aid","lti","fatality","property_damage"] as const;
+export type IncidentClassification = (typeof INCIDENT_CLASSIFICATIONS)[number];
+
+export const incidentsTable = pgTable("incidents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  incidentNumber: varchar("incident_number", { length: 32 }).notNull(),
+  incidentDate: timestamp("incident_date", { withTimezone: true }).notNull(),
+  reportedById: varchar("reported_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  classification: varchar("classification", { length: 32 }).notNull().default("near_miss"),
+  title: varchar("title", { length: 256 }).notNull(),
+  description: text("description"),
+  location: varchar("location", { length: 256 }),
+  injured: text("injured"),
+  lostDays: integer("lost_days").notNull().default(0),
+  rootCause: text("root_cause"),
+  immediateAction: text("immediate_action"),
+  status: varchar("status", { length: 16 }).notNull().default("open"),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type Incident = typeof incidentsTable.$inferSelect;
+
+export const incidentActionsTable = pgTable("incident_actions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  incidentId: varchar("incident_id").notNull().references(() => incidentsTable.id, { onDelete: "cascade" }),
+  actionDescription: text("action_description").notNull(),
+  responsibleId: varchar("responsible_id").references(() => usersTable.id, { onDelete: "set null" }),
+  dueDate: timestamp("due_date", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  status: varchar("status", { length: 16 }).notNull().default("open"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const _zUserRole = z.enum(USER_ROLES);
