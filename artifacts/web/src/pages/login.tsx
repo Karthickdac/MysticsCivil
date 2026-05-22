@@ -29,7 +29,7 @@ export default function Login() {
           </div>
           
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight text-white">OCMS Platform</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-white">Kattida Core</h1>
             <p className="text-zinc-400 text-sm">
               Construction Operations Cockpit
             </p>

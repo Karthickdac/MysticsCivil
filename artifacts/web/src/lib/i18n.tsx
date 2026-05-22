@@ -6,7 +6,7 @@ const STORAGE_KEY = "ocms.lang";
 
 const dict: Record<string, { en: string; ta: string }> = {
   // Brand / app
-  "app.name": { en: "OCMS", ta: "OCMS" },
+  "app.name": { en: "Kattida Core", ta: "கட்டிட கோர்" },
   "app.tagline": { en: "Construction Management", ta: "கட்டுமான மேலாண்மை" },
 
   // Sidebar navigation
