@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed": "tsx src/scripts/seed.ts",
     "seed:estimation": "tsx src/scripts/seed-estimation.ts",
-    "seed:financial": "tsx src/scripts/seed-financial.ts"
+    "seed:financial": "tsx src/scripts/seed-financial.ts",
+    "seed:supply-chain": "tsx src/scripts/seed-supply-chain.ts"
   },
   "dependencies": {
     "@types/multer": "^2.1.0",

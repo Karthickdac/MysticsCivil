@@ -1484,3 +1484,395 @@ export type CreateLedgerEntryBody = {
   creditAccountId?: string;
 };
 
+export type ListVendorsParams = {
+status?: string;
+};
+
+export type ListVendors200Item = { [key: string]: unknown };
+
+export type CreateVendorBody = {
+  name: string;
+  code?: string;
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  gstNumber?: string;
+  pan?: string;
+  msmeCategory?: string;
+  bankName?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+  organisationId?: string;
+};
+
+export type CreateVendor201 = { [key: string]: unknown };
+
+export type GetVendor200 = { [key: string]: unknown };
+
+export type UpdateVendorBody = {
+  name?: string;
+  status?: string;
+  blacklistReason?: string;
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
+  city?: string;
+  state?: string;
+};
+
+export type UpdateVendor200 = { [key: string]: unknown };
+
+export type ListVendorDocuments200Item = { [key: string]: unknown };
+
+export type AddVendorDocumentBody = {
+  documentType?: string;
+  documentUrl?: string;
+  fileName?: string;
+};
+
+export type AddVendorDocument201 = { [key: string]: unknown };
+
+export type GetProjectAvl200Item = { [key: string]: unknown };
+
+export type AddToAvlBody = {
+  vendorId: string;
+  materialCategory?: string;
+  notes?: string;
+};
+
+export type AddToAvl201 = { [key: string]: unknown };
+
+export type ListStores200Item = { [key: string]: unknown };
+
+export type CreateStoreBody = {
+  name: string;
+  storeType?: string;
+  location?: string;
+  storeKeeperName?: string;
+};
+
+export type CreateStore201 = { [key: string]: unknown };
+
+export type ListInventoryItemsParams = {
+storeId?: string;
+reorderOnly?: string;
+};
+
+export type ListInventoryItems200Item = { [key: string]: unknown };
+
+export type CreateInventoryItemBody = {
+  itemName: string;
+  itemCode?: string;
+  category?: string;
+  unit?: string;
+  storeId?: string;
+  minStockLevel?: number;
+  maxStockLevel?: number;
+  openingStock?: number;
+  avgRate?: number;
+  hsnCode?: string;
+};
+
+export type CreateInventoryItem201 = { [key: string]: unknown };
+
+export type UpdateInventoryItemBody = { [key: string]: unknown };
+
+export type UpdateInventoryItem200 = { [key: string]: unknown };
+
+export type GetStockLedger200Item = { [key: string]: unknown };
+
+export type ListMaterialIndentsParams = {
+status?: string;
+};
+
+export type ListMaterialIndents200Item = { [key: string]: unknown };
+
+export type CreateMaterialIndentBody = {
+  indentNumber: string;
+  wbsActivityId?: string;
+  requiredByDate?: string;
+  remarks?: string;
+};
+
+export type CreateMaterialIndent201 = { [key: string]: unknown };
+
+export type GetMaterialIndent200 = { [key: string]: unknown };
+
+export type ListIndentItems200Item = { [key: string]: unknown };
+
+export type AddIndentItemBody = {
+  itemName: string;
+  unit?: string;
+  requiredQty: number;
+  inventoryItemId?: string;
+  specification?: string;
+};
+
+export type AddIndentItem201 = { [key: string]: unknown };
+
+export type SubmitMaterialIndent200 = { [key: string]: unknown };
+
+export type ApproveMaterialIndentBodyItemsItem = { [key: string]: unknown };
+
+export type ApproveMaterialIndentBody = {
+  items?: ApproveMaterialIndentBodyItemsItem[];
+};
+
+export type ApproveMaterialIndent200 = { [key: string]: unknown };
+
+export type QueryMaterialIndentBody = {
+  remarks?: string;
+};
+
+export type QueryMaterialIndent200 = { [key: string]: unknown };
+
+export type ListRfqs200Item = { [key: string]: unknown };
+
+export type CreateRfqBody = {
+  rfqNumber: string;
+  indentId?: string;
+  submissionDeadline?: string;
+  deliveryDeadline?: string;
+  deliveryLocation?: string;
+  paymentTerms?: string;
+  notes?: string;
+};
+
+export type CreateRfq201 = { [key: string]: unknown };
+
+export type GetRfq200 = { [key: string]: unknown };
+
+export type AddRfqItemBody = {
+  itemName: string;
+  unit?: string;
+  requiredQty?: number;
+  specification?: string;
+  inventoryItemId?: string;
+};
+
+export type AddRfqItem201 = { [key: string]: unknown };
+
+export type AddRfqVendorBody = {
+  vendorId: string;
+};
+
+export type AddRfqVendor201 = { [key: string]: unknown };
+
+export type AddRfqResponseBody = {
+  vendorId: string;
+  rfqItemId?: string;
+  unitRate: number;
+  gstRate?: number;
+  leadTimeDays?: number;
+  deliveryCharges?: number;
+  validityDays?: number;
+  remarks?: string;
+};
+
+export type AddRfqResponse201 = { [key: string]: unknown };
+
+export type GetRfqComparison200 = { [key: string]: unknown };
+
+export type AwardRfqBody = {
+  vendorId: string;
+};
+
+export type AwardRfq200 = { [key: string]: unknown };
+
+export type ListPurchaseOrdersParams = {
+status?: string;
+};
+
+export type ListPurchaseOrders200Item = { [key: string]: unknown };
+
+export type CreatePurchaseOrderBody = {
+  poNumber: string;
+  vendorId: string;
+  rfqId?: string;
+  indentId?: string;
+  deliveryLocation?: string;
+  deliveryDeadline?: string;
+  paymentTerms?: string;
+  notes?: string;
+};
+
+export type CreatePurchaseOrder201 = { [key: string]: unknown };
+
+export type GetPurchaseOrder200 = { [key: string]: unknown };
+
+export type UpdatePurchaseOrderBody = {
+  status?: string;
+  amendmentReason?: string;
+  notes?: string;
+};
+
+export type UpdatePurchaseOrder200 = { [key: string]: unknown };
+
+export type AddPoItemBody = {
+  itemName: string;
+  unit?: string;
+  orderedQty: number;
+  unitRate: number;
+  gstRate?: number;
+  inventoryItemId?: string;
+  specification?: string;
+  hsnCode?: string;
+};
+
+export type AddPoItem201 = { [key: string]: unknown };
+
+export type ApprovePurchaseOrder200 = { [key: string]: unknown };
+
+export type ListGrnsParams = {
+status?: string;
+poId?: string;
+};
+
+export type ListGrns200Item = { [key: string]: unknown };
+
+export type CreateGrnBody = {
+  grnNumber: string;
+  poId?: string;
+  vendorId?: string;
+  storeId?: string;
+  vehicleNumber?: string;
+  dcNumber?: string;
+  invoiceNumber?: string;
+  invoiceAmount?: number;
+};
+
+export type CreateGrn201 = { [key: string]: unknown };
+
+export type GetGrn200 = { [key: string]: unknown };
+
+export type AddGrnItemBody = {
+  itemName: string;
+  unit?: string;
+  receivedQty: number;
+  acceptedQty?: number;
+  orderedQty?: number;
+  unitRate?: number;
+  inventoryItemId?: string;
+  poItemId?: string;
+  condition?: string;
+  qcHold?: boolean;
+  batchNumber?: string;
+  remarks?: string;
+};
+
+export type AddGrnItem201 = { [key: string]: unknown };
+
+export type SubmitGrn200 = { [key: string]: unknown };
+
+export type ListMaterialTestsParams = {
+result?: string;
+};
+
+export type ListMaterialTests200Item = { [key: string]: unknown };
+
+export type CreateMaterialTestBody = {
+  testType: string;
+  grnItemId?: string;
+  inventoryItemId?: string;
+  isCode?: string;
+  sampleDate?: string;
+  testDate?: string;
+  requiredValue?: number;
+  actualValue?: number;
+  unit?: string;
+  testResult?: string;
+  remarks?: string;
+};
+
+export type CreateMaterialTest201 = { [key: string]: unknown };
+
+export type UpdateMaterialTestBody = {
+  testResult?: string;
+  actualValue?: number;
+  certificateUrl?: string;
+  remarks?: string;
+  debitNoteIssued?: boolean;
+};
+
+export type UpdateMaterialTest200 = { [key: string]: unknown };
+
+export type ListStockIssues200Item = { [key: string]: unknown };
+
+export type CreateStockIssueBodyItemsItem = {
+  inventoryItemId?: string;
+  indentItemId?: string;
+  issuedQty?: number;
+};
+
+export type CreateStockIssueBody = {
+  issueNumber: string;
+  indentId?: string;
+  storeId?: string;
+  issuedToName?: string;
+  issuedToContractor?: string;
+  wbsActivityId?: string;
+  notes?: string;
+  items?: CreateStockIssueBodyItemsItem[];
+};
+
+export type CreateStockIssue201 = { [key: string]: unknown };
+
+export type ListWastageLogs200Item = { [key: string]: unknown };
+
+export type CreateWastageLogBody = {
+  inventoryItemId?: string;
+  storeId?: string;
+  qty: number;
+  unit?: string;
+  rate?: number;
+  reasonCode: string;
+  description?: string;
+  normQty?: number;
+};
+
+export type CreateWastageLog201 = { [key: string]: unknown };
+
+export type ListRateContracts200Item = { [key: string]: unknown };
+
+export type CreateRateContractBody = {
+  vendorId: string;
+  contractNumber: string;
+  validFrom: string;
+  validTo: string;
+  inventoryItemId?: string;
+  itemName: string;
+  unit?: string;
+  agreedRate: number;
+  gstRate?: number;
+  maxQty?: number;
+  notes?: string;
+};
+
+export type CreateRateContract201 = { [key: string]: unknown };
+
+export type GetInventorySummary200CategoryBreakdown = { [key: string]: unknown };
+
+export type GetInventorySummary200ReorderAlertsItem = { [key: string]: unknown };
+
+export type GetInventorySummary200 = {
+  totalItems?: number;
+  reorderItems?: number;
+  totalStockValue?: number;
+  totalWastageValue?: number;
+  aboveNormWastage?: number;
+  totalIssues?: number;
+  categoryBreakdown?: GetInventorySummary200CategoryBreakdown;
+  reorderAlerts?: GetInventorySummary200ReorderAlertsItem[];
+};
+
+export type GetReconciliationParams = {
+month?: string;
+year?: string;
+};
+
+export type GetReconciliation200 = { [key: string]: unknown };
+

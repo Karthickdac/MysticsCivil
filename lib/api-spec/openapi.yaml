@@ -21,6 +21,7 @@ tags:
   - name: Approvals
   - name: Dashboard
   - name: Financial
+  - name: SupplyChain
 paths:
   /healthz:
     get:
@@ -1587,6 +1588,863 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/AgingReport' }
 
+  # ─── SupplyChain — Vendors ──────────────────────────────────────────────────
+  /vendors:
+    get:
+      operationId: listVendors
+      tags: [SupplyChain]
+      summary: List all vendors
+      parameters:
+        - { in: query, name: status, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object }
+    post:
+      operationId: createVendor
+      tags: [SupplyChain]
+      summary: Create vendor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                code: { type: string }
+                contactPerson: { type: string }
+                email: { type: string }
+                phone: { type: string }
+                address: { type: string }
+                city: { type: string }
+                state: { type: string }
+                pincode: { type: string }
+                gstNumber: { type: string }
+                pan: { type: string }
+                msmeCategory: { type: string }
+                bankName: { type: string }
+                accountNumber: { type: string }
+                ifscCode: { type: string }
+                organisationId: { type: string }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { type: object }
+
+  /vendors/{vendorId}:
+    get:
+      operationId: getVendor
+      tags: [SupplyChain]
+      summary: Get vendor
+      parameters:
+        - { in: path, name: vendorId, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+    patch:
+      operationId: updateVendor
+      tags: [SupplyChain]
+      summary: Update vendor
+      parameters:
+        - { in: path, name: vendorId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                status: { type: string }
+                blacklistReason: { type: string }
+                contactPerson: { type: string }
+                email: { type: string }
+                phone: { type: string }
+                city: { type: string }
+                state: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+
+  /vendors/{vendorId}/documents:
+    get:
+      operationId: listVendorDocuments
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: vendorId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: addVendorDocument
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: vendorId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                documentType: { type: string }
+                documentUrl: { type: string }
+                fileName: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /projects/{projectId}/avl:
+    get:
+      operationId: getProjectAvl
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: addToAvl
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vendorId]
+              properties:
+                vendorId: { type: string }
+                materialCategory: { type: string }
+                notes: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  # ─── Stores ──────────────────────────────────────────────────────────────────
+  /projects/{projectId}/stores:
+    get:
+      operationId: listStores
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createStore
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                storeType: { type: string }
+                location: { type: string }
+                storeKeeperName: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  # ─── Inventory ────────────────────────────────────────────────────────────────
+  /projects/{projectId}/inventory:
+    get:
+      operationId: listInventoryItems
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+        - { in: query, name: storeId, schema: { type: string } }
+        - { in: query, name: reorderOnly, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createInventoryItem
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemName]
+              properties:
+                itemName: { type: string }
+                itemCode: { type: string }
+                category: { type: string }
+                unit: { type: string }
+                storeId: { type: string }
+                minStockLevel: { type: number }
+                maxStockLevel: { type: number }
+                openingStock: { type: number }
+                avgRate: { type: number }
+                hsnCode: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /projects/{projectId}/inventory/{itemId}:
+    patch:
+      operationId: updateInventoryItem
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+        - { in: path, name: itemId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  /projects/{projectId}/stock-ledger/{itemId}:
+    get:
+      operationId: getStockLedger
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+        - { in: path, name: itemId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+
+  # ─── Material Indents ─────────────────────────────────────────────────────────
+  /projects/{projectId}/material-indents:
+    get:
+      operationId: listMaterialIndents
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+        - { in: query, name: status, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createMaterialIndent
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [indentNumber]
+              properties:
+                indentNumber: { type: string }
+                wbsActivityId: { type: string }
+                requiredByDate: { type: string }
+                remarks: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /material-indents/{indentId}:
+    get:
+      operationId: getMaterialIndent
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: indentId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  /material-indents/{indentId}/items:
+    get:
+      operationId: listIndentItems
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: indentId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: addIndentItem
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: indentId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemName, requiredQty]
+              properties:
+                itemName: { type: string }
+                unit: { type: string }
+                requiredQty: { type: number }
+                inventoryItemId: { type: string }
+                specification: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /material-indents/{indentId}/submit:
+    post:
+      operationId: submitMaterialIndent
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: indentId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  /material-indents/{indentId}/approve:
+    post:
+      operationId: approveMaterialIndent
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: indentId, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                items: { type: array, items: { type: object } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  /material-indents/{indentId}/query:
+    post:
+      operationId: queryMaterialIndent
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: indentId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                remarks: { type: string }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  # ─── RFQ ────────────────────────────────────────────────────────────────────
+  /projects/{projectId}/rfqs:
+    get:
+      operationId: listRfqs
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createRfq
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rfqNumber]
+              properties:
+                rfqNumber: { type: string }
+                indentId: { type: string }
+                submissionDeadline: { type: string }
+                deliveryDeadline: { type: string }
+                deliveryLocation: { type: string }
+                paymentTerms: { type: string }
+                notes: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /rfqs/{rfqId}:
+    get:
+      operationId: getRfq
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: rfqId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  /rfqs/{rfqId}/items:
+    post:
+      operationId: addRfqItem
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: rfqId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemName]
+              properties:
+                itemName: { type: string }
+                unit: { type: string }
+                requiredQty: { type: number }
+                specification: { type: string }
+                inventoryItemId: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /rfqs/{rfqId}/vendors:
+    post:
+      operationId: addRfqVendor
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: rfqId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vendorId]
+              properties:
+                vendorId: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /rfqs/{rfqId}/responses:
+    post:
+      operationId: addRfqResponse
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: rfqId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vendorId, unitRate]
+              properties:
+                vendorId: { type: string }
+                rfqItemId: { type: string }
+                unitRate: { type: number }
+                gstRate: { type: number }
+                leadTimeDays: { type: integer }
+                deliveryCharges: { type: number }
+                validityDays: { type: integer }
+                remarks: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /rfqs/{rfqId}/comparison:
+    get:
+      operationId: getRfqComparison
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: rfqId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  /rfqs/{rfqId}/award:
+    post:
+      operationId: awardRfq
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: rfqId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vendorId]
+              properties:
+                vendorId: { type: string }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  # ─── Purchase Orders ──────────────────────────────────────────────────────────
+  /projects/{projectId}/purchase-orders:
+    get:
+      operationId: listPurchaseOrders
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+        - { in: query, name: status, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createPurchaseOrder
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [poNumber, vendorId]
+              properties:
+                poNumber: { type: string }
+                vendorId: { type: string }
+                rfqId: { type: string }
+                indentId: { type: string }
+                deliveryLocation: { type: string }
+                deliveryDeadline: { type: string }
+                paymentTerms: { type: string }
+                notes: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /purchase-orders/{poId}:
+    get:
+      operationId: getPurchaseOrder
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: poId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+    patch:
+      operationId: updatePurchaseOrder
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: poId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string }
+                amendmentReason: { type: string }
+                notes: { type: string }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  /purchase-orders/{poId}/items:
+    post:
+      operationId: addPoItem
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: poId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemName, orderedQty, unitRate]
+              properties:
+                itemName: { type: string }
+                unit: { type: string }
+                orderedQty: { type: number }
+                unitRate: { type: number }
+                gstRate: { type: number }
+                inventoryItemId: { type: string }
+                specification: { type: string }
+                hsnCode: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /purchase-orders/{poId}/approve:
+    post:
+      operationId: approvePurchaseOrder
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: poId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  # ─── GRN ──────────────────────────────────────────────────────────────────────
+  /projects/{projectId}/grns:
+    get:
+      operationId: listGrns
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+        - { in: query, name: status, schema: { type: string } }
+        - { in: query, name: poId, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createGrn
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grnNumber]
+              properties:
+                grnNumber: { type: string }
+                poId: { type: string }
+                vendorId: { type: string }
+                storeId: { type: string }
+                vehicleNumber: { type: string }
+                dcNumber: { type: string }
+                invoiceNumber: { type: string }
+                invoiceAmount: { type: number }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /grns/{grnId}:
+    get:
+      operationId: getGrn
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: grnId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  /grns/{grnId}/items:
+    post:
+      operationId: addGrnItem
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: grnId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemName, receivedQty]
+              properties:
+                itemName: { type: string }
+                unit: { type: string }
+                receivedQty: { type: number }
+                acceptedQty: { type: number }
+                orderedQty: { type: number }
+                unitRate: { type: number }
+                inventoryItemId: { type: string }
+                poItemId: { type: string }
+                condition: { type: string }
+                qcHold: { type: boolean }
+                batchNumber: { type: string }
+                remarks: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /grns/{grnId}/submit:
+    post:
+      operationId: submitGrn
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: grnId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  # ─── Material Tests ────────────────────────────────────────────────────────────
+  /projects/{projectId}/material-tests:
+    get:
+      operationId: listMaterialTests
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+        - { in: query, name: result, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createMaterialTest
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [testType]
+              properties:
+                testType: { type: string }
+                grnItemId: { type: string }
+                inventoryItemId: { type: string }
+                isCode: { type: string }
+                sampleDate: { type: string }
+                testDate: { type: string }
+                requiredValue: { type: number }
+                actualValue: { type: number }
+                unit: { type: string }
+                testResult: { type: string }
+                remarks: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  /material-tests/{testId}:
+    patch:
+      operationId: updateMaterialTest
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: testId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                testResult: { type: string }
+                actualValue: { type: number }
+                certificateUrl: { type: string }
+                remarks: { type: string }
+                debitNoteIssued: { type: boolean }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  # ─── Stock Issues ──────────────────────────────────────────────────────────────
+  /projects/{projectId}/stock-issues:
+    get:
+      operationId: listStockIssues
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createStockIssue
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [issueNumber]
+              properties:
+                issueNumber: { type: string }
+                indentId: { type: string }
+                storeId: { type: string }
+                issuedToName: { type: string }
+                issuedToContractor: { type: string }
+                wbsActivityId: { type: string }
+                notes: { type: string }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      inventoryItemId: { type: string }
+                      indentItemId: { type: string }
+                      issuedQty: { type: number }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  # ─── Wastage Logs ──────────────────────────────────────────────────────────────
+  /projects/{projectId}/wastage-logs:
+    get:
+      operationId: listWastageLogs
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createWastageLog
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qty, reasonCode]
+              properties:
+                inventoryItemId: { type: string }
+                storeId: { type: string }
+                qty: { type: number }
+                unit: { type: string }
+                rate: { type: number }
+                reasonCode: { type: string }
+                description: { type: string }
+                normQty: { type: number }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  # ─── Rate Contracts ────────────────────────────────────────────────────────────
+  /projects/{projectId}/rate-contracts:
+    get:
+      operationId: listRateContracts
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      operationId: createRateContract
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vendorId, contractNumber, agreedRate, validFrom, validTo, itemName]
+              properties:
+                vendorId: { type: string }
+                contractNumber: { type: string }
+                validFrom: { type: string }
+                validTo: { type: string }
+                inventoryItemId: { type: string }
+                itemName: { type: string }
+                unit: { type: string }
+                agreedRate: { type: number }
+                gstRate: { type: number }
+                maxQty: { type: number }
+                notes: { type: string }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+
+  # ─── Reports ──────────────────────────────────────────────────────────────────
+  /projects/{projectId}/inventory-summary:
+    get:
+      operationId: getInventorySummary
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalItems: { type: integer }
+                  reorderItems: { type: integer }
+                  totalStockValue: { type: number }
+                  totalWastageValue: { type: number }
+                  aboveNormWastage: { type: integer }
+                  totalIssues: { type: integer }
+                  categoryBreakdown: { type: object }
+                  reorderAlerts: { type: array, items: { type: object } }
+
+  /projects/{projectId}/reconciliation:
+    get:
+      operationId: getReconciliation
+      tags: [SupplyChain]
+      parameters:
+        - { in: path, name: projectId, required: true, schema: { type: string } }
+        - { in: query, name: month, schema: { type: string } }
+        - { in: query, name: year, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
 components:
   parameters:
     AuthorizationSessionHeader:
@@ -2789,3 +3647,4 @@ components:
             count: { type: integer }
             amount: { type: number }
             bills: { type: array, items: { type: object } }
+

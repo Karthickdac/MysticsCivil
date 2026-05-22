@@ -692,4 +692,416 @@ export const advanceLedgerTable = pgTable("advance_ledger", {
 });
 export type AdvanceLedger = typeof advanceLedgerTable.$inferSelect;
 
+// ─────────────────────────────────────────────
+// Phase 4 — Supply Chain
+// ─────────────────────────────────────────────
+
+export const VENDOR_STATUSES = ["active", "inactive", "blacklisted", "pending_approval"] as const;
+export type VendorStatus = (typeof VENDOR_STATUSES)[number];
+
+export const INDENT_STATUSES = ["draft", "submitted", "approved", "queried", "cancelled", "fulfilled"] as const;
+export type IndentStatus = (typeof INDENT_STATUSES)[number];
+
+export const PO_STATUSES = ["draft", "approved", "sent", "partial", "received", "closed", "cancelled"] as const;
+export type PoStatus = (typeof PO_STATUSES)[number];
+
+export const GRN_STATUSES = ["draft", "submitted", "qc_pending", "accepted", "rejected"] as const;
+export type GrnStatus = (typeof GRN_STATUSES)[number];
+
+export const MATERIAL_CATEGORIES = ["cement", "steel", "aggregates", "bricks", "sand", "tiles", "plumbing", "electrical", "hardware", "timber", "glass", "paint", "chemicals", "admixtures", "other"] as const;
+export type MaterialCategory = (typeof MATERIAL_CATEGORIES)[number];
+
+export const COSTING_METHODS = ["fifo", "wac"] as const;
+export type CostingMethod = (typeof COSTING_METHODS)[number];
+
+export const TEST_RESULTS = ["pass", "fail", "pending"] as const;
+export type TestResult = (typeof TEST_RESULTS)[number];
+
+// Vendors
+export const vendorsTable = pgTable("vendors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organisationId: varchar("organisation_id").references(() => organisationsTable.id, { onDelete: "set null" }),
+  name: varchar("name", { length: 256 }).notNull(),
+  code: varchar("code", { length: 32 }),
+  contactPerson: varchar("contact_person", { length: 128 }),
+  email: varchar("email", { length: 256 }),
+  phone: varchar("phone", { length: 24 }),
+  address: text("address"),
+  city: varchar("city", { length: 64 }),
+  state: varchar("state", { length: 64 }),
+  pincode: varchar("pincode", { length: 8 }),
+  gstNumber: varchar("gst_number", { length: 20 }),
+  pan: varchar("pan", { length: 12 }),
+  msmeCategory: varchar("msme_category", { length: 8 }), // micro/small/medium
+  msmeNumber: varchar("msme_number", { length: 32 }),
+  bankName: varchar("bank_name", { length: 128 }),
+  accountNumber: varchar("account_number", { length: 32 }),
+  ifscCode: varchar("ifsc_code", { length: 16 }),
+  status: varchar("status", { length: 32 }).notNull().default("pending_approval"),
+  performanceScore: numeric("performance_score", { precision: 5, scale: 2 }).default("0"),
+  onTimeDeliveryPct: numeric("on_time_delivery_pct", { precision: 5, scale: 2 }).default("0"),
+  qualityAcceptancePct: numeric("quality_acceptance_pct", { precision: 5, scale: 2 }).default("0"),
+  totalOrders: integer("total_orders").notNull().default(0),
+  blacklistReason: text("blacklist_reason"),
+  approvedById: varchar("approved_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+export type Vendor = typeof vendorsTable.$inferSelect;
+
+export const vendorDocumentsTable = pgTable("vendor_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  vendorId: varchar("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
+  documentType: varchar("document_type", { length: 64 }).notNull(), // gst_cert, pan_card, msme_cert, bank_statement, other
+  documentUrl: varchar("document_url"),
+  fileName: varchar("file_name", { length: 256 }),
+  verified: boolean("verified").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const avlEntriesTable = pgTable("avl_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  vendorId: varchar("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
+  materialCategory: varchar("material_category", { length: 64 }),
+  addedById: varchar("added_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  notes: text("notes"),
+});
+
+// Stores (multi-store per project)
+export const storesTable = pgTable("stores", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 128 }).notNull(),
+  storeType: varchar("store_type", { length: 32 }).notNull().default("site"), // site/main/sub
+  location: varchar("location", { length: 256 }),
+  storeKeeperName: varchar("store_keeper_name", { length: 128 }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type Store = typeof storesTable.$inferSelect;
+
+// Inventory Items (material catalog + current stock per store)
+export const inventoryItemsTable = pgTable("inventory_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  storeId: varchar("store_id").references(() => storesTable.id, { onDelete: "set null" }),
+  itemCode: varchar("item_code", { length: 32 }),
+  itemName: varchar("item_name", { length: 256 }).notNull(),
+  description: text("description"),
+  category: varchar("category", { length: 64 }),
+  unit: varchar("unit", { length: 32 }).notNull().default("nos"),
+  hsnCode: varchar("hsn_code", { length: 16 }),
+  minStockLevel: numeric("min_stock_level", { precision: 18, scale: 3 }).notNull().default("0"),
+  maxStockLevel: numeric("max_stock_level", { precision: 18, scale: 3 }).notNull().default("0"),
+  currentStock: numeric("current_stock", { precision: 18, scale: 3 }).notNull().default("0"),
+  costingMethod: varchar("costing_method", { length: 8 }).notNull().default("wac"),
+  avgRate: numeric("avg_rate", { precision: 18, scale: 4 }).notNull().default("0"), // WAC rate
+  lastPurchaseRate: numeric("last_purchase_rate", { precision: 18, scale: 4 }).notNull().default("0"),
+  wbsActivityId: varchar("wbs_activity_id").references(() => wbsActivitiesTable.id, { onDelete: "set null" }),
+  boqItemId: varchar("boq_item_id").references(() => boqItemsTable.id, { onDelete: "set null" }),
+  isReorderTriggered: boolean("is_reorder_triggered").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+export type InventoryItem = typeof inventoryItemsTable.$inferSelect;
+
+// Material Indents
+export const materialIndentsTable = pgTable("material_indents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  indentNumber: varchar("indent_number", { length: 32 }).notNull(),
+  indentDate: timestamp("indent_date", { withTimezone: true }).notNull().defaultNow(),
+  wbsActivityId: varchar("wbs_activity_id").references(() => wbsActivitiesTable.id, { onDelete: "set null" }),
+  requiredByDate: timestamp("required_by_date", { withTimezone: true }),
+  status: varchar("status", { length: 32 }).notNull().default("draft"),
+  remarks: text("remarks"),
+  queryRemarks: text("query_remarks"),
+  raisedById: varchar("raised_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  approvedById: varchar("approved_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+export type MaterialIndent = typeof materialIndentsTable.$inferSelect;
+
+export const indentItemsTable = pgTable("indent_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  indentId: varchar("indent_id").notNull().references(() => materialIndentsTable.id, { onDelete: "cascade" }),
+  inventoryItemId: varchar("inventory_item_id").references(() => inventoryItemsTable.id, { onDelete: "set null" }),
+  itemName: varchar("item_name", { length: 256 }).notNull(),
+  unit: varchar("unit", { length: 32 }).notNull(),
+  requiredQty: numeric("required_qty", { precision: 18, scale: 3 }).notNull(),
+  availableStock: numeric("available_stock", { precision: 18, scale: 3 }).notNull().default("0"),
+  approvedQty: numeric("approved_qty", { precision: 18, scale: 3 }),
+  specification: text("specification"),
+  boqItemId: varchar("boq_item_id").references(() => boqItemsTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type IndentItem = typeof indentItemsTable.$inferSelect;
+
+// RFQ
+export const rfqsTable = pgTable("rfqs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  rfqNumber: varchar("rfq_number", { length: 32 }).notNull(),
+  rfqDate: timestamp("rfq_date", { withTimezone: true }).notNull().defaultNow(),
+  indentId: varchar("indent_id").references(() => materialIndentsTable.id, { onDelete: "set null" }),
+  submissionDeadline: timestamp("submission_deadline", { withTimezone: true }),
+  deliveryDeadline: timestamp("delivery_deadline", { withTimezone: true }),
+  deliveryLocation: varchar("delivery_location", { length: 256 }),
+  status: varchar("status", { length: 32 }).notNull().default("draft"), // draft/sent/received/awarded/cancelled
+  paymentTerms: varchar("payment_terms", { length: 128 }),
+  notes: text("notes"),
+  createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  awardedVendorId: varchar("awarded_vendor_id").references(() => vendorsTable.id, { onDelete: "set null" }),
+  awardedAt: timestamp("awarded_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+export type Rfq = typeof rfqsTable.$inferSelect;
+
+export const rfqItemsTable = pgTable("rfq_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  rfqId: varchar("rfq_id").notNull().references(() => rfqsTable.id, { onDelete: "cascade" }),
+  itemName: varchar("item_name", { length: 256 }).notNull(),
+  unit: varchar("unit", { length: 32 }).notNull(),
+  requiredQty: numeric("required_qty", { precision: 18, scale: 3 }).notNull(),
+  specification: text("specification"),
+  inventoryItemId: varchar("inventory_item_id").references(() => inventoryItemsTable.id, { onDelete: "set null" }),
+});
+
+export const rfqVendorsTable = pgTable("rfq_vendors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  rfqId: varchar("rfq_id").notNull().references(() => rfqsTable.id, { onDelete: "cascade" }),
+  vendorId: varchar("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  responseReceived: boolean("response_received").notNull().default(false),
+});
+
+export const rfqResponsesTable = pgTable("rfq_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  rfqId: varchar("rfq_id").notNull().references(() => rfqsTable.id, { onDelete: "cascade" }),
+  vendorId: varchar("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "cascade" }),
+  rfqItemId: varchar("rfq_item_id").references(() => rfqItemsTable.id, { onDelete: "cascade" }),
+  unitRate: numeric("unit_rate", { precision: 18, scale: 4 }).notNull(),
+  gstRate: numeric("gst_rate", { precision: 5, scale: 2 }).notNull().default("18"),
+  leadTimeDays: integer("lead_time_days"),
+  deliveryCharges: numeric("delivery_charges", { precision: 18, scale: 2 }).notNull().default("0"),
+  validityDays: integer("validity_days"),
+  remarks: text("remarks"),
+  isL1: boolean("is_l1").notNull().default(false), // lowest quote
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type RfqResponse = typeof rfqResponsesTable.$inferSelect;
+
+// Purchase Orders
+export const purchaseOrdersTable = pgTable("purchase_orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  poNumber: varchar("po_number", { length: 32 }).notNull(),
+  poDate: timestamp("po_date", { withTimezone: true }).notNull().defaultNow(),
+  vendorId: varchar("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "restrict" }),
+  rfqId: varchar("rfq_id").references(() => rfqsTable.id, { onDelete: "set null" }),
+  indentId: varchar("indent_id").references(() => materialIndentsTable.id, { onDelete: "set null" }),
+  status: varchar("status", { length: 32 }).notNull().default("draft"),
+  deliveryLocation: varchar("delivery_location", { length: 256 }),
+  deliveryDeadline: timestamp("delivery_deadline", { withTimezone: true }),
+  paymentTerms: varchar("payment_terms", { length: 128 }),
+  totalAmount: numeric("total_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  gstAmount: numeric("gst_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  grandTotal: numeric("grand_total", { precision: 18, scale: 2 }).notNull().default("0"),
+  advancePaid: numeric("advance_paid", { precision: 18, scale: 2 }).notNull().default("0"),
+  amountReceived: numeric("amount_received", { precision: 18, scale: 2 }).notNull().default("0"),
+  version: integer("version").notNull().default(1),
+  amendmentReason: text("amendment_reason"),
+  notes: text("notes"),
+  createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  approvedById: varchar("approved_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+export type PurchaseOrder = typeof purchaseOrdersTable.$inferSelect;
+
+export const poItemsTable = pgTable("po_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  poId: varchar("po_id").notNull().references(() => purchaseOrdersTable.id, { onDelete: "cascade" }),
+  inventoryItemId: varchar("inventory_item_id").references(() => inventoryItemsTable.id, { onDelete: "set null" }),
+  itemName: varchar("item_name", { length: 256 }).notNull(),
+  unit: varchar("unit", { length: 32 }).notNull(),
+  orderedQty: numeric("ordered_qty", { precision: 18, scale: 3 }).notNull(),
+  receivedQty: numeric("received_qty", { precision: 18, scale: 3 }).notNull().default("0"),
+  unitRate: numeric("unit_rate", { precision: 18, scale: 4 }).notNull(),
+  gstRate: numeric("gst_rate", { precision: 5, scale: 2 }).notNull().default("18"),
+  amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  gstAmount: numeric("gst_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  specification: text("specification"),
+  hsnCode: varchar("hsn_code", { length: 16 }),
+});
+export type PoItem = typeof poItemsTable.$inferSelect;
+
+// GRN
+export const grnsTable = pgTable("grns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  grnNumber: varchar("grn_number", { length: 32 }).notNull(),
+  grnDate: timestamp("grn_date", { withTimezone: true }).notNull().defaultNow(),
+  poId: varchar("po_id").references(() => purchaseOrdersTable.id, { onDelete: "set null" }),
+  vendorId: varchar("vendor_id").references(() => vendorsTable.id, { onDelete: "set null" }),
+  storeId: varchar("store_id").references(() => storesTable.id, { onDelete: "set null" }),
+  vehicleNumber: varchar("vehicle_number", { length: 32 }),
+  dcNumber: varchar("dc_number", { length: 64 }), // delivery challan
+  invoiceNumber: varchar("invoice_number", { length: 64 }),
+  invoiceAmount: numeric("invoice_amount", { precision: 18, scale: 2 }),
+  status: varchar("status", { length: 32 }).notNull().default("draft"),
+  threeWayMatchStatus: varchar("three_way_match_status", { length: 32 }).default("pending"), // matched/qty_mismatch/rate_mismatch
+  threeWayMatchNotes: text("three_way_match_notes"),
+  qcHoldCount: integer("qc_hold_count").notNull().default(0),
+  photoUrls: text("photo_urls").array(),
+  gpsLocation: varchar("gps_location", { length: 128 }),
+  receivedById: varchar("received_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+export type Grn = typeof grnsTable.$inferSelect;
+
+export const grnItemsTable = pgTable("grn_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  grnId: varchar("grn_id").notNull().references(() => grnsTable.id, { onDelete: "cascade" }),
+  poItemId: varchar("po_item_id").references(() => poItemsTable.id, { onDelete: "set null" }),
+  inventoryItemId: varchar("inventory_item_id").references(() => inventoryItemsTable.id, { onDelete: "set null" }),
+  itemName: varchar("item_name", { length: 256 }).notNull(),
+  unit: varchar("unit", { length: 32 }).notNull(),
+  orderedQty: numeric("ordered_qty", { precision: 18, scale: 3 }).notNull().default("0"),
+  receivedQty: numeric("received_qty", { precision: 18, scale: 3 }).notNull(),
+  acceptedQty: numeric("accepted_qty", { precision: 18, scale: 3 }).notNull().default("0"),
+  rejectedQty: numeric("rejected_qty", { precision: 18, scale: 3 }).notNull().default("0"),
+  unitRate: numeric("unit_rate", { precision: 18, scale: 4 }).notNull().default("0"),
+  batchNumber: varchar("batch_number", { length: 64 }),
+  gradeSpecification: varchar("grade_specification", { length: 128 }),
+  condition: varchar("condition", { length: 64 }).notNull().default("good"), // good/damaged/partial
+  qcHold: boolean("qc_hold").notNull().default(false),
+  remarks: text("remarks"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type GrnItem = typeof grnItemsTable.$inferSelect;
+
+// Material Testing
+export const materialTestsTable = pgTable("material_tests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  grnItemId: varchar("grn_item_id").references(() => grnItemsTable.id, { onDelete: "set null" }),
+  inventoryItemId: varchar("inventory_item_id").references(() => inventoryItemsTable.id, { onDelete: "set null" }),
+  testType: varchar("test_type", { length: 64 }).notNull(), // cube_strength/tensile/sieve/proctor/other
+  isCode: varchar("is_code", { length: 64 }), // IS:456, IS:1786, etc.
+  sampleDate: timestamp("sample_date", { withTimezone: true }),
+  testDate: timestamp("test_date", { withTimezone: true }),
+  testResult: varchar("test_result", { length: 16 }).notNull().default("pending"),
+  requiredValue: numeric("required_value", { precision: 18, scale: 4 }),
+  actualValue: numeric("actual_value", { precision: 18, scale: 4 }),
+  unit: varchar("unit", { length: 32 }),
+  testedById: varchar("tested_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  remarks: text("remarks"),
+  certificateUrl: varchar("certificate_url"),
+  debitNoteIssued: boolean("debit_note_issued").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type MaterialTest = typeof materialTestsTable.$inferSelect;
+
+// Stock Ledger (movement log)
+export const stockLedgerTable = pgTable("stock_ledger", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  inventoryItemId: varchar("inventory_item_id").notNull().references(() => inventoryItemsTable.id, { onDelete: "cascade" }),
+  storeId: varchar("store_id").references(() => storesTable.id, { onDelete: "set null" }),
+  transactionType: varchar("transaction_type", { length: 32 }).notNull(), // grn_receipt/issue/return/adjustment/wastage
+  entityType: varchar("entity_type", { length: 32 }), // grn/issue/adjustment
+  entityId: varchar("entity_id", { length: 64 }),
+  qty: numeric("qty", { precision: 18, scale: 3 }).notNull(), // +/- quantity
+  rate: numeric("rate", { precision: 18, scale: 4 }).notNull().default("0"),
+  amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  balanceQty: numeric("balance_qty", { precision: 18, scale: 3 }).notNull(),
+  narration: text("narration"),
+  createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type StockLedger = typeof stockLedgerTable.$inferSelect;
+
+// Stock Issues (against approved indent)
+export const stockIssuesTable = pgTable("stock_issues", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  issueNumber: varchar("issue_number", { length: 32 }).notNull(),
+  issueDate: timestamp("issue_date", { withTimezone: true }).notNull().defaultNow(),
+  indentId: varchar("indent_id").references(() => materialIndentsTable.id, { onDelete: "set null" }),
+  storeId: varchar("store_id").references(() => storesTable.id, { onDelete: "set null" }),
+  issuedToName: varchar("issued_to_name", { length: 128 }),
+  issuedToContractor: varchar("issued_to_contractor", { length: 128 }),
+  wbsActivityId: varchar("wbs_activity_id").references(() => wbsActivitiesTable.id, { onDelete: "set null" }),
+  contractorSignature: varchar("contractor_signature"), // base64 or URL
+  notes: text("notes"),
+  issuedById: varchar("issued_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type StockIssue = typeof stockIssuesTable.$inferSelect;
+
+export const issueItemsTable = pgTable("issue_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  issueId: varchar("issue_id").notNull().references(() => stockIssuesTable.id, { onDelete: "cascade" }),
+  inventoryItemId: varchar("inventory_item_id").references(() => inventoryItemsTable.id, { onDelete: "set null" }),
+  indentItemId: varchar("indent_item_id").references(() => indentItemsTable.id, { onDelete: "set null" }),
+  itemName: varchar("item_name", { length: 256 }).notNull(),
+  unit: varchar("unit", { length: 32 }).notNull(),
+  issuedQty: numeric("issued_qty", { precision: 18, scale: 3 }).notNull(),
+  rate: numeric("rate", { precision: 18, scale: 4 }).notNull().default("0"),
+  amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Wastage Logs
+export const wastageLogsTable = pgTable("wastage_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  inventoryItemId: varchar("inventory_item_id").references(() => inventoryItemsTable.id, { onDelete: "set null" }),
+  storeId: varchar("store_id").references(() => storesTable.id, { onDelete: "set null" }),
+  wasteDate: timestamp("waste_date", { withTimezone: true }).notNull().defaultNow(),
+  qty: numeric("qty", { precision: 18, scale: 3 }).notNull(),
+  unit: varchar("unit", { length: 32 }).notNull(),
+  rate: numeric("rate", { precision: 18, scale: 4 }).notNull().default("0"),
+  amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  reasonCode: varchar("reason_code", { length: 64 }).notNull(), // breakage/theft/spoilage/excess_mix/other
+  description: text("description"),
+  normQty: numeric("norm_qty", { precision: 18, scale: 3 }), // allowed wastage per norm
+  aboveNorm: boolean("above_norm").notNull().default(false),
+  alertSentToPm: boolean("alert_sent_to_pm").notNull().default(false),
+  loggedById: varchar("logged_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type WastageLog = typeof wastageLogsTable.$inferSelect;
+
+// Rate Contracts (standing POs at agreed rates)
+export const rateContractsTable = pgTable("rate_contracts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  vendorId: varchar("vendor_id").notNull().references(() => vendorsTable.id, { onDelete: "restrict" }),
+  contractNumber: varchar("contract_number", { length: 32 }).notNull(),
+  validFrom: timestamp("valid_from", { withTimezone: true }).notNull(),
+  validTo: timestamp("valid_to", { withTimezone: true }).notNull(),
+  inventoryItemId: varchar("inventory_item_id").references(() => inventoryItemsTable.id, { onDelete: "set null" }),
+  itemName: varchar("item_name", { length: 256 }).notNull(),
+  unit: varchar("unit", { length: 32 }).notNull(),
+  agreedRate: numeric("agreed_rate", { precision: 18, scale: 4 }).notNull(),
+  gstRate: numeric("gst_rate", { precision: 5, scale: 2 }).notNull().default("18"),
+  maxQty: numeric("max_qty", { precision: 18, scale: 3 }),
+  usedQty: numeric("used_qty", { precision: 18, scale: 3 }).notNull().default("0"),
+  isActive: boolean("is_active").notNull().default(true),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type RateContract = typeof rateContractsTable.$inferSelect;
+
 export const _zUserRole = z.enum(USER_ROLES);

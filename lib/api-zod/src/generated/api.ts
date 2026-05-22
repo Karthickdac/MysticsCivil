@@ -2354,3 +2354,702 @@ export const GetAgingReportResponse = zod.object({
 })
 
 
+/**
+ * @summary List all vendors
+ */
+export const ListVendorsQueryParams = zod.object({
+  "status": zod.coerce.string().optional()
+})
+
+export const ListVendorsResponseItem = zod.object({
+
+}).passthrough()
+export const ListVendorsResponse = zod.array(ListVendorsResponseItem)
+
+
+/**
+ * @summary Create vendor
+ */
+export const CreateVendorBody = zod.object({
+  "name": zod.string(),
+  "code": zod.string().optional(),
+  "contactPerson": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "address": zod.string().optional(),
+  "city": zod.string().optional(),
+  "state": zod.string().optional(),
+  "pincode": zod.string().optional(),
+  "gstNumber": zod.string().optional(),
+  "pan": zod.string().optional(),
+  "msmeCategory": zod.string().optional(),
+  "bankName": zod.string().optional(),
+  "accountNumber": zod.string().optional(),
+  "ifscCode": zod.string().optional(),
+  "organisationId": zod.string().optional()
+})
+
+
+/**
+ * @summary Get vendor
+ */
+export const GetVendorParams = zod.object({
+  "vendorId": zod.coerce.string()
+})
+
+export const GetVendorResponse = zod.object({
+
+}).passthrough()
+
+
+/**
+ * @summary Update vendor
+ */
+export const UpdateVendorParams = zod.object({
+  "vendorId": zod.coerce.string()
+})
+
+export const UpdateVendorBody = zod.object({
+  "name": zod.string().optional(),
+  "status": zod.string().optional(),
+  "blacklistReason": zod.string().optional(),
+  "contactPerson": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "city": zod.string().optional(),
+  "state": zod.string().optional()
+})
+
+export const UpdateVendorResponse = zod.object({
+
+}).passthrough()
+
+
+export const ListVendorDocumentsParams = zod.object({
+  "vendorId": zod.coerce.string()
+})
+
+export const ListVendorDocumentsResponseItem = zod.object({
+
+}).passthrough()
+export const ListVendorDocumentsResponse = zod.array(ListVendorDocumentsResponseItem)
+
+
+export const AddVendorDocumentParams = zod.object({
+  "vendorId": zod.coerce.string()
+})
+
+export const AddVendorDocumentBody = zod.object({
+  "documentType": zod.string().optional(),
+  "documentUrl": zod.string().optional(),
+  "fileName": zod.string().optional()
+})
+
+
+export const GetProjectAvlParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const GetProjectAvlResponseItem = zod.object({
+
+}).passthrough()
+export const GetProjectAvlResponse = zod.array(GetProjectAvlResponseItem)
+
+
+export const AddToAvlParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const AddToAvlBody = zod.object({
+  "vendorId": zod.string(),
+  "materialCategory": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+
+export const ListStoresParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListStoresResponseItem = zod.object({
+
+}).passthrough()
+export const ListStoresResponse = zod.array(ListStoresResponseItem)
+
+
+export const CreateStoreParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateStoreBody = zod.object({
+  "name": zod.string(),
+  "storeType": zod.string().optional(),
+  "location": zod.string().optional(),
+  "storeKeeperName": zod.string().optional()
+})
+
+
+export const ListInventoryItemsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListInventoryItemsQueryParams = zod.object({
+  "storeId": zod.coerce.string().optional(),
+  "reorderOnly": zod.coerce.string().optional()
+})
+
+export const ListInventoryItemsResponseItem = zod.object({
+
+}).passthrough()
+export const ListInventoryItemsResponse = zod.array(ListInventoryItemsResponseItem)
+
+
+export const CreateInventoryItemParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateInventoryItemBody = zod.object({
+  "itemName": zod.string(),
+  "itemCode": zod.string().optional(),
+  "category": zod.string().optional(),
+  "unit": zod.string().optional(),
+  "storeId": zod.string().optional(),
+  "minStockLevel": zod.number().optional(),
+  "maxStockLevel": zod.number().optional(),
+  "openingStock": zod.number().optional(),
+  "avgRate": zod.number().optional(),
+  "hsnCode": zod.string().optional()
+})
+
+
+export const UpdateInventoryItemParams = zod.object({
+  "projectId": zod.coerce.string(),
+  "itemId": zod.coerce.string()
+})
+
+export const UpdateInventoryItemBody = zod.object({
+
+}).passthrough()
+
+export const UpdateInventoryItemResponse = zod.object({
+
+}).passthrough()
+
+
+export const GetStockLedgerParams = zod.object({
+  "projectId": zod.coerce.string(),
+  "itemId": zod.coerce.string()
+})
+
+export const GetStockLedgerResponseItem = zod.object({
+
+}).passthrough()
+export const GetStockLedgerResponse = zod.array(GetStockLedgerResponseItem)
+
+
+export const ListMaterialIndentsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListMaterialIndentsQueryParams = zod.object({
+  "status": zod.coerce.string().optional()
+})
+
+export const ListMaterialIndentsResponseItem = zod.object({
+
+}).passthrough()
+export const ListMaterialIndentsResponse = zod.array(ListMaterialIndentsResponseItem)
+
+
+export const CreateMaterialIndentParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateMaterialIndentBody = zod.object({
+  "indentNumber": zod.string(),
+  "wbsActivityId": zod.string().optional(),
+  "requiredByDate": zod.string().optional(),
+  "remarks": zod.string().optional()
+})
+
+
+export const GetMaterialIndentParams = zod.object({
+  "indentId": zod.coerce.string()
+})
+
+export const GetMaterialIndentResponse = zod.object({
+
+}).passthrough()
+
+
+export const ListIndentItemsParams = zod.object({
+  "indentId": zod.coerce.string()
+})
+
+export const ListIndentItemsResponseItem = zod.object({
+
+}).passthrough()
+export const ListIndentItemsResponse = zod.array(ListIndentItemsResponseItem)
+
+
+export const AddIndentItemParams = zod.object({
+  "indentId": zod.coerce.string()
+})
+
+export const AddIndentItemBody = zod.object({
+  "itemName": zod.string(),
+  "unit": zod.string().optional(),
+  "requiredQty": zod.number(),
+  "inventoryItemId": zod.string().optional(),
+  "specification": zod.string().optional()
+})
+
+
+export const SubmitMaterialIndentParams = zod.object({
+  "indentId": zod.coerce.string()
+})
+
+export const SubmitMaterialIndentResponse = zod.object({
+
+}).passthrough()
+
+
+export const ApproveMaterialIndentParams = zod.object({
+  "indentId": zod.coerce.string()
+})
+
+export const ApproveMaterialIndentBody = zod.object({
+  "items": zod.array(zod.object({
+
+}).passthrough()).optional()
+})
+
+export const ApproveMaterialIndentResponse = zod.object({
+
+}).passthrough()
+
+
+export const QueryMaterialIndentParams = zod.object({
+  "indentId": zod.coerce.string()
+})
+
+export const QueryMaterialIndentBody = zod.object({
+  "remarks": zod.string().optional()
+})
+
+export const QueryMaterialIndentResponse = zod.object({
+
+}).passthrough()
+
+
+export const ListRfqsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListRfqsResponseItem = zod.object({
+
+}).passthrough()
+export const ListRfqsResponse = zod.array(ListRfqsResponseItem)
+
+
+export const CreateRfqParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateRfqBody = zod.object({
+  "rfqNumber": zod.string(),
+  "indentId": zod.string().optional(),
+  "submissionDeadline": zod.string().optional(),
+  "deliveryDeadline": zod.string().optional(),
+  "deliveryLocation": zod.string().optional(),
+  "paymentTerms": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+
+export const GetRfqParams = zod.object({
+  "rfqId": zod.coerce.string()
+})
+
+export const GetRfqResponse = zod.object({
+
+}).passthrough()
+
+
+export const AddRfqItemParams = zod.object({
+  "rfqId": zod.coerce.string()
+})
+
+export const AddRfqItemBody = zod.object({
+  "itemName": zod.string(),
+  "unit": zod.string().optional(),
+  "requiredQty": zod.number().optional(),
+  "specification": zod.string().optional(),
+  "inventoryItemId": zod.string().optional()
+})
+
+
+export const AddRfqVendorParams = zod.object({
+  "rfqId": zod.coerce.string()
+})
+
+export const AddRfqVendorBody = zod.object({
+  "vendorId": zod.string()
+})
+
+
+export const AddRfqResponseParams = zod.object({
+  "rfqId": zod.coerce.string()
+})
+
+export const AddRfqResponseBody = zod.object({
+  "vendorId": zod.string(),
+  "rfqItemId": zod.string().optional(),
+  "unitRate": zod.number(),
+  "gstRate": zod.number().optional(),
+  "leadTimeDays": zod.number().optional(),
+  "deliveryCharges": zod.number().optional(),
+  "validityDays": zod.number().optional(),
+  "remarks": zod.string().optional()
+})
+
+
+export const GetRfqComparisonParams = zod.object({
+  "rfqId": zod.coerce.string()
+})
+
+export const GetRfqComparisonResponse = zod.object({
+
+}).passthrough()
+
+
+export const AwardRfqParams = zod.object({
+  "rfqId": zod.coerce.string()
+})
+
+export const AwardRfqBody = zod.object({
+  "vendorId": zod.string()
+})
+
+export const AwardRfqResponse = zod.object({
+
+}).passthrough()
+
+
+export const ListPurchaseOrdersParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListPurchaseOrdersQueryParams = zod.object({
+  "status": zod.coerce.string().optional()
+})
+
+export const ListPurchaseOrdersResponseItem = zod.object({
+
+}).passthrough()
+export const ListPurchaseOrdersResponse = zod.array(ListPurchaseOrdersResponseItem)
+
+
+export const CreatePurchaseOrderParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreatePurchaseOrderBody = zod.object({
+  "poNumber": zod.string(),
+  "vendorId": zod.string(),
+  "rfqId": zod.string().optional(),
+  "indentId": zod.string().optional(),
+  "deliveryLocation": zod.string().optional(),
+  "deliveryDeadline": zod.string().optional(),
+  "paymentTerms": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+
+export const GetPurchaseOrderParams = zod.object({
+  "poId": zod.coerce.string()
+})
+
+export const GetPurchaseOrderResponse = zod.object({
+
+}).passthrough()
+
+
+export const UpdatePurchaseOrderParams = zod.object({
+  "poId": zod.coerce.string()
+})
+
+export const UpdatePurchaseOrderBody = zod.object({
+  "status": zod.string().optional(),
+  "amendmentReason": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+export const UpdatePurchaseOrderResponse = zod.object({
+
+}).passthrough()
+
+
+export const AddPoItemParams = zod.object({
+  "poId": zod.coerce.string()
+})
+
+export const AddPoItemBody = zod.object({
+  "itemName": zod.string(),
+  "unit": zod.string().optional(),
+  "orderedQty": zod.number(),
+  "unitRate": zod.number(),
+  "gstRate": zod.number().optional(),
+  "inventoryItemId": zod.string().optional(),
+  "specification": zod.string().optional(),
+  "hsnCode": zod.string().optional()
+})
+
+
+export const ApprovePurchaseOrderParams = zod.object({
+  "poId": zod.coerce.string()
+})
+
+export const ApprovePurchaseOrderResponse = zod.object({
+
+}).passthrough()
+
+
+export const ListGrnsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListGrnsQueryParams = zod.object({
+  "status": zod.coerce.string().optional(),
+  "poId": zod.coerce.string().optional()
+})
+
+export const ListGrnsResponseItem = zod.object({
+
+}).passthrough()
+export const ListGrnsResponse = zod.array(ListGrnsResponseItem)
+
+
+export const CreateGrnParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateGrnBody = zod.object({
+  "grnNumber": zod.string(),
+  "poId": zod.string().optional(),
+  "vendorId": zod.string().optional(),
+  "storeId": zod.string().optional(),
+  "vehicleNumber": zod.string().optional(),
+  "dcNumber": zod.string().optional(),
+  "invoiceNumber": zod.string().optional(),
+  "invoiceAmount": zod.number().optional()
+})
+
+
+export const GetGrnParams = zod.object({
+  "grnId": zod.coerce.string()
+})
+
+export const GetGrnResponse = zod.object({
+
+}).passthrough()
+
+
+export const AddGrnItemParams = zod.object({
+  "grnId": zod.coerce.string()
+})
+
+export const AddGrnItemBody = zod.object({
+  "itemName": zod.string(),
+  "unit": zod.string().optional(),
+  "receivedQty": zod.number(),
+  "acceptedQty": zod.number().optional(),
+  "orderedQty": zod.number().optional(),
+  "unitRate": zod.number().optional(),
+  "inventoryItemId": zod.string().optional(),
+  "poItemId": zod.string().optional(),
+  "condition": zod.string().optional(),
+  "qcHold": zod.boolean().optional(),
+  "batchNumber": zod.string().optional(),
+  "remarks": zod.string().optional()
+})
+
+
+export const SubmitGrnParams = zod.object({
+  "grnId": zod.coerce.string()
+})
+
+export const SubmitGrnResponse = zod.object({
+
+}).passthrough()
+
+
+export const ListMaterialTestsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListMaterialTestsQueryParams = zod.object({
+  "result": zod.coerce.string().optional()
+})
+
+export const ListMaterialTestsResponseItem = zod.object({
+
+}).passthrough()
+export const ListMaterialTestsResponse = zod.array(ListMaterialTestsResponseItem)
+
+
+export const CreateMaterialTestParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateMaterialTestBody = zod.object({
+  "testType": zod.string(),
+  "grnItemId": zod.string().optional(),
+  "inventoryItemId": zod.string().optional(),
+  "isCode": zod.string().optional(),
+  "sampleDate": zod.string().optional(),
+  "testDate": zod.string().optional(),
+  "requiredValue": zod.number().optional(),
+  "actualValue": zod.number().optional(),
+  "unit": zod.string().optional(),
+  "testResult": zod.string().optional(),
+  "remarks": zod.string().optional()
+})
+
+
+export const UpdateMaterialTestParams = zod.object({
+  "testId": zod.coerce.string()
+})
+
+export const UpdateMaterialTestBody = zod.object({
+  "testResult": zod.string().optional(),
+  "actualValue": zod.number().optional(),
+  "certificateUrl": zod.string().optional(),
+  "remarks": zod.string().optional(),
+  "debitNoteIssued": zod.boolean().optional()
+})
+
+export const UpdateMaterialTestResponse = zod.object({
+
+}).passthrough()
+
+
+export const ListStockIssuesParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListStockIssuesResponseItem = zod.object({
+
+}).passthrough()
+export const ListStockIssuesResponse = zod.array(ListStockIssuesResponseItem)
+
+
+export const CreateStockIssueParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateStockIssueBody = zod.object({
+  "issueNumber": zod.string(),
+  "indentId": zod.string().optional(),
+  "storeId": zod.string().optional(),
+  "issuedToName": zod.string().optional(),
+  "issuedToContractor": zod.string().optional(),
+  "wbsActivityId": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "items": zod.array(zod.object({
+  "inventoryItemId": zod.string().optional(),
+  "indentItemId": zod.string().optional(),
+  "issuedQty": zod.number().optional()
+})).optional()
+})
+
+
+export const ListWastageLogsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListWastageLogsResponseItem = zod.object({
+
+}).passthrough()
+export const ListWastageLogsResponse = zod.array(ListWastageLogsResponseItem)
+
+
+export const CreateWastageLogParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateWastageLogBody = zod.object({
+  "inventoryItemId": zod.string().optional(),
+  "storeId": zod.string().optional(),
+  "qty": zod.number(),
+  "unit": zod.string().optional(),
+  "rate": zod.number().optional(),
+  "reasonCode": zod.string(),
+  "description": zod.string().optional(),
+  "normQty": zod.number().optional()
+})
+
+
+export const ListRateContractsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListRateContractsResponseItem = zod.object({
+
+}).passthrough()
+export const ListRateContractsResponse = zod.array(ListRateContractsResponseItem)
+
+
+export const CreateRateContractParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateRateContractBody = zod.object({
+  "vendorId": zod.string(),
+  "contractNumber": zod.string(),
+  "validFrom": zod.string(),
+  "validTo": zod.string(),
+  "inventoryItemId": zod.string().optional(),
+  "itemName": zod.string(),
+  "unit": zod.string().optional(),
+  "agreedRate": zod.number(),
+  "gstRate": zod.number().optional(),
+  "maxQty": zod.number().optional(),
+  "notes": zod.string().optional()
+})
+
+
+export const GetInventorySummaryParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const GetInventorySummaryResponse = zod.object({
+  "totalItems": zod.number().optional(),
+  "reorderItems": zod.number().optional(),
+  "totalStockValue": zod.number().optional(),
+  "totalWastageValue": zod.number().optional(),
+  "aboveNormWastage": zod.number().optional(),
+  "totalIssues": zod.number().optional(),
+  "categoryBreakdown": zod.object({
+
+}).passthrough().optional(),
+  "reorderAlerts": zod.array(zod.object({
+
+}).passthrough()).optional()
+})
+
+
+export const GetReconciliationParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const GetReconciliationQueryParams = zod.object({
+  "month": zod.coerce.string().optional(),
+  "year": zod.coerce.string().optional()
+})
+
+export const GetReconciliationResponse = zod.object({
+
+}).passthrough()
+
+

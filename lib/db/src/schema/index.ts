@@ -8,4 +8,10 @@ export type {
   LedgerAccount, LedgerEntry, ClientInvoice,
   GstEntry, TdsEntry, RetentionLedger, AdvanceLedger,
   BillStatus, DeductionType, PaymentMode, LedgerAccountType, ClientInvoiceStatus,
+  // Phase 4 — Supply Chain
+  Vendor, VendorStatus, MaterialIndent, IndentStatus, IndentItem,
+  Rfq, RfqResponse, PurchaseOrder, PoItem, PoStatus,
+  Grn, GrnItem, GrnStatus, MaterialTest, TestResult,
+  Store, InventoryItem, StockLedger, StockIssue, WastageLog, RateContract,
+  MaterialCategory, CostingMethod,
 } from "./ocms";
