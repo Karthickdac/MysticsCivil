@@ -12,6 +12,14 @@ import { n, d, dReq } from "../lib/serialize";
 
 const router: IRouter = Router();
 
+// One-way status machine: terminal states cannot change
+const VO_TRANSITIONS: Record<string, string[]> = {
+  draft:     ["submitted"],
+  submitted: ["approved", "rejected"],
+  approved:  [],   // terminal
+  rejected:  [],   // terminal
+};
+
 function serializeVo(v: any) {
   return {
     id: v.id,
@@ -113,6 +121,25 @@ router.patch(
 
     const [existing] = await db.select().from(variationOrdersTable).where(eq(variationOrdersTable.id, req.params.voId));
     if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+
+    // Enforce state machine: validate status transition before any mutation
+    if (b.status !== undefined) {
+      const allowed = VO_TRANSITIONS[existing.status] ?? [];
+      if (!allowed.includes(b.status)) {
+        res.status(409).json({
+          error: `Invalid VO status transition: "${existing.status}" → "${b.status}". ` +
+            (allowed.length ? `Allowed: ${allowed.join(", ")}.` : `"${existing.status}" is a terminal state.`),
+        });
+        return;
+      }
+    }
+
+    // Terminal-state guard: disallow metadata edits on approved/rejected VOs
+    const isTerminal = existing.status === "approved" || existing.status === "rejected";
+    if (isTerminal && Object.keys(b).some(k => k !== "status")) {
+      res.status(409).json({ error: `Variation order is ${existing.status} (terminal) — no further edits allowed.` });
+      return;
+    }
 
     const update: Record<string, unknown> = {};
     for (const k of ["title", "description", "scopeChange", "estimateId"]) {

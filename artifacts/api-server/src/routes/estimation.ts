@@ -11,6 +11,7 @@ import {
   wbsActivitiesTable,
   workOrderEstimatesTable,
   workOrderEstimateItemsTable,
+  variationOrdersTable,
 } from "@workspace/db";
 import { eq, asc, and, sql } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
@@ -222,6 +223,24 @@ router.patch(
       .select({ status: estimatesTable.status })
       .from(estimatesTable)
       .where(eq(estimatesTable.id, req.params.estimateId));
+
+    // VO-gated unlock: moving a locked estimate out of "locked" requires an approved VO
+    if (b.status !== undefined && b.status !== "locked" && current?.status === "locked") {
+      const [approvedVO] = await db
+        .select({ id: variationOrdersTable.id })
+        .from(variationOrdersTable)
+        .where(and(
+          eq(variationOrdersTable.estimateId, req.params.estimateId),
+          eq(variationOrdersTable.status, "approved"),
+        ));
+      if (!approvedVO) {
+        res.status(409).json({
+          error: "Cannot unlock a locked estimate without an approved Variation Order linked to this estimate. Raise a VO, get it approved, then unlock.",
+        });
+        return;
+      }
+    }
+
     const [est] = await db
       .update(estimatesTable)
       .set(update as any)
