@@ -575,6 +575,20 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Document' }
 
+  /projects/{projectId}/documents/{documentId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+      - name: documentId
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [Documents]
+      operationId: deleteDocument
+      responses:
+        '204':
+          description: Deleted
+
   /projects/{projectId}/issues:
     parameters:
       - $ref: '#/components/parameters/ProjectIdParam'

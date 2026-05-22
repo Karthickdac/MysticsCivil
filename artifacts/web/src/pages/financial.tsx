@@ -130,18 +130,49 @@ function AdvanceBillDialog({ bill, onAdvanced }: { bill: any; onAdvanced: () => 
   const [open, setOpen] = useState(false);
   const [remarks, setRemarks] = useState("");
   const [utr, setUtr] = useState("");
-  const [mode, setMode] = useState("neft");
+  const [bankName, setBankName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [ifscCode, setIfscCode] = useState("");
+  const [mode, setMode] = useState("bank_transfer");
   const [loading, setLoading] = useState(false);
   const nextStep = BILL_STEPS[BILL_STEPS.findIndex(s => s.key === bill.status) + 1];
-  const isPayment = bill.status === "payment_released";
+  // Show payment fields when ADVANCING INTO payment_released (i.e. current step is finance_approval)
+  const isPayment = bill.status === "finance_approval";
+
+  // Mode metadata: label, reference-field label, whether we need bank fields
+  const PAYMENT_MODES: Array<{
+    key: string; label: string; refLabel: string; refPlaceholder: string; needsBank: boolean;
+  }> = [
+    { key: "cash",          label: "Cash / In-hand",  refLabel: "Receipt No. (optional)", refPlaceholder: "RCPT-2026-001", needsBank: false },
+    { key: "gpay",          label: "GPay / UPI",      refLabel: "UPI Reference ID",        refPlaceholder: "123456789012",  needsBank: false },
+    { key: "bank_transfer", label: "Bank Transfer",   refLabel: "UTR",                     refPlaceholder: "SBIN0R52026…",  needsBank: true  },
+    { key: "neft",          label: "NEFT",            refLabel: "UTR",                     refPlaceholder: "SBIN0R52026…",  needsBank: true  },
+    { key: "rtgs",          label: "RTGS",            refLabel: "UTR",                     refPlaceholder: "HDFC0R52026…",  needsBank: true  },
+    { key: "upi",           label: "UPI",             refLabel: "UPI Reference ID",        refPlaceholder: "123456789012",  needsBank: false },
+    { key: "cheque",        label: "Cheque",          refLabel: "Cheque No.",              refPlaceholder: "012345",        needsBank: true  },
+  ];
+  const modeMeta = PAYMENT_MODES.find(m => m.key === mode) ?? PAYMENT_MODES[2];
 
   const advance = async () => {
+    if (isPayment) {
+      if (modeMeta.needsBank && !bankName.trim()) { alert("Bank name is required for this payment mode."); return; }
+      if ((mode === "bank_transfer" || mode === "neft" || mode === "rtgs") && !utr.trim()) {
+        alert("UTR is required for bank transfers."); return;
+      }
+    }
     setLoading(true);
     try {
       await apiFetch(`/contractor-bills/${bill.id}/advance`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ remarks, utr: utr || undefined, paymentMode: mode }),
+        body: JSON.stringify({
+          remarks,
+          paymentMode: mode,
+          utr: utr || undefined,
+          bankName: bankName || undefined,
+          accountNumber: accountNumber || undefined,
+          ifscCode: ifscCode || undefined,
+        }),
       });
       setOpen(false); onAdvanced();
     } catch (e: any) { alert(e.message); }
@@ -153,7 +184,7 @@ function AdvanceBillDialog({ bill, onAdvanced }: { bill: any; onAdvanced: () => 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="text-xs gap-1 h-7 px-2"><ChevronRight className="h-3 w-3" /> Advance</Button>
+        <Button size="sm" variant="outline" className="text-xs gap-1 h-7 px-2" data-testid={`bill-advance-${bill.id}`}><ChevronRight className="h-3 w-3" /> Advance</Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>Advance to: {nextStep.label}</DialogTitle></DialogHeader>
@@ -162,16 +193,45 @@ function AdvanceBillDialog({ bill, onAdvanced }: { bill: any; onAdvanced: () => 
           <div><Label>Remarks (optional)</Label><Textarea value={remarks} onChange={e => setRemarks(e.target.value)} rows={2} /></div>
           {isPayment && (
             <>
-              <div><Label>UTR / Cheque No.</Label><Input value={utr} onChange={e => setUtr(e.target.value)} placeholder="SBIN0023451" /></div>
               <div>
                 <Label>Payment Mode</Label>
                 <Select value={mode} onValueChange={setMode}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger data-testid="payment-mode-select"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {["neft", "rtgs", "upi", "cheque"].map(m => <SelectItem key={m} value={m}>{m.toUpperCase()}</SelectItem>)}
+                    {PAYMENT_MODES.map(m => <SelectItem key={m.key} value={m.key}>{m.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label>{modeMeta.refLabel}</Label>
+                <Input
+                  value={utr}
+                  onChange={e => setUtr(e.target.value)}
+                  placeholder={modeMeta.refPlaceholder}
+                  data-testid="payment-ref-input"
+                />
+              </div>
+              {modeMeta.needsBank && (
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-3">
+                    <Label>Bank Name</Label>
+                    <Input value={bankName} onChange={e => setBankName(e.target.value)} placeholder="State Bank of India" data-testid="payment-bank-input" />
+                  </div>
+                  <div className="col-span-2">
+                    <Label>Account No.</Label>
+                    <Input value={accountNumber} onChange={e => setAccountNumber(e.target.value)} placeholder="00112233445566" data-testid="payment-account-input" />
+                  </div>
+                  <div>
+                    <Label>IFSC</Label>
+                    <Input value={ifscCode} onChange={e => setIfscCode(e.target.value.toUpperCase())} placeholder="SBIN0001234" data-testid="payment-ifsc-input" />
+                  </div>
+                </div>
+              )}
+              {mode === "cash" && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                  Cash payments above ₹10,000 to a single payee per day are disallowed for tax deduction under Sec. 40A(3). Make sure this transaction complies.
+                </p>
+              )}
             </>
           )}
           <div className="flex justify-end gap-2">

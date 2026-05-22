@@ -840,6 +840,12 @@ export const CreateDocumentBody = zod.object({
 })
 
 
+export const DeleteDocumentParams = zod.object({
+  "projectId": zod.coerce.string(),
+  "documentId": zod.coerce.string()
+})
+
+
 export const ListProjectIssuesParams = zod.object({
   "projectId": zod.coerce.string()
 })

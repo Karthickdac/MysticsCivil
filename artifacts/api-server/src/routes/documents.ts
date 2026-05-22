@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, documentsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { serializeDoc } from "../lib/serialize";
 
@@ -41,6 +41,25 @@ router.post(
       })
       .returning();
     res.status(201).json(serializeDoc(row));
+  },
+);
+
+router.delete(
+  "/projects/:projectId/documents/:documentId",
+  requireAuth,
+  requireRole(...ROLE_GROUPS.SITE_WRITE),
+  async (req: Request, res: Response) => {
+    const [row] = await db
+      .delete(documentsTable)
+      .where(
+        and(
+          eq(documentsTable.id, req.params.documentId),
+          eq(documentsTable.projectId, req.params.projectId),
+        ),
+      )
+      .returning();
+    if (!row) { res.status(404).json({ error: "Document not found" }); return; }
+    res.status(204).end();
   },
 );
 

@@ -2625,6 +2625,72 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getCreateDocumentMutationOptions(options));
     }
 
+export const getDeleteDocumentUrl = (projectId: string,
+    documentId: string,) => {
+
+
+
+
+  return `/api/projects/${projectId}/documents/${documentId}`
+}
+
+export const deleteDocument = async (projectId: string,
+    documentId: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteDocumentUrl(projectId,documentId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteDocumentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDocument>>, TError,{projectId: string;documentId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteDocument>>, TError,{projectId: string;documentId: string}, TContext> => {
+
+const mutationKey = ['deleteDocument'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteDocument>>, {projectId: string;documentId: string}> = (props) => {
+          const {projectId,documentId} = props ?? {};
+
+          return  deleteDocument(projectId,documentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof deleteDocument>>>
+
+    export type DeleteDocumentMutationError = ErrorType<unknown>
+
+    export const useDeleteDocument = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDocument>>, TError,{projectId: string;documentId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteDocument>>,
+        TError,
+        {projectId: string;documentId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteDocumentMutationOptions(options));
+    }
+
 export const getListProjectIssuesUrl = (projectId: string,) => {
 
 
