@@ -1,4 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import * as XLSX from "xlsx";
+import multer from "multer";
 import {
   db,
   estimatesTable,
@@ -15,6 +17,7 @@ import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAut
 import { n, nOrNull, d, dReq } from "../lib/serialize";
 
 const router: IRouter = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const DEFAULT_L1_HEADS = [
   { code: "CIV", name: "Civil Works", pct: 35, sort: 0 },
@@ -215,12 +218,22 @@ router.patch(
       update.approvedById = req.user!.id;
       update.approvedAt = new Date();
     }
+    const [current] = await db
+      .select({ status: estimatesTable.status })
+      .from(estimatesTable)
+      .where(eq(estimatesTable.id, req.params.estimateId));
     const [est] = await db
       .update(estimatesTable)
       .set(update as any)
       .where(eq(estimatesTable.id, req.params.estimateId))
       .returning();
     if (!est) { res.status(404).json({ error: "Not found" }); return; }
+    // Auto-lock all BOQ items when estimate is locked; auto-unlock when moving out of locked
+    if (b.status === "locked") {
+      await db.update(boqItemsTable).set({ locked: true }).where(eq(boqItemsTable.estimateId, req.params.estimateId));
+    } else if (b.status !== undefined && b.status !== "locked" && current?.status === "locked") {
+      await db.update(boqItemsTable).set({ locked: false }).where(eq(boqItemsTable.estimateId, req.params.estimateId));
+    }
     res.json(serializeEstimate(est));
   },
 );
@@ -300,7 +313,7 @@ router.get(
   },
 );
 
-// BOQ CSV Export ── GET /estimates/:estimateId/boq-items/export
+// BOQ Excel Export ── GET /estimates/:estimateId/boq-items/export
 router.get(
   "/estimates/:estimateId/boq-items/export",
   requireAuth,
@@ -313,26 +326,89 @@ router.get(
       .where(eq(boqItemsTable.estimateId, req.params.estimateId))
       .orderBy(asc(boqItemsTable.trade), asc(boqItemsTable.sortOrder));
 
-    const escape = (v: string | null | undefined) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const header = ["#", "Trade", "Item Code", "Description", "Unit", "Quantity", "Rate (INR)", "Amount (INR)", "GST %", "HSN Code", "Locked"];
     const rows = items.map((item, idx) => [
       idx + 1,
-      escape(item.trade),
-      escape(item.itemCode),
-      escape(item.description),
-      escape(item.unit),
-      n(item.quantity).toFixed(3),
-      n(item.rate).toFixed(2),
-      n(item.amount).toFixed(2),
-      n(item.gstRate).toFixed(0),
-      escape(item.hsnCode),
+      item.trade ?? "",
+      item.itemCode ?? "",
+      item.description ?? "",
+      item.unit ?? "",
+      n(item.quantity),
+      n(item.rate),
+      n(item.amount),
+      n(item.gstRate),
+      item.hsnCode ?? "",
       item.locked ? "Yes" : "No",
     ]);
-    const csv = [header.join(","), ...rows.map(r => r.join(","))].join("\r\n");
-    const filename = `BOQ_${est?.level ?? "L3"}_${req.params.estimateId.slice(0, 8)}.csv`;
-    res.setHeader("Content-Type", "text/csv");
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    ws["!cols"] = [
+      { wch: 4 }, { wch: 18 }, { wch: 10 }, { wch: 55 }, { wch: 8 },
+      { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 7 }, { wch: 12 }, { wch: 7 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "BOQ");
+    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+    const filename = `BOQ_${est?.level ?? "L3"}_${req.params.estimateId.slice(0, 8)}.xlsx`;
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.send(csv);
+    res.send(buf);
+  },
+);
+
+// BOQ Excel Import ── POST /estimates/:estimateId/boq-items/import
+router.post(
+  "/estimates/:estimateId/boq-items/import",
+  requireAuth,
+  requireRole(...ROLE_GROUPS.OWNER_PM_QS),
+  upload.single("file"),
+  async (req: Request, res: Response) => {
+    const file = (req as any).file as { buffer: Buffer; originalname: string } | undefined;
+    if (!file) { res.status(400).json({ error: "No file uploaded — send multipart/form-data with field 'file'" }); return; }
+    const [est] = await db
+      .select({ projectId: estimatesTable.projectId, status: estimatesTable.status })
+      .from(estimatesTable).where(eq(estimatesTable.id, req.params.estimateId));
+    if (!est) { res.status(404).json({ error: "Estimate not found" }); return; }
+    if (est.status === "locked") {
+      res.status(409).json({ error: "Estimate is locked — unlock it before importing BOQ items" });
+      return;
+    }
+    const wb = XLSX.read(file.buffer, { type: "buffer" });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const raw: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    // Skip header row (row 0); skip rows missing a description (col index 3)
+    const dataRows = raw.slice(1).filter((r) => r.length > 3 && r[3]);
+    const created: ReturnType<typeof serializeBoqItem>[] = [];
+    for (const [i, row] of dataRows.entries()) {
+      // Columns: #(0), Trade(1), Item Code(2), Description(3), Unit(4),
+      //          Quantity(5), Rate INR(6), Amount INR(7), GST %(8), HSN(9)
+      const trade = String(row[1] ?? "General");
+      const itemCode = row[2] ? String(row[2]) : null;
+      const description = String(row[3] ?? "");
+      const unit = String(row[4] ?? "LS");
+      const qty = n(row[5] ?? 0);
+      const rate = n(row[6] ?? 0);
+      const gstRate = n(row[8] ?? 18);
+      const hsnCode = row[9] ? String(row[9]) : null;
+      const [item] = await db.insert(boqItemsTable).values({
+        estimateId: req.params.estimateId,
+        projectId: est.projectId,
+        levelType: "L3",
+        trade,
+        itemCode,
+        description,
+        unit,
+        quantity: String(qty),
+        rate: String(rate),
+        amount: String(qty * rate),
+        actualQuantity: "0",
+        actualAmount: "0",
+        hsnCode,
+        gstRate: String(gstRate),
+        sortOrder: i,
+      }).returning();
+      created.push(serializeBoqItem(item));
+    }
+    res.status(201).json(created);
   },
 );
 
@@ -410,12 +486,12 @@ router.patch(
       update.amount = String(qty * rate);
     }
     if (b.gstRate !== undefined && !existing.locked) update.gstRate = String(n(b.gstRate));
-    // Progress fields — always allowed
+    // Progress fields — always allowed (record actual site progress regardless of lock)
     if (b.actualQuantity !== undefined || b.actualAmount !== undefined) {
       update.actualQuantity = String(n(b.actualQuantity ?? existing.actualQuantity));
       update.actualAmount = String(n(b.actualAmount ?? existing.actualAmount));
     }
-    if (b.locked !== undefined) update.locked = b.locked;
+    // locked is system-controlled (via estimate status) — never accept from client
 
     const [item] = await db.update(boqItemsTable).set(update as any).where(eq(boqItemsTable.id, req.params.itemId)).returning();
     res.json(serializeBoqItem(item));

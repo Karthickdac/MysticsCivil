@@ -947,14 +947,15 @@ paths:
         schema: { type: string }
     get:
       tags: [Estimation]
-      operationId: exportBoqItemsCsv
-      summary: Export BOQ items as CSV
+      operationId: exportBoqItemsXlsx
+      summary: Export BOQ items as Excel (xlsx)
       responses:
         '200':
-          description: CSV file
+          description: Excel workbook
           content:
-            text/csv:
-              schema: { type: string }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+
 
   /projects/{projectId}/work-orders:
     parameters:

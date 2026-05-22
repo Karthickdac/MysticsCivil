@@ -33,7 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatINR } from "@/lib/ocms-format";
 import {
   Plus, ChevronRight, FileBarChart, Layers, Calculator,
-  ClipboardList, Wrench, AlertTriangle, Lock, Edit3, Check, X, Download,
+  ClipboardList, Wrench, AlertTriangle, Lock, Edit3, Check, X, Download, Upload,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
@@ -424,6 +424,23 @@ function BoqPanel({ estimate }: { estimate: Estimate }) {
     window.open(`/api/estimates/${estimate.id}/boq-items/export`, "_blank");
   };
 
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const res = await fetch(`/api/estimates/${estimate.id}/boq-items/import`, { method: "POST", body: fd });
+      if (!res.ok) { const err = await res.json(); toast({ title: "Import failed", description: err?.error, variant: "destructive" }); return; }
+      const imported: any[] = await res.json();
+      qc.invalidateQueries({ queryKey: getListBoqItemsQueryKey(estimate.id) });
+      toast({ title: `Imported ${imported.length} BOQ items` });
+    } catch {
+      toast({ title: "Import error", description: "Could not parse file", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -434,8 +451,16 @@ function BoqPanel({ estimate }: { estimate: Estimate }) {
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={handleExport}>
-            <Download className="h-3.5 w-3.5 mr-1" /> Export CSV
+            <Download className="h-3.5 w-3.5 mr-1" /> Export Excel
           </Button>
+          {!locked && (
+            <label>
+              <input type="file" accept=".xlsx" className="sr-only" onChange={handleImport} />
+              <Button size="sm" variant="outline" asChild>
+                <span className="cursor-pointer"><Upload className="h-3.5 w-3.5 mr-1" /> Import Excel</span>
+              </Button>
+            </label>
+          )}
           {!locked && (
             <Button size="sm" variant="outline" onClick={() => setNewRow({ trade: TRADES[0], description: "", unit: "sqm", quantity: "0", rate: "0", hsnCode: "", gstRate: "18" })}>
               <Plus className="h-3 w-3 mr-1" /> Add Item

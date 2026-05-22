@@ -6,12 +6,15 @@ import {
   estimateCostHeadsTable,
   boqItemsTable,
   variationOrdersTable,
+  workOrderEstimatesTable,
+  workOrderEstimateItemsTable,
 } from "@workspace/db";
-import { sql, eq } from "drizzle-orm";
+import { sql, eq, asc } from "drizzle-orm";
 
 async function resetEstimation() {
   await db.execute(sql`
-    TRUNCATE TABLE variation_orders, rate_analysis_components, boq_items,
+    TRUNCATE TABLE work_order_estimate_items, work_order_estimates,
+      variation_orders, rate_analysis_components, boq_items,
       estimate_cost_heads, estimates, dsr_rates RESTART IDENTITY CASCADE;
   `);
 }
@@ -226,6 +229,87 @@ async function seedProjectEstimation(project: { id: string; name: string; contra
     });
   }
 
+  // ── L5 Work Order Estimates ───────────────────────────────────
+  const boqRows = await db
+    .select()
+    .from(boqItemsTable)
+    .where(eq(boqItemsTable.estimateId, l3.id))
+    .orderBy(asc(boqItemsTable.sortOrder));
+
+  const rccItems = boqRows.filter(i => i.trade === "RCC");
+  const pilingItems = boqRows.filter(i => i.trade === "Piling");
+
+  const [wo1] = await db.insert(workOrderEstimatesTable).values({
+    projectId: project.id,
+    l3EstimateId: l3.id,
+    subcontractor: "Shree Balaji Construction Pvt Ltd",
+    workPackage: "RCC Civil Works — Basement to Terrace",
+    status: "awarded",
+    notes: "Back-to-back sub-contract for all RCC items at 5% saving vs BOQ",
+  }).returning();
+
+  if (rccItems.length > 0) {
+    await db.insert(workOrderEstimateItemsTable).values(
+      rccItems.map((item, i) => {
+        const boqRate = Number(item.rate);
+        const negotiatedRate = boqRate * 0.95;
+        const qty = Number(item.quantity);
+        return {
+          workOrderEstimateId: wo1.id,
+          boqItemId: item.id,
+          description: item.description,
+          unit: item.unit,
+          quantity: String(qty),
+          boqRate: String(boqRate),
+          negotiatedRate: String(Math.round(negotiatedRate)),
+          negotiatedAmount: String(Math.round(qty * negotiatedRate)),
+          sortOrder: i,
+        };
+      })
+    );
+    const totalBoq = rccItems.reduce((s, i) => s + Number(i.quantity) * Number(i.rate), 0);
+    await db.update(workOrderEstimatesTable).set({
+      totalBoqAmount: String(Math.round(totalBoq)),
+      totalNegotiatedAmount: String(Math.round(totalBoq * 0.95)),
+    }).where(eq(workOrderEstimatesTable.id, wo1.id));
+  }
+
+  const [wo2] = await db.insert(workOrderEstimatesTable).values({
+    projectId: project.id,
+    l3EstimateId: l3.id,
+    subcontractor: "Franki Foundations India Ltd",
+    workPackage: "Piling Works — Bored Cast-in-situ Piles",
+    status: "draft",
+    notes: "Specialist piling contractor — quotes under negotiation",
+  }).returning();
+
+  if (pilingItems.length > 0) {
+    await db.insert(workOrderEstimateItemsTable).values(
+      pilingItems.map((item, i) => {
+        const boqRate = Number(item.rate);
+        const negotiatedRate = boqRate * 0.92;
+        const qty = Number(item.quantity);
+        return {
+          workOrderEstimateId: wo2.id,
+          boqItemId: item.id,
+          description: item.description,
+          unit: item.unit,
+          quantity: String(qty),
+          boqRate: String(boqRate),
+          negotiatedRate: String(Math.round(negotiatedRate)),
+          negotiatedAmount: String(Math.round(qty * negotiatedRate)),
+          sortOrder: i,
+        };
+      })
+    );
+    const totalBoq = pilingItems.reduce((s, i) => s + Number(i.quantity) * Number(i.rate), 0);
+    await db.update(workOrderEstimatesTable).set({
+      totalBoqAmount: String(Math.round(totalBoq)),
+      totalNegotiatedAmount: String(Math.round(totalBoq * 0.92)),
+    }).where(eq(workOrderEstimatesTable.id, wo2.id));
+  }
+
+  // ── Variation Orders ──────────────────────────────────────────
   await db.insert(variationOrdersTable).values([
     {
       projectId: project.id,

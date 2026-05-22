@@ -4257,7 +4257,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getUpdateVariationOrderMutationOptions(options));
     }
 
-export const getExportBoqItemsCsvUrl = (estimateId: string,) => {
+export const getExportBoqItemsXlsxUrl = (estimateId: string,) => {
 
 
 
@@ -4266,11 +4266,11 @@ export const getExportBoqItemsCsvUrl = (estimateId: string,) => {
 }
 
 /**
- * @summary Export BOQ items as CSV
+ * @summary Export BOQ items as Excel (xlsx)
  */
-export const exportBoqItemsCsv = async (estimateId: string, options?: RequestInit): Promise<string> => {
+export const exportBoqItemsXlsx = async (estimateId: string, options?: RequestInit): Promise<Blob> => {
 
-  return customFetch<string>(getExportBoqItemsCsvUrl(estimateId),
+  return customFetch<Blob>(getExportBoqItemsXlsxUrl(estimateId),
   {
     ...options,
     method: 'GET'
@@ -4283,45 +4283,45 @@ export const exportBoqItemsCsv = async (estimateId: string, options?: RequestIni
 
 
 
-export const getExportBoqItemsCsvQueryKey = (estimateId: string,) => {
+export const getExportBoqItemsXlsxQueryKey = (estimateId: string,) => {
     return [
     `/api/estimates/${estimateId}/boq-items/export`
     ] as const;
     }
 
 
-export const getExportBoqItemsCsvQueryOptions = <TData = Awaited<ReturnType<typeof exportBoqItemsCsv>>, TError = ErrorType<unknown>>(estimateId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportBoqItemsCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getExportBoqItemsXlsxQueryOptions = <TData = Awaited<ReturnType<typeof exportBoqItemsXlsx>>, TError = ErrorType<unknown>>(estimateId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportBoqItemsXlsx>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getExportBoqItemsCsvQueryKey(estimateId);
+  const queryKey =  queryOptions?.queryKey ?? getExportBoqItemsXlsxQueryKey(estimateId);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportBoqItemsCsv>>> = ({ signal }) => exportBoqItemsCsv(estimateId, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportBoqItemsXlsx>>> = ({ signal }) => exportBoqItemsXlsx(estimateId, { signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, enabled: !!(estimateId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportBoqItemsCsv>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, enabled: !!(estimateId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportBoqItemsXlsx>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type ExportBoqItemsCsvQueryResult = NonNullable<Awaited<ReturnType<typeof exportBoqItemsCsv>>>
-export type ExportBoqItemsCsvQueryError = ErrorType<unknown>
+export type ExportBoqItemsXlsxQueryResult = NonNullable<Awaited<ReturnType<typeof exportBoqItemsXlsx>>>
+export type ExportBoqItemsXlsxQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Export BOQ items as CSV
+ * @summary Export BOQ items as Excel (xlsx)
  */
 
-export function useExportBoqItemsCsv<TData = Awaited<ReturnType<typeof exportBoqItemsCsv>>, TError = ErrorType<unknown>>(
- estimateId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportBoqItemsCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useExportBoqItemsXlsx<TData = Awaited<ReturnType<typeof exportBoqItemsXlsx>>, TError = ErrorType<unknown>>(
+ estimateId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportBoqItemsXlsx>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getExportBoqItemsCsvQueryOptions(estimateId,options)
+  const queryOptions = getExportBoqItemsXlsxQueryOptions(estimateId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -4,6 +4,7 @@ import {
   variationOrdersTable,
   approvalsTable,
   projectsTable,
+  estimatesTable,
 } from "@workspace/db";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
@@ -101,6 +102,18 @@ router.patch(
   requireRole(...ROLE_GROUPS.OWNER_PM_QS),
   async (req: Request, res: Response) => {
     const b = req.body ?? {};
+
+    // Only Owner / PM / Admin may approve or reject — QS may edit metadata only
+    if (b.status === "approved" || b.status === "rejected") {
+      if (!req.user || !ROLE_GROUPS.OWNER_PM.includes(req.user.role as any)) {
+        res.status(403).json({ error: "Only Owner or PM can approve or reject variation orders" });
+        return;
+      }
+    }
+
+    const [existing] = await db.select().from(variationOrdersTable).where(eq(variationOrdersTable.id, req.params.voId));
+    if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+
     const update: Record<string, unknown> = {};
     for (const k of ["title", "description", "scopeChange", "estimateId"]) {
       if (b[k] !== undefined) update[k] = b[k];
@@ -115,20 +128,31 @@ router.patch(
         await db.update(approvalsTable)
           .set({ status: "approved", resolvedAt: new Date() })
           .where(and(eq(approvalsTable.entityId, req.params.voId), eq(approvalsTable.entityType, "variation_order")));
+      } else if (b.status === "rejected") {
+        await db.update(approvalsTable)
+          .set({ status: "rejected", resolvedAt: new Date() })
+          .where(and(eq(approvalsTable.entityId, req.params.voId), eq(approvalsTable.entityType, "variation_order")));
       }
     }
-    const [existing] = await db.select().from(variationOrdersTable).where(eq(variationOrdersTable.id, req.params.voId));
+
     const [vo] = await db.update(variationOrdersTable).set(update as any).where(eq(variationOrdersTable.id, req.params.voId)).returning();
-    // When VO approved: add costImpact to project contractValue (Revised Contract Value)
-    if (b.status === "approved" && existing && existing.status !== "approved" && vo) {
+    if (!vo) { res.status(404).json({ error: "Not found" }); return; }
+
+    // Approval side-effects: update project RCV + linked estimate totalAmount
+    if (b.status === "approved" && existing.status !== "approved") {
       const impact = n(vo.costImpact);
       if (impact !== 0) {
         await db.update(projectsTable)
           .set({ contractValue: sql`contract_value + ${String(impact)}` })
           .where(eq(projectsTable.id, vo.projectId));
+        if (vo.estimateId) {
+          await db.update(estimatesTable)
+            .set({ totalAmount: sql`total_amount + ${String(impact)}` })
+            .where(eq(estimatesTable.id, vo.estimateId));
+        }
       }
     }
-    if (!vo) { res.status(404).json({ error: "Not found" }); return; }
+
     res.json(serializeVo(vo));
   },
 );

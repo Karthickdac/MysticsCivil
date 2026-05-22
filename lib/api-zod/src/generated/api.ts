@@ -1406,9 +1406,9 @@ export const UpdateVariationOrderResponse = zod.object({
 
 
 /**
- * @summary Export BOQ items as CSV
+ * @summary Export BOQ items as Excel (xlsx)
  */
-export const ExportBoqItemsCsvParams = zod.object({
+export const ExportBoqItemsXlsxParams = zod.object({
   "estimateId": zod.coerce.string()
 })
 
