@@ -305,4 +305,135 @@ export const approvalsTable = pgTable("approvals", {
 });
 export type Approval = typeof approvalsTable.$inferSelect;
 
+// ─────────────────────────────────────────────
+// Phase 2 — Estimation Engine
+// ─────────────────────────────────────────────
+
+export const ESTIMATE_LEVELS = ["L0", "L1", "L2", "L3", "L4", "L5"] as const;
+export type EstimateLevel = (typeof ESTIMATE_LEVELS)[number];
+
+export const ESTIMATE_STATUSES = ["draft", "submitted", "approved", "locked"] as const;
+export type EstimateStatus = (typeof ESTIMATE_STATUSES)[number];
+
+export const VO_STATUSES = ["draft", "submitted", "approved", "rejected"] as const;
+export type VoStatus = (typeof VO_STATUSES)[number];
+
+export const RATE_COMPONENT_TYPES = ["material", "labour", "plant", "overhead"] as const;
+export type RateComponentType = (typeof RATE_COMPONENT_TYPES)[number];
+
+export const BOQ_LEVEL_TYPES = ["L2", "L3"] as const;
+
+export const dsrRatesTable = pgTable("dsr_rates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 32 }).notNull(),
+  description: varchar("description", { length: 512 }).notNull(),
+  trade: varchar("trade", { length: 64 }).notNull(),
+  unit: varchar("unit", { length: 32 }).notNull(),
+  state: varchar("state", { length: 64 }).notNull(),
+  cityTier: varchar("city_tier", { length: 16 }).notNull().default("T2"),
+  rate: numeric("rate", { precision: 18, scale: 2 }).notNull(),
+  effectiveYear: integer("effective_year").notNull().default(2024),
+  source: varchar("source", { length: 64 }).notNull().default("DSR"),
+  createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+export type DsrRate = typeof dsrRatesTable.$inferSelect;
+
+export const estimatesTable = pgTable("estimates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id")
+    .notNull()
+    .references(() => projectsTable.id, { onDelete: "cascade" }),
+  level: varchar("level", { length: 8 }).notNull(),
+  name: varchar("name", { length: 256 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull().default("draft"),
+  totalAmount: numeric("total_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  notes: text("notes"),
+  metadata: jsonb("metadata"),
+  createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  approvedById: varchar("approved_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+export type Estimate = typeof estimatesTable.$inferSelect;
+
+export const estimateCostHeadsTable = pgTable("estimate_cost_heads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  estimateId: varchar("estimate_id")
+    .notNull()
+    .references(() => estimatesTable.id, { onDelete: "cascade" }),
+  headCode: varchar("head_code", { length: 16 }).notNull(),
+  headName: varchar("head_name", { length: 128 }).notNull(),
+  percentage: numeric("percentage", { precision: 6, scale: 2 }).notNull().default("0"),
+  amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+export type EstimateCostHead = typeof estimateCostHeadsTable.$inferSelect;
+
+export const boqItemsTable = pgTable("boq_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  estimateId: varchar("estimate_id")
+    .notNull()
+    .references(() => estimatesTable.id, { onDelete: "cascade" }),
+  projectId: varchar("project_id")
+    .notNull()
+    .references(() => projectsTable.id, { onDelete: "cascade" }),
+  wbsActivityId: varchar("wbs_activity_id").references(() => wbsActivitiesTable.id, { onDelete: "set null" }),
+  dsrRateId: varchar("dsr_rate_id").references(() => dsrRatesTable.id, { onDelete: "set null" }),
+  levelType: varchar("level_type", { length: 4 }).notNull().default("L3"),
+  trade: varchar("trade", { length: 64 }).notNull(),
+  itemCode: varchar("item_code", { length: 32 }),
+  description: text("description").notNull(),
+  unit: varchar("unit", { length: 32 }).notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 3 }).notNull().default("0"),
+  rate: numeric("rate", { precision: 18, scale: 2 }).notNull().default("0"),
+  amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  actualQuantity: numeric("actual_quantity", { precision: 18, scale: 3 }).notNull().default("0"),
+  actualAmount: numeric("actual_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  hsnCode: varchar("hsn_code", { length: 16 }),
+  gstRate: numeric("gst_rate", { precision: 5, scale: 2 }).notNull().default("18"),
+  locked: boolean("locked").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type BoqItem = typeof boqItemsTable.$inferSelect;
+
+export const rateAnalysisComponentsTable = pgTable("rate_analysis_components", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  boqItemId: varchar("boq_item_id")
+    .notNull()
+    .references(() => boqItemsTable.id, { onDelete: "cascade" }),
+  componentType: varchar("component_type", { length: 16 }).notNull(),
+  description: varchar("description", { length: 256 }).notNull(),
+  unit: varchar("unit", { length: 32 }).notNull(),
+  quantity: numeric("quantity", { precision: 18, scale: 3 }).notNull().default("0"),
+  marketRate: numeric("market_rate", { precision: 18, scale: 2 }).notNull().default("0"),
+  dsrRate: numeric("dsr_rate", { precision: 18, scale: 2 }).notNull().default("0"),
+  amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+export type RateAnalysisComponent = typeof rateAnalysisComponentsTable.$inferSelect;
+
+export const variationOrdersTable = pgTable("variation_orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id")
+    .notNull()
+    .references(() => projectsTable.id, { onDelete: "cascade" }),
+  estimateId: varchar("estimate_id").references(() => estimatesTable.id, { onDelete: "set null" }),
+  voNumber: varchar("vo_number", { length: 32 }).notNull(),
+  title: varchar("title", { length: 256 }).notNull(),
+  description: text("description"),
+  scopeChange: text("scope_change"),
+  costImpact: numeric("cost_impact", { precision: 18, scale: 2 }).notNull().default("0"),
+  programmeImpactDays: integer("programme_impact_days").notNull().default(0),
+  status: varchar("status", { length: 32 }).notNull().default("draft"),
+  raisedById: varchar("raised_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  approvedById: varchar("approved_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+});
+export type VariationOrder = typeof variationOrdersTable.$inferSelect;
+
 export const _zUserRole = z.enum(USER_ROLES);

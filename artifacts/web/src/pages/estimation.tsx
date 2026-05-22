@@ -1,0 +1,591 @@
+import { useState } from "react";
+import { useParams, Link } from "wouter";
+import {
+  useListProjectEstimates,
+  useCreateEstimate,
+  useUpdateEstimate,
+  useListEstimateCostHeads,
+  useReplaceEstimateCostHeads,
+  useListBoqItems,
+  useCreateBoqItem,
+  useUpdateBoqItem,
+  useListRateAnalysisComponents,
+  useReplaceRateAnalysisComponents,
+  useListDsrRates,
+  getListProjectEstimatesQueryKey,
+  getListEstimateCostHeadsQueryKey,
+  getListBoqItemsQueryKey,
+  getListRateAnalysisComponentsQueryKey,
+} from "@workspace/api-client-react";
+import type { Estimate, EstimateCostHead, BoqItem } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { formatINR } from "@/lib/ocms-format";
+import {
+  Plus, ChevronRight, FileBarChart, Layers, Calculator,
+  ClipboardList, Wrench, AlertTriangle, ArrowLeft, Lock, Edit3, Check, X,
+} from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
+
+const LEVEL_ICONS: Record<string, any> = {
+  L0: FileBarChart, L1: Layers, L2: ClipboardList, L3: ClipboardList, L4: Calculator, L5: Wrench,
+};
+
+const LEVEL_LABELS: Record<string, string> = {
+  L0: "Concept Estimate",
+  L1: "Preliminary Cost Plan",
+  L2: "Abstract Estimate",
+  L3: "Detailed BOQ",
+  L4: "Rate Analysis",
+  L5: "Work Order Estimate",
+};
+
+const LEVEL_COLORS = ["#4f46e5","#0891b2","#0d9488","#16a34a","#ca8a04","#dc2626"];
+
+const STATUS_BADGE: Record<string, string> = {
+  draft: "bg-slate-100 text-slate-600",
+  submitted: "bg-amber-100 text-amber-700",
+  approved: "bg-emerald-100 text-emerald-700",
+  locked: "bg-rose-100 text-rose-700",
+};
+
+const L1_HEADS_COLORS = ["#4f46e5","#0891b2","#0d9488","#16a34a","#ca8a04","#dc2626","#7c3aed","#db2777","#2563eb","#d97706"];
+const TRADES = ["Earthwork","RCC","Masonry","Plaster","Flooring","Tiling","Waterproofing","Painting","MEP-Electrical","MEP-Plumbing","MEP-HVAC","Facade","Structural Steel","Piling","Roads","External Works","Landscaping","Prelims"];
+const COMP_TYPES = ["material","labour","plant","overhead"];
+
+function NewEstimateDialog({ projectId }: { projectId: string }) {
+  const [open, setOpen] = useState(false);
+  const [level, setLevel] = useState("L1");
+  const [name, setName] = useState("");
+  const [totalAmount, setTotalAmount] = useState("");
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const createEstimate = useCreateEstimate();
+
+  const submit = () => {
+    if (!name.trim()) { toast({ title: "Name required", variant: "destructive" }); return; }
+    createEstimate.mutate(
+      { projectId, data: { level: level as any, name, totalAmount: totalAmount ? Number(totalAmount) : 0 } },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListProjectEstimatesQueryKey(projectId) });
+          toast({ title: "Estimate created" });
+          setOpen(false); setName(""); setTotalAmount("");
+        },
+        onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+      },
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button><Plus className="h-4 w-4 mr-1" /> New Estimate</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Create Estimate</DialogTitle></DialogHeader>
+        <div className="space-y-4 mt-2">
+          <div>
+            <label className="text-sm font-medium mb-1 block">Level</label>
+            <Select value={level} onValueChange={setLevel}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(LEVEL_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{k} — {v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">Name</label>
+            <Input placeholder={`e.g. ${LEVEL_LABELS[level]} Rev 1`} value={name} onChange={e => setName(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">Total Amount (₹) <span className="text-muted-foreground font-normal">— optional seed value</span></label>
+            <Input type="number" placeholder="0" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={submit} disabled={createEstimate.isPending}>Create</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function L0Panel({ estimate }: { estimate: Estimate }) {
+  const meta = (estimate.metadata as any) ?? {};
+  const total = estimate.totalAmount;
+  const area = meta.builtUpArea ?? 0;
+  const perSqm = area > 0 ? total / area : 0;
+  const ranges = [
+    { label: "Conservative (−15%)", value: total * 0.85 },
+    { label: "Median", value: total },
+    { label: "Optimistic (+15%)", value: total * 1.15 },
+  ];
+  const breakdown = [
+    { name: "Civil & Structure", pct: 40 },
+    { name: "Finishing & MEP", pct: 35 },
+    { name: "Prelims & Fees", pct: 15 },
+    { name: "Contingency", pct: 10 },
+  ].map(d => ({ ...d, value: total * d.pct / 100 }));
+
+  return (
+    <div className="grid lg:grid-cols-2 gap-6">
+      <Card>
+        <CardHeader><CardTitle className="text-sm">Cost Range</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          {ranges.map((r, i) => (
+            <div key={r.label} className={`p-3 rounded-lg border-2 ${i === 1 ? "border-primary bg-primary/5" : "border-border"}`}>
+              <div className="text-xs text-muted-foreground">{r.label}</div>
+              <div className={`text-2xl font-bold ${i === 1 ? "text-primary" : ""}`}>{formatINR(r.value)}</div>
+              {area > 0 && <div className="text-xs text-muted-foreground">{formatINR(r.value / area)} / sqm</div>}
+            </div>
+          ))}
+          {meta.projectType && (
+            <div className="text-xs text-muted-foreground pt-2 border-t space-y-1">
+              <div>Type: <span className="font-medium">{meta.projectType}</span></div>
+              {meta.cityTier && <div>City tier: <span className="font-medium">{meta.cityTier}</span></div>}
+              {area > 0 && <div>BUA: <span className="font-medium">{area.toLocaleString()} sqm · {perSqm.toFixed(0)} ₹/sqm</span></div>}
+              {meta.floors && <div>Floors: <span className="font-medium">{meta.floors}</span></div>}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle className="text-sm">Cost Breakdown</CardTitle></CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie data={breakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, pct }) => `${name} ${pct}%`}>
+                {breakdown.map((_, i) => <Cell key={i} fill={LEVEL_COLORS[i % LEVEL_COLORS.length]} />)}
+              </Pie>
+              <Tooltip formatter={(v: any) => formatINR(v)} />
+            </PieChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function L1Panel({ estimate }: { estimate: Estimate }) {
+  const { data: heads = [], isLoading } = useListEstimateCostHeads(estimate.id);
+  const replaceHeads = useReplaceEstimateCostHeads();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [editing, setEditing] = useState<Record<string, { pct: string; amount: string }>>({});
+  const total = estimate.totalAmount;
+
+  const handlePctChange = (id: string, pct: string) => {
+    const p = parseFloat(pct) || 0;
+    setEditing(prev => ({ ...prev, [id]: { pct, amount: String((total * p / 100).toFixed(2)) } }));
+  };
+
+  const save = () => {
+    const updated = heads.map(h => {
+      const e = editing[h.id];
+      return { headCode: h.headCode, headName: h.headName, percentage: parseFloat(e?.pct ?? String(h.percentage)), amount: parseFloat(e?.amount ?? String(h.amount)) };
+    });
+    replaceHeads.mutate(
+      { estimateId: estimate.id, data: updated },
+      {
+        onSuccess: () => { setEditing({}); qc.invalidateQueries({ queryKey: getListEstimateCostHeadsQueryKey(estimate.id) }); toast({ title: "Saved" }); },
+        onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+      },
+    );
+  };
+
+  if (isLoading) return <Skeleton className="h-40 w-full" />;
+
+  const chartData = heads.map(h => ({ name: h.headName, value: h.amount }));
+  const totalPct = heads.reduce((s, h) => s + (parseFloat(editing[h.id]?.pct ?? String(h.percentage)) || 0), 0);
+
+  return (
+    <div className="grid lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 space-y-1">
+        <div className="grid grid-cols-12 gap-2 text-xs uppercase text-muted-foreground font-medium py-1 px-2">
+          <div className="col-span-5">Cost Head</div>
+          <div className="col-span-3 text-right">%</div>
+          <div className="col-span-4 text-right">Amount (₹)</div>
+        </div>
+        {heads.map((h) => {
+          const e = editing[h.id];
+          return (
+            <div key={h.id} className="grid grid-cols-12 gap-2 items-center py-1.5 px-2 rounded hover:bg-muted/40">
+              <div className="col-span-5 text-sm font-medium">{h.headName}</div>
+              <div className="col-span-3">
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    className="h-7 text-right text-sm"
+                    value={e?.pct ?? String(h.percentage)}
+                    onChange={ev => handlePctChange(h.id, ev.target.value)}
+                  />
+                  <span className="text-muted-foreground text-xs">%</span>
+                </div>
+              </div>
+              <div className="col-span-4 text-right text-sm tabular-nums">
+                {formatINR(parseFloat(e?.amount ?? String(h.amount)) || 0)}
+              </div>
+            </div>
+          );
+        })}
+        <div className="grid grid-cols-12 gap-2 py-2 px-2 border-t font-bold text-sm">
+          <div className="col-span-5">Total</div>
+          <div className={`col-span-3 text-right ${Math.abs(totalPct - 100) > 0.5 ? "text-rose-600" : "text-emerald-700"}`}>{totalPct.toFixed(1)}%</div>
+          <div className="col-span-4 text-right">{formatINR(total)}</div>
+        </div>
+        {Object.keys(editing).length > 0 && (
+          <Button size="sm" onClick={save} disabled={replaceHeads.isPending} className="mt-2">
+            <Check className="h-3 w-3 mr-1" /> Save Changes
+          </Button>
+        )}
+      </div>
+      <Card>
+        <CardHeader><CardTitle className="text-xs">Distribution</CardTitle></CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart>
+              <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70}>
+                {chartData.map((_, i) => <Cell key={i} fill={L1_HEADS_COLORS[i % L1_HEADS_COLORS.length]} />)}
+              </Pie>
+              <Tooltip formatter={(v: any) => formatINR(v)} />
+              <Legend wrapperStyle={{ fontSize: 10 }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function BoqPanel({ estimate }: { estimate: Estimate }) {
+  const { data: items = [], isLoading } = useListBoqItems(estimate.id);
+  const [newRow, setNewRow] = useState<any>(null);
+  const [raItem, setRaItem] = useState<BoqItem | null>(null);
+  const createItem = useCreateBoqItem();
+  const updateItem = useUpdateBoqItem();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { data: dsrRates = [] } = useListDsrRates({});
+
+  if (isLoading) return <Skeleton className="h-40 w-full" />;
+
+  const locked = estimate.status === "locked";
+  const groupedByTrade = items.reduce<Record<string, BoqItem[]>>((acc, i) => {
+    (acc[i.trade] ||= []).push(i);
+    return acc;
+  }, {});
+  const total = items.reduce((s, i) => s + i.amount, 0);
+
+  const addItem = () => {
+    if (!newRow?.description || !newRow?.unit || !newRow?.trade) {
+      toast({ title: "Description, unit and trade required", variant: "destructive" }); return;
+    }
+    createItem.mutate(
+      { estimateId: estimate.id, data: { ...newRow, quantity: Number(newRow.quantity || 0), rate: Number(newRow.rate || 0), levelType: estimate.level as "L2" | "L3" } },
+      {
+        onSuccess: () => { qc.invalidateQueries({ queryKey: getListBoqItemsQueryKey(estimate.id) }); setNewRow(null); toast({ title: "Item added" }); },
+        onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+      },
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-muted-foreground">
+          {items.length} items · Total: <span className="font-bold text-foreground">{formatINR(total)}</span>
+          {estimate.level === "L3" && <span className="ml-2 text-xs">(excl. GST)</span>}
+        </div>
+        {!locked && (
+          <Button size="sm" variant="outline" onClick={() => setNewRow({ trade: TRADES[0], description: "", unit: "sqm", quantity: "0", rate: "0", hsnCode: "", gstRate: "18" })}>
+            <Plus className="h-3 w-3 mr-1" /> Add Item
+          </Button>
+        )}
+      </div>
+
+      {newRow && (
+        <div className="grid grid-cols-12 gap-2 p-3 border rounded-lg bg-muted/30">
+          <Select value={newRow.trade} onValueChange={v => setNewRow((r: any) => ({ ...r, trade: v }))}>
+            <SelectTrigger className="col-span-2 h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>{TRADES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+          </Select>
+          <Input className="col-span-4 h-8 text-xs" placeholder="Description" value={newRow.description} onChange={e => setNewRow((r: any) => ({ ...r, description: e.target.value }))} />
+          <Input className="col-span-1 h-8 text-xs" placeholder="Unit" value={newRow.unit} onChange={e => setNewRow((r: any) => ({ ...r, unit: e.target.value }))} />
+          <Input className="col-span-1 h-8 text-xs text-right" type="number" placeholder="Qty" value={newRow.quantity} onChange={e => setNewRow((r: any) => ({ ...r, quantity: e.target.value }))} />
+          <Input className="col-span-2 h-8 text-xs text-right" type="number" placeholder="Rate ₹" value={newRow.rate} onChange={e => setNewRow((r: any) => ({ ...r, rate: e.target.value }))} />
+          <div className="col-span-2 flex gap-1">
+            <Button size="sm" className="h-8 flex-1" onClick={addItem}><Check className="h-3 w-3" /></Button>
+            <Button size="sm" variant="outline" className="h-8" onClick={() => setNewRow(null)}><X className="h-3 w-3" /></Button>
+          </div>
+        </div>
+      )}
+
+      {Object.entries(groupedByTrade).map(([trade, tradeItems]) => (
+        <div key={trade}>
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-1 border-b mb-1">{trade}</div>
+          <table className="w-full text-sm">
+            <thead className="text-[10px] uppercase text-muted-foreground">
+              <tr>
+                <th className="text-left pb-1 w-8">#</th>
+                <th className="text-left pb-1">Description</th>
+                <th className="text-right pb-1 w-16">Unit</th>
+                <th className="text-right pb-1 w-20">Qty</th>
+                <th className="text-right pb-1 w-24">Rate ₹</th>
+                <th className="text-right pb-1 w-28">Amount ₹</th>
+                {estimate.level === "L3" && <th className="text-right pb-1 w-16">GST%</th>}
+                <th className="w-16"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {tradeItems.map((item, idx) => (
+                <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30 group">
+                  <td className="py-1 text-muted-foreground text-xs">{idx + 1}</td>
+                  <td className="py-1">
+                    <div>{item.description}</div>
+                    {item.itemCode && <div className="text-[10px] text-muted-foreground">{item.itemCode} {item.hsnCode && `· HSN ${item.hsnCode}`}</div>}
+                  </td>
+                  <td className="py-1 text-right">{item.unit}</td>
+                  <td className="py-1 text-right tabular-nums">{item.quantity.toLocaleString()}</td>
+                  <td className="py-1 text-right tabular-nums">{formatINR(item.rate)}</td>
+                  <td className="py-1 text-right tabular-nums font-medium">{formatINR(item.amount)}</td>
+                  {estimate.level === "L3" && <td className="py-1 text-right">{item.gstRate}%</td>}
+                  <td className="py-1 text-right">
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                      {item.locked && <Lock className="h-3 w-3 text-rose-500" />}
+                      <button onClick={() => setRaItem(item)} className="text-muted-foreground hover:text-primary" title="Rate Analysis">
+                        <Calculator className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+
+      {raItem && <RateAnalysisModal item={raItem} onClose={() => setRaItem(null)} />}
+    </div>
+  );
+}
+
+function RateAnalysisModal({ item, onClose }: { item: BoqItem; onClose: () => void }) {
+  const { data: comps = [], isLoading } = useListRateAnalysisComponents(item.id);
+  const replaceComps = useReplaceRateAnalysisComponents();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [rows, setRows] = useState<any[]>([]);
+
+  const handleSave = () => {
+    replaceComps.mutate(
+      { itemId: item.id, data: rows },
+      {
+        onSuccess: () => { qc.invalidateQueries({ queryKey: getListRateAnalysisComponentsQueryKey(item.id) }); toast({ title: "Saved" }); onClose(); },
+        onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+      },
+    );
+  };
+
+  const data = rows.length ? rows : comps;
+  const total = data.reduce((s, c) => s + (parseFloat(c.quantity) * parseFloat(c.marketRate || c.market_rate || 0)), 0);
+  const byType = COMP_TYPES.map(t => ({ name: t, value: data.filter(c => c.componentType === t).reduce((s, c) => s + (parseFloat(c.quantity) * parseFloat(c.marketRate || 0)), 0) })).filter(d => d.value > 0);
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader><DialogTitle>Rate Analysis — {item.description}</DialogTitle></DialogHeader>
+        <div className="grid md:grid-cols-3 gap-4">
+          <div className="md:col-span-2">
+            {isLoading ? <Skeleton className="h-32 w-full" /> : (
+              <table className="w-full text-sm">
+                <thead className="text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="text-left pb-1">Type</th>
+                    <th className="text-left pb-1">Description</th>
+                    <th className="text-right pb-1">Qty</th>
+                    <th className="text-right pb-1">Unit</th>
+                    <th className="text-right pb-1">Market ₹</th>
+                    <th className="text-right pb-1">DSR ₹</th>
+                    <th className="text-right pb-1">Amount ₹</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.map((c, i) => (
+                    <tr key={i} className="border-b last:border-0">
+                      <td className="py-1"><Badge variant="outline" className="text-[10px]">{c.componentType}</Badge></td>
+                      <td className="py-1">{c.description}</td>
+                      <td className="py-1 text-right">{parseFloat(c.quantity).toFixed(2)}</td>
+                      <td className="py-1 text-right">{c.unit}</td>
+                      <td className="py-1 text-right">{formatINR(parseFloat(c.marketRate || c.market_rate || 0))}</td>
+                      <td className="py-1 text-right text-muted-foreground">{formatINR(parseFloat(c.dsrRate || c.dsr_rate || 0))}</td>
+                      <td className="py-1 text-right font-medium">{formatINR(parseFloat(c.quantity) * parseFloat(c.marketRate || c.market_rate || 0))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t font-bold">
+                    <td colSpan={6}>Total Analysis Rate</td>
+                    <td className="text-right">{formatINR(total)}</td>
+                  </tr>
+                  <tr className="text-muted-foreground text-xs">
+                    <td colSpan={6}>BOQ Rate</td>
+                    <td className="text-right">{formatINR(item.rate)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            )}
+            <div className="flex gap-2 mt-2">
+              <Button size="sm" variant="outline" onClick={() => setRows([...(data), { componentType: "material", description: "", unit: "kg", quantity: "0", marketRate: "0", dsrRate: "0" }])}>
+                <Plus className="h-3 w-3 mr-1" /> Add Row
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={replaceComps.isPending}>Save</Button>
+            </div>
+          </div>
+          <div>
+            <ResponsiveContainer width="100%" height={150}>
+              <PieChart>
+                <Pie data={byType} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={55}>
+                  {byType.map((_, i) => <Cell key={i} fill={LEVEL_COLORS[i % LEVEL_COLORS.length]} />)}
+                </Pie>
+                <Tooltip formatter={(v: any) => formatINR(v)} />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function L5Panel({ estimate }: { estimate: Estimate }) {
+  const meta = (estimate.metadata as any) ?? {};
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader><CardTitle className="text-sm">Work Order Estimate — Sub-contractor Scope</CardTitle></CardHeader>
+        <CardContent>
+          {meta.subcontractor ? (
+            <div className="space-y-2 text-sm">
+              <div className="grid grid-cols-2 gap-2">
+                <div><span className="text-muted-foreground">Sub-contractor:</span> <span className="font-medium">{meta.subcontractor}</span></div>
+                <div><span className="text-muted-foreground">Work Package:</span> <span className="font-medium">{meta.workPackage ?? "—"}</span></div>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                <div className="p-3 rounded border text-center">
+                  <div className="text-xs text-muted-foreground">BOQ Rate Total</div>
+                  <div className="font-bold text-lg">{formatINR(meta.boqTotal ?? 0)}</div>
+                </div>
+                <div className="p-3 rounded border text-center">
+                  <div className="text-xs text-muted-foreground">Sub Rate Total</div>
+                  <div className="font-bold text-lg">{formatINR(meta.subTotal ?? 0)}</div>
+                </div>
+                <div className={`p-3 rounded border text-center ${(meta.marginPct ?? 0) < 0 ? "border-rose-300 bg-rose-50" : "border-emerald-300 bg-emerald-50"}`}>
+                  <div className="text-xs text-muted-foreground">Back-to-Back Margin</div>
+                  <div className={`font-bold text-lg ${(meta.marginPct ?? 0) < 0 ? "text-rose-600" : "text-emerald-700"}`}>{(meta.marginPct ?? 0).toFixed(1)}%</div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground text-center py-8">
+              No work order data. Edit the estimate metadata to set sub-contractor details.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export default function EstimationPage({ projectId: propProjectId }: { projectId?: string } = {}) {
+  const params = useParams<{ id: string }>();
+  const projectId = propProjectId ?? params.id;
+  const { data: estimates = [], isLoading } = useListProjectEstimates(projectId);
+  const [selected, setSelected] = useState<Estimate | null>(null);
+
+  const activeEst = selected ?? null;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Estimation</h1>
+          <p className="text-sm text-muted-foreground">L0 concept through L5 work order — full estimation workflow.</p>
+        </div>
+        <NewEstimateDialog projectId={projectId} />
+      </div>
+
+      <div className="grid lg:grid-cols-4 gap-6">
+        <div className="space-y-2">
+          <div className="text-xs uppercase tracking-wide font-semibold text-muted-foreground mb-2">Estimates</div>
+          {isLoading && [1,2,3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
+          {!isLoading && estimates.length === 0 && (
+            <div className="text-sm text-muted-foreground p-4 border border-dashed rounded-lg text-center">No estimates yet.</div>
+          )}
+          {estimates.map(est => {
+            const Icon = LEVEL_ICONS[est.level] ?? FileBarChart;
+            return (
+              <button
+                key={est.id}
+                onClick={() => setSelected(est)}
+                className={`w-full text-left p-3 rounded-lg border transition-all ${activeEst?.id === est.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
+              >
+                <div className="flex items-center gap-2">
+                  <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{est.name}</div>
+                    <div className="text-xs text-muted-foreground">{est.level} · {LEVEL_LABELS[est.level]}</div>
+                  </div>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${STATUS_BADGE[est.status] ?? ""}`}>{est.status}</span>
+                </div>
+                <div className="text-xs tabular-nums text-muted-foreground mt-1">{formatINR(est.totalAmount)}</div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="lg:col-span-3">
+          {!activeEst ? (
+            <div className="flex items-center justify-center h-64 border border-dashed rounded-lg text-muted-foreground text-sm">
+              Select an estimate to view details
+            </div>
+          ) : (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">{activeEst.name}</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">{activeEst.level} — {LEVEL_LABELS[activeEst.level]}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-0.5 rounded border ${STATUS_BADGE[activeEst.status] ?? ""}`}>{activeEst.status}</span>
+                  <div className="text-sm font-bold">{formatINR(activeEst.totalAmount)}</div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {activeEst.level === "L0" && <L0Panel estimate={activeEst} />}
+                {activeEst.level === "L1" && <L1Panel estimate={activeEst} />}
+                {(activeEst.level === "L2" || activeEst.level === "L3") && <BoqPanel estimate={activeEst} />}
+                {activeEst.level === "L4" && <BoqPanel estimate={activeEst} />}
+                {activeEst.level === "L5" && <L5Panel estimate={activeEst} />}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

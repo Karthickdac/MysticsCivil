@@ -916,6 +916,495 @@ export const ResolveApprovalResponse = zod.object({
 })
 
 
+export const ListProjectEstimatesParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListProjectEstimatesResponseItem = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "level": zod.enum(['L0', 'L1', 'L2', 'L3', 'L4', 'L5']),
+  "name": zod.string(),
+  "status": zod.enum(['draft', 'submitted', 'approved', 'locked']),
+  "totalAmount": zod.number(),
+  "notes": zod.string().nullable(),
+  "metadata": zod.unknown(),
+  "createdById": zod.string().nullable(),
+  "approvedById": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListProjectEstimatesResponse = zod.array(ListProjectEstimatesResponseItem)
+
+
+export const CreateEstimateParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+
+
+
+export const CreateEstimateBody = zod.object({
+  "level": zod.enum(['L0', 'L1', 'L2', 'L3', 'L4', 'L5']),
+  "name": zod.string().min(1),
+  "notes": zod.string().optional(),
+  "totalAmount": zod.number().optional(),
+  "metadata": zod.unknown().optional(),
+  "skipDefaultHeads": zod.boolean().optional()
+})
+
+
+export const GetEstimateParams = zod.object({
+  "estimateId": zod.coerce.string()
+})
+
+export const GetEstimateResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "level": zod.enum(['L0', 'L1', 'L2', 'L3', 'L4', 'L5']),
+  "name": zod.string(),
+  "status": zod.enum(['draft', 'submitted', 'approved', 'locked']),
+  "totalAmount": zod.number(),
+  "notes": zod.string().nullable(),
+  "metadata": zod.unknown(),
+  "createdById": zod.string().nullable(),
+  "approvedById": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const UpdateEstimateParams = zod.object({
+  "estimateId": zod.coerce.string()
+})
+
+export const UpdateEstimateBody = zod.object({
+  "name": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "status": zod.enum(['draft', 'submitted', 'approved', 'locked']).optional(),
+  "totalAmount": zod.number().optional(),
+  "metadata": zod.unknown().optional()
+})
+
+export const UpdateEstimateResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "level": zod.enum(['L0', 'L1', 'L2', 'L3', 'L4', 'L5']),
+  "name": zod.string(),
+  "status": zod.enum(['draft', 'submitted', 'approved', 'locked']),
+  "totalAmount": zod.number(),
+  "notes": zod.string().nullable(),
+  "metadata": zod.unknown(),
+  "createdById": zod.string().nullable(),
+  "approvedById": zod.string().nullable(),
+  "approvedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const DeleteEstimateParams = zod.object({
+  "estimateId": zod.coerce.string()
+})
+
+
+export const ListEstimateCostHeadsParams = zod.object({
+  "estimateId": zod.coerce.string()
+})
+
+export const ListEstimateCostHeadsResponseItem = zod.object({
+  "id": zod.string(),
+  "estimateId": zod.string(),
+  "headCode": zod.string(),
+  "headName": zod.string(),
+  "percentage": zod.number(),
+  "amount": zod.number(),
+  "sortOrder": zod.number()
+})
+export const ListEstimateCostHeadsResponse = zod.array(ListEstimateCostHeadsResponseItem)
+
+
+export const ReplaceEstimateCostHeadsParams = zod.object({
+  "estimateId": zod.coerce.string()
+})
+
+export const ReplaceEstimateCostHeadsBodyItem = zod.object({
+  "headCode": zod.string(),
+  "headName": zod.string(),
+  "percentage": zod.number(),
+  "amount": zod.number()
+})
+export const ReplaceEstimateCostHeadsBody = zod.array(ReplaceEstimateCostHeadsBodyItem)
+
+export const ReplaceEstimateCostHeadsResponseItem = zod.object({
+  "id": zod.string(),
+  "estimateId": zod.string(),
+  "headCode": zod.string(),
+  "headName": zod.string(),
+  "percentage": zod.number(),
+  "amount": zod.number(),
+  "sortOrder": zod.number()
+})
+export const ReplaceEstimateCostHeadsResponse = zod.array(ReplaceEstimateCostHeadsResponseItem)
+
+
+export const ListBoqItemsParams = zod.object({
+  "estimateId": zod.coerce.string()
+})
+
+export const ListBoqItemsResponseItem = zod.object({
+  "id": zod.string(),
+  "estimateId": zod.string(),
+  "projectId": zod.string(),
+  "wbsActivityId": zod.string().nullable(),
+  "dsrRateId": zod.string().nullable(),
+  "levelType": zod.string(),
+  "trade": zod.string(),
+  "itemCode": zod.string().nullable(),
+  "description": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "rate": zod.number(),
+  "amount": zod.number(),
+  "actualQuantity": zod.number(),
+  "actualAmount": zod.number(),
+  "hsnCode": zod.string().nullable(),
+  "gstRate": zod.number(),
+  "locked": zod.boolean(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date()
+})
+export const ListBoqItemsResponse = zod.array(ListBoqItemsResponseItem)
+
+
+export const CreateBoqItemParams = zod.object({
+  "estimateId": zod.coerce.string()
+})
+
+
+
+
+export const CreateBoqItemBody = zod.object({
+  "trade": zod.string(),
+  "description": zod.string().min(1),
+  "unit": zod.string(),
+  "itemCode": zod.string().optional(),
+  "levelType": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "rate": zod.number().optional(),
+  "dsrRateId": zod.string().optional(),
+  "wbsActivityId": zod.string().optional(),
+  "hsnCode": zod.string().optional(),
+  "gstRate": zod.number().optional()
+})
+
+
+export const UpdateBoqItemParams = zod.object({
+  "itemId": zod.coerce.string()
+})
+
+export const UpdateBoqItemBody = zod.object({
+  "description": zod.string().optional(),
+  "trade": zod.string().optional(),
+  "unit": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "rate": zod.number().optional(),
+  "actualQuantity": zod.number().optional(),
+  "actualAmount": zod.number().optional(),
+  "hsnCode": zod.string().optional(),
+  "gstRate": zod.number().optional(),
+  "locked": zod.boolean().optional()
+})
+
+export const UpdateBoqItemResponse = zod.object({
+  "id": zod.string(),
+  "estimateId": zod.string(),
+  "projectId": zod.string(),
+  "wbsActivityId": zod.string().nullable(),
+  "dsrRateId": zod.string().nullable(),
+  "levelType": zod.string(),
+  "trade": zod.string(),
+  "itemCode": zod.string().nullable(),
+  "description": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "rate": zod.number(),
+  "amount": zod.number(),
+  "actualQuantity": zod.number(),
+  "actualAmount": zod.number(),
+  "hsnCode": zod.string().nullable(),
+  "gstRate": zod.number(),
+  "locked": zod.boolean(),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const DeleteBoqItemParams = zod.object({
+  "itemId": zod.coerce.string()
+})
+
+
+export const ListRateAnalysisComponentsParams = zod.object({
+  "itemId": zod.coerce.string()
+})
+
+export const ListRateAnalysisComponentsResponseItem = zod.object({
+  "id": zod.string(),
+  "boqItemId": zod.string(),
+  "componentType": zod.string(),
+  "description": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "marketRate": zod.number(),
+  "dsrRate": zod.number(),
+  "amount": zod.number(),
+  "sortOrder": zod.number()
+})
+export const ListRateAnalysisComponentsResponse = zod.array(ListRateAnalysisComponentsResponseItem)
+
+
+export const ReplaceRateAnalysisComponentsParams = zod.object({
+  "itemId": zod.coerce.string()
+})
+
+export const ReplaceRateAnalysisComponentsBodyItem = zod.object({
+  "componentType": zod.enum(['material', 'labour', 'plant', 'overhead']),
+  "description": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "marketRate": zod.number(),
+  "dsrRate": zod.number().optional()
+})
+export const ReplaceRateAnalysisComponentsBody = zod.array(ReplaceRateAnalysisComponentsBodyItem)
+
+export const ReplaceRateAnalysisComponentsResponseItem = zod.object({
+  "id": zod.string(),
+  "boqItemId": zod.string(),
+  "componentType": zod.string(),
+  "description": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "marketRate": zod.number(),
+  "dsrRate": zod.number(),
+  "amount": zod.number(),
+  "sortOrder": zod.number()
+})
+export const ReplaceRateAnalysisComponentsResponse = zod.array(ReplaceRateAnalysisComponentsResponseItem)
+
+
+/**
+ * @summary BOQ vs actual rate variance comparison
+ */
+export const GetBoqVsActualParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const GetBoqVsActualResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "estimateId": zod.string(),
+  "projectId": zod.string(),
+  "trade": zod.string(),
+  "description": zod.string(),
+  "unit": zod.string(),
+  "quantity": zod.number(),
+  "rate": zod.number(),
+  "amount": zod.number(),
+  "actualQuantity": zod.number(),
+  "actualAmount": zod.number(),
+  "actualRate": zod.number(),
+  "variancePct": zod.number(),
+  "alert": zod.enum(['green', 'amber', 'red']),
+  "gstRate": zod.number().optional(),
+  "hsnCode": zod.string().nullish(),
+  "locked": zod.boolean().optional(),
+  "sortOrder": zod.number().optional(),
+  "createdAt": zod.coerce.date().optional(),
+  "wbsActivityId": zod.string().nullish(),
+  "dsrRateId": zod.string().nullish(),
+  "itemCode": zod.string().nullish(),
+  "levelType": zod.string().optional()
+})),
+  "counts": zod.object({
+  "green": zod.number(),
+  "amber": zod.number(),
+  "red": zod.number()
+})
+})
+
+
+export const ListDsrRatesQueryParams = zod.object({
+  "q": zod.coerce.string().optional(),
+  "trade": zod.coerce.string().optional(),
+  "state": zod.coerce.string().optional(),
+  "cityTier": zod.coerce.string().optional()
+})
+
+export const ListDsrRatesResponseItem = zod.object({
+  "id": zod.string(),
+  "code": zod.string(),
+  "description": zod.string(),
+  "trade": zod.string(),
+  "unit": zod.string(),
+  "state": zod.string(),
+  "cityTier": zod.string(),
+  "rate": zod.number(),
+  "effectiveYear": zod.number(),
+  "source": zod.string(),
+  "createdById": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListDsrRatesResponse = zod.array(ListDsrRatesResponseItem)
+
+
+export const CreateDsrRateBody = zod.object({
+  "code": zod.string(),
+  "description": zod.string(),
+  "trade": zod.string(),
+  "unit": zod.string(),
+  "state": zod.string(),
+  "cityTier": zod.string().optional(),
+  "rate": zod.number(),
+  "effectiveYear": zod.number().optional(),
+  "source": zod.string().optional()
+})
+
+
+export const UpdateDsrRateParams = zod.object({
+  "rateId": zod.coerce.string()
+})
+
+export const UpdateDsrRateBody = zod.object({
+  "description": zod.string().optional(),
+  "trade": zod.string().optional(),
+  "unit": zod.string().optional(),
+  "state": zod.string().optional(),
+  "cityTier": zod.string().optional(),
+  "rate": zod.number().optional(),
+  "effectiveYear": zod.number().optional(),
+  "source": zod.string().optional()
+})
+
+export const UpdateDsrRateResponse = zod.object({
+  "id": zod.string(),
+  "code": zod.string(),
+  "description": zod.string(),
+  "trade": zod.string(),
+  "unit": zod.string(),
+  "state": zod.string(),
+  "cityTier": zod.string(),
+  "rate": zod.number(),
+  "effectiveYear": zod.number(),
+  "source": zod.string(),
+  "createdById": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const DeleteDsrRateParams = zod.object({
+  "rateId": zod.coerce.string()
+})
+
+
+export const ListVariationOrdersParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListVariationOrdersResponseItem = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "estimateId": zod.string().nullable(),
+  "voNumber": zod.string(),
+  "title": zod.string(),
+  "description": zod.string().nullable(),
+  "scopeChange": zod.string().nullable(),
+  "costImpact": zod.number(),
+  "programmeImpactDays": zod.number(),
+  "status": zod.string(),
+  "raisedById": zod.string().nullable(),
+  "approvedById": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "approvedAt": zod.coerce.date().nullable()
+})
+export const ListVariationOrdersResponse = zod.array(ListVariationOrdersResponseItem)
+
+
+export const CreateVariationOrderParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+
+
+
+export const CreateVariationOrderBody = zod.object({
+  "title": zod.string().min(1),
+  "description": zod.string().optional(),
+  "scopeChange": zod.string().optional(),
+  "costImpact": zod.number().optional(),
+  "programmeImpactDays": zod.number().optional(),
+  "estimateId": zod.string().optional()
+})
+
+
+export const GetVariationOrderParams = zod.object({
+  "voId": zod.coerce.string()
+})
+
+export const GetVariationOrderResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "estimateId": zod.string().nullable(),
+  "voNumber": zod.string(),
+  "title": zod.string(),
+  "description": zod.string().nullable(),
+  "scopeChange": zod.string().nullable(),
+  "costImpact": zod.number(),
+  "programmeImpactDays": zod.number(),
+  "status": zod.string(),
+  "raisedById": zod.string().nullable(),
+  "approvedById": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "approvedAt": zod.coerce.date().nullable()
+})
+
+
+export const UpdateVariationOrderParams = zod.object({
+  "voId": zod.coerce.string()
+})
+
+export const UpdateVariationOrderBody = zod.object({
+  "title": zod.string().optional(),
+  "description": zod.string().optional(),
+  "scopeChange": zod.string().optional(),
+  "costImpact": zod.number().optional(),
+  "programmeImpactDays": zod.number().optional(),
+  "status": zod.string().optional(),
+  "estimateId": zod.string().optional()
+})
+
+export const UpdateVariationOrderResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "estimateId": zod.string().nullable(),
+  "voNumber": zod.string(),
+  "title": zod.string(),
+  "description": zod.string().nullable(),
+  "scopeChange": zod.string().nullable(),
+  "costImpact": zod.number(),
+  "programmeImpactDays": zod.number(),
+  "status": zod.string(),
+  "raisedById": zod.string().nullable(),
+  "approvedById": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "approvedAt": zod.coerce.date().nullable()
+})
+
+
 /**
  * @summary Portfolio KPI summary + live project status table
  */

@@ -3,7 +3,7 @@ import { useParams, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Building2, Calendar, FileText, LayoutDashboard, ListTodo, MapPin, AlertCircle, Camera, FolderOpen } from "lucide-react";
+import { ArrowLeft, Building2, Calendar, FileText, LayoutDashboard, ListTodo, MapPin, AlertCircle, Camera, FolderOpen, Calculator, GitBranch, TrendingUp } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { WbsTab } from "@/components/project-tabs/wbs-tab";
@@ -12,6 +12,9 @@ import { DprsTab } from "@/components/project-tabs/dprs-tab";
 import { PhotosTab } from "@/components/project-tabs/photos-tab";
 import { DocumentsTab } from "@/components/project-tabs/documents-tab";
 import { IssuesTab } from "@/components/project-tabs/issues-tab";
+import EstimationPage from "@/pages/estimation";
+import VariationOrdersPage from "@/pages/variation-orders";
+import BoqVsActualPage from "@/pages/boq-vs-actual";
 
 export default function ProjectDetail() {
   const params = useParams();
@@ -101,6 +104,9 @@ export default function ProjectDetail() {
           <TabsTrigger value="dashboard" className="flex items-center gap-2"><LayoutDashboard className="h-4 w-4" /> Dashboard</TabsTrigger>
           <TabsTrigger value="wbs" className="flex items-center gap-2"><ListTodo className="h-4 w-4" /> WBS</TabsTrigger>
           <TabsTrigger value="milestones" className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Milestones</TabsTrigger>
+          <TabsTrigger value="estimation" className="flex items-center gap-2"><Calculator className="h-4 w-4" /> Estimation</TabsTrigger>
+          <TabsTrigger value="variation-orders" className="flex items-center gap-2"><GitBranch className="h-4 w-4" /> VOs</TabsTrigger>
+          <TabsTrigger value="boq-actual" className="flex items-center gap-2"><TrendingUp className="h-4 w-4" /> BOQ vs Actual</TabsTrigger>
           <TabsTrigger value="dprs" className="flex items-center gap-2"><FileText className="h-4 w-4" /> DPRs</TabsTrigger>
           <TabsTrigger value="photos" className="flex items-center gap-2"><Camera className="h-4 w-4" /> Photos</TabsTrigger>
           <TabsTrigger value="documents" className="flex items-center gap-2"><FolderOpen className="h-4 w-4" /> Documents</TabsTrigger>
@@ -334,6 +340,9 @@ export default function ProjectDetail() {
 
         <TabsContent value="wbs"><WbsTab projectId={id} /></TabsContent>
         <TabsContent value="milestones"><MilestonesTab projectId={id} /></TabsContent>
+        <TabsContent value="estimation"><EstimationPage projectId={id} /></TabsContent>
+        <TabsContent value="variation-orders"><VariationOrdersPage projectId={id} /></TabsContent>
+        <TabsContent value="boq-actual"><BoqVsActualPage projectId={id} /></TabsContent>
         <TabsContent value="dprs"><DprsTab projectId={id} /></TabsContent>
         <TabsContent value="photos"><PhotosTab projectId={id} /></TabsContent>
         <TabsContent value="documents"><DocumentsTab projectId={id} /></TabsContent>

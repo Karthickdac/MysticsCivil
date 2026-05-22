@@ -603,6 +603,342 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ApprovalItem' }
 
+  /projects/{projectId}/estimates:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Estimation]
+      operationId: listProjectEstimates
+      responses:
+        '200':
+          description: Estimates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Estimate' }
+    post:
+      tags: [Estimation]
+      operationId: createEstimate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EstimateInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Estimate' }
+
+  /estimates/{estimateId}:
+    parameters:
+      - name: estimateId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Estimation]
+      operationId: getEstimate
+      responses:
+        '200':
+          description: Estimate
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Estimate' }
+    patch:
+      tags: [Estimation]
+      operationId: updateEstimate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EstimateUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Estimate' }
+    delete:
+      tags: [Estimation]
+      operationId: deleteEstimate
+      responses:
+        '204':
+          description: Deleted
+
+  /estimates/{estimateId}/cost-heads:
+    parameters:
+      - name: estimateId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Estimation]
+      operationId: listEstimateCostHeads
+      responses:
+        '200':
+          description: Cost heads
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/EstimateCostHead' }
+    put:
+      tags: [Estimation]
+      operationId: replaceEstimateCostHeads
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: '#/components/schemas/EstimateCostHeadInput' }
+      responses:
+        '200':
+          description: Updated cost heads
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/EstimateCostHead' }
+
+  /estimates/{estimateId}/boq-items:
+    parameters:
+      - name: estimateId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Estimation]
+      operationId: listBoqItems
+      responses:
+        '200':
+          description: BOQ items
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BoqItem' }
+    post:
+      tags: [Estimation]
+      operationId: createBoqItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BoqItemInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BoqItem' }
+
+  /boq-items/{itemId}:
+    parameters:
+      - name: itemId
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [Estimation]
+      operationId: updateBoqItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BoqItemUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BoqItem' }
+    delete:
+      tags: [Estimation]
+      operationId: deleteBoqItem
+      responses:
+        '204':
+          description: Deleted
+
+  /boq-items/{itemId}/rate-analysis:
+    parameters:
+      - name: itemId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Estimation]
+      operationId: listRateAnalysisComponents
+      responses:
+        '200':
+          description: Rate analysis components
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RateAnalysisComponent' }
+    put:
+      tags: [Estimation]
+      operationId: replaceRateAnalysisComponents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: '#/components/schemas/RateAnalysisComponentInput' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RateAnalysisComponent' }
+
+  /projects/{projectId}/boq-vs-actual:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Estimation]
+      operationId: getBoqVsActual
+      summary: BOQ vs actual rate variance comparison
+      responses:
+        '200':
+          description: Comparison result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BoqVsActualResult' }
+
+  /dsr-rates:
+    get:
+      tags: [DSR]
+      operationId: listDsrRates
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: trade
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+        - name: cityTier
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: DSR rates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DsrRate' }
+    post:
+      tags: [DSR]
+      operationId: createDsrRate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DsrRateInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DsrRate' }
+
+  /dsr-rates/{rateId}:
+    parameters:
+      - name: rateId
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [DSR]
+      operationId: updateDsrRate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DsrRateUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DsrRate' }
+    delete:
+      tags: [DSR]
+      operationId: deleteDsrRate
+      responses:
+        '204':
+          description: Deleted
+
+  /projects/{projectId}/variation-orders:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [VariationOrders]
+      operationId: listVariationOrders
+      responses:
+        '200':
+          description: Variation orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/VariationOrder' }
+    post:
+      tags: [VariationOrders]
+      operationId: createVariationOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VariationOrderInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VariationOrder' }
+
+  /variation-orders/{voId}:
+    parameters:
+      - name: voId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [VariationOrders]
+      operationId: getVariationOrder
+      responses:
+        '200':
+          description: VO
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VariationOrder' }
+    patch:
+      tags: [VariationOrders]
+      operationId: updateVariationOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VariationOrderUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VariationOrder' }
+
   /dashboard/portfolio:
     get:
       tags: [Dashboard]
@@ -1105,6 +1441,270 @@ components:
       properties:
         decision: { type: string, enum: [approved, rejected] }
         comment: { type: string }
+
+    EstimateLevel:
+      type: string
+      enum: [L0, L1, L2, L3, L4, L5]
+    EstimateStatus:
+      type: string
+      enum: [draft, submitted, approved, locked]
+
+    Estimate:
+      type: object
+      required: [id, projectId, level, name, status, totalAmount, notes, metadata, createdById, approvedById, approvedAt, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        level: { $ref: '#/components/schemas/EstimateLevel' }
+        name: { type: string }
+        status: { $ref: '#/components/schemas/EstimateStatus' }
+        totalAmount: { type: number }
+        notes: { type: [string, 'null'] }
+        metadata: {}
+        createdById: { type: [string, 'null'] }
+        approvedById: { type: [string, 'null'] }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    EstimateInput:
+      type: object
+      required: [level, name]
+      properties:
+        level: { $ref: '#/components/schemas/EstimateLevel' }
+        name: { type: string, minLength: 1 }
+        notes: { type: string }
+        totalAmount: { type: number }
+        metadata: {}
+        skipDefaultHeads: { type: boolean }
+    EstimateUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        notes: { type: string }
+        status: { $ref: '#/components/schemas/EstimateStatus' }
+        totalAmount: { type: number }
+        metadata: {}
+
+    EstimateCostHead:
+      type: object
+      required: [id, estimateId, headCode, headName, percentage, amount, sortOrder]
+      properties:
+        id: { type: string }
+        estimateId: { type: string }
+        headCode: { type: string }
+        headName: { type: string }
+        percentage: { type: number }
+        amount: { type: number }
+        sortOrder: { type: integer }
+    EstimateCostHeadInput:
+      type: object
+      required: [headCode, headName, percentage, amount]
+      properties:
+        headCode: { type: string }
+        headName: { type: string }
+        percentage: { type: number }
+        amount: { type: number }
+
+    BoqItem:
+      type: object
+      required: [id, estimateId, projectId, wbsActivityId, dsrRateId, levelType, trade, itemCode, description, unit, quantity, rate, amount, actualQuantity, actualAmount, hsnCode, gstRate, locked, sortOrder, createdAt]
+      properties:
+        id: { type: string }
+        estimateId: { type: string }
+        projectId: { type: string }
+        wbsActivityId: { type: [string, 'null'] }
+        dsrRateId: { type: [string, 'null'] }
+        levelType: { type: string }
+        trade: { type: string }
+        itemCode: { type: [string, 'null'] }
+        description: { type: string }
+        unit: { type: string }
+        quantity: { type: number }
+        rate: { type: number }
+        amount: { type: number }
+        actualQuantity: { type: number }
+        actualAmount: { type: number }
+        hsnCode: { type: [string, 'null'] }
+        gstRate: { type: number }
+        locked: { type: boolean }
+        sortOrder: { type: integer }
+        createdAt: { type: string, format: date-time }
+    BoqItemInput:
+      type: object
+      required: [description, unit, trade]
+      properties:
+        trade: { type: string }
+        description: { type: string, minLength: 1 }
+        unit: { type: string }
+        itemCode: { type: string }
+        levelType: { type: string }
+        quantity: { type: number }
+        rate: { type: number }
+        dsrRateId: { type: string }
+        wbsActivityId: { type: string }
+        hsnCode: { type: string }
+        gstRate: { type: number }
+    BoqItemUpdate:
+      type: object
+      properties:
+        description: { type: string }
+        trade: { type: string }
+        unit: { type: string }
+        quantity: { type: number }
+        rate: { type: number }
+        actualQuantity: { type: number }
+        actualAmount: { type: number }
+        hsnCode: { type: string }
+        gstRate: { type: number }
+        locked: { type: boolean }
+
+    RateAnalysisComponent:
+      type: object
+      required: [id, boqItemId, componentType, description, unit, quantity, marketRate, dsrRate, amount, sortOrder]
+      properties:
+        id: { type: string }
+        boqItemId: { type: string }
+        componentType: { type: string }
+        description: { type: string }
+        unit: { type: string }
+        quantity: { type: number }
+        marketRate: { type: number }
+        dsrRate: { type: number }
+        amount: { type: number }
+        sortOrder: { type: integer }
+    RateAnalysisComponentInput:
+      type: object
+      required: [componentType, description, unit, quantity, marketRate]
+      properties:
+        componentType: { type: string, enum: [material, labour, plant, overhead] }
+        description: { type: string }
+        unit: { type: string }
+        quantity: { type: number }
+        marketRate: { type: number }
+        dsrRate: { type: number }
+
+    BoqVsActualItem:
+      type: object
+      required: [id, estimateId, projectId, trade, description, unit, quantity, rate, amount, actualQuantity, actualAmount, actualRate, variancePct, alert]
+      properties:
+        id: { type: string }
+        estimateId: { type: string }
+        projectId: { type: string }
+        trade: { type: string }
+        description: { type: string }
+        unit: { type: string }
+        quantity: { type: number }
+        rate: { type: number }
+        amount: { type: number }
+        actualQuantity: { type: number }
+        actualAmount: { type: number }
+        actualRate: { type: number }
+        variancePct: { type: number }
+        alert: { type: string, enum: [green, amber, red] }
+        gstRate: { type: number }
+        hsnCode: { type: [string, 'null'] }
+        locked: { type: boolean }
+        sortOrder: { type: integer }
+        createdAt: { type: string, format: date-time }
+        wbsActivityId: { type: [string, 'null'] }
+        dsrRateId: { type: [string, 'null'] }
+        itemCode: { type: [string, 'null'] }
+        levelType: { type: string }
+    BoqVsActualResult:
+      type: object
+      required: [items, counts]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/BoqVsActualItem' }
+        counts:
+          type: object
+          required: [green, amber, red]
+          properties:
+            green: { type: integer }
+            amber: { type: integer }
+            red: { type: integer }
+
+    DsrRate:
+      type: object
+      required: [id, code, description, trade, unit, state, cityTier, rate, effectiveYear, source, createdById, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        code: { type: string }
+        description: { type: string }
+        trade: { type: string }
+        unit: { type: string }
+        state: { type: string }
+        cityTier: { type: string }
+        rate: { type: number }
+        effectiveYear: { type: integer }
+        source: { type: string }
+        createdById: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DsrRateInput:
+      type: object
+      required: [code, description, trade, unit, state, rate]
+      properties:
+        code: { type: string }
+        description: { type: string }
+        trade: { type: string }
+        unit: { type: string }
+        state: { type: string }
+        cityTier: { type: string }
+        rate: { type: number }
+        effectiveYear: { type: integer }
+        source: { type: string }
+    DsrRateUpdate:
+      type: object
+      properties:
+        description: { type: string }
+        trade: { type: string }
+        unit: { type: string }
+        state: { type: string }
+        cityTier: { type: string }
+        rate: { type: number }
+        effectiveYear: { type: integer }
+        source: { type: string }
+
+    VariationOrder:
+      type: object
+      required: [id, projectId, estimateId, voNumber, title, description, scopeChange, costImpact, programmeImpactDays, status, raisedById, approvedById, createdAt, approvedAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        estimateId: { type: [string, 'null'] }
+        voNumber: { type: string }
+        title: { type: string }
+        description: { type: [string, 'null'] }
+        scopeChange: { type: [string, 'null'] }
+        costImpact: { type: number }
+        programmeImpactDays: { type: integer }
+        status: { type: string }
+        raisedById: { type: [string, 'null'] }
+        approvedById: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        approvedAt: { type: [string, 'null'], format: date-time }
+    VariationOrderInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1 }
+        description: { type: string }
+        scopeChange: { type: string }
+        costImpact: { type: number }
+        programmeImpactDays: { type: integer }
+        estimateId: { type: string }
+    VariationOrderUpdate:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        scopeChange: { type: string }
+        costImpact: { type: number }
+        programmeImpactDays: { type: integer }
+        status: { type: string }
+        estimateId: { type: string }
 
     PortfolioKpi:
       type: object

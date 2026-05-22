@@ -553,6 +553,303 @@ export interface ApprovalResolutionInput {
   comment?: string;
 }
 
+export type EstimateLevel = typeof EstimateLevel[keyof typeof EstimateLevel];
+
+
+export const EstimateLevel = {
+  L0: 'L0',
+  L1: 'L1',
+  L2: 'L2',
+  L3: 'L3',
+  L4: 'L4',
+  L5: 'L5',
+} as const;
+
+export type EstimateStatus = typeof EstimateStatus[keyof typeof EstimateStatus];
+
+
+export const EstimateStatus = {
+  draft: 'draft',
+  submitted: 'submitted',
+  approved: 'approved',
+  locked: 'locked',
+} as const;
+
+export interface Estimate {
+  id: string;
+  projectId: string;
+  level: EstimateLevel;
+  name: string;
+  status: EstimateStatus;
+  totalAmount: number;
+  /** @nullable */
+  notes: string | null;
+  metadata: unknown;
+  /** @nullable */
+  createdById: string | null;
+  /** @nullable */
+  approvedById: string | null;
+  /** @nullable */
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EstimateInput {
+  level: EstimateLevel;
+  /** @minLength 1 */
+  name: string;
+  notes?: string;
+  totalAmount?: number;
+  metadata?: unknown;
+  skipDefaultHeads?: boolean;
+}
+
+export interface EstimateUpdate {
+  name?: string;
+  notes?: string;
+  status?: EstimateStatus;
+  totalAmount?: number;
+  metadata?: unknown;
+}
+
+export interface EstimateCostHead {
+  id: string;
+  estimateId: string;
+  headCode: string;
+  headName: string;
+  percentage: number;
+  amount: number;
+  sortOrder: number;
+}
+
+export interface EstimateCostHeadInput {
+  headCode: string;
+  headName: string;
+  percentage: number;
+  amount: number;
+}
+
+export interface BoqItem {
+  id: string;
+  estimateId: string;
+  projectId: string;
+  /** @nullable */
+  wbsActivityId: string | null;
+  /** @nullable */
+  dsrRateId: string | null;
+  levelType: string;
+  trade: string;
+  /** @nullable */
+  itemCode: string | null;
+  description: string;
+  unit: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+  actualQuantity: number;
+  actualAmount: number;
+  /** @nullable */
+  hsnCode: string | null;
+  gstRate: number;
+  locked: boolean;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface BoqItemInput {
+  trade: string;
+  /** @minLength 1 */
+  description: string;
+  unit: string;
+  itemCode?: string;
+  levelType?: string;
+  quantity?: number;
+  rate?: number;
+  dsrRateId?: string;
+  wbsActivityId?: string;
+  hsnCode?: string;
+  gstRate?: number;
+}
+
+export interface BoqItemUpdate {
+  description?: string;
+  trade?: string;
+  unit?: string;
+  quantity?: number;
+  rate?: number;
+  actualQuantity?: number;
+  actualAmount?: number;
+  hsnCode?: string;
+  gstRate?: number;
+  locked?: boolean;
+}
+
+export interface RateAnalysisComponent {
+  id: string;
+  boqItemId: string;
+  componentType: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  marketRate: number;
+  dsrRate: number;
+  amount: number;
+  sortOrder: number;
+}
+
+export type RateAnalysisComponentInputComponentType = typeof RateAnalysisComponentInputComponentType[keyof typeof RateAnalysisComponentInputComponentType];
+
+
+export const RateAnalysisComponentInputComponentType = {
+  material: 'material',
+  labour: 'labour',
+  plant: 'plant',
+  overhead: 'overhead',
+} as const;
+
+export interface RateAnalysisComponentInput {
+  componentType: RateAnalysisComponentInputComponentType;
+  description: string;
+  unit: string;
+  quantity: number;
+  marketRate: number;
+  dsrRate?: number;
+}
+
+export type BoqVsActualItemAlert = typeof BoqVsActualItemAlert[keyof typeof BoqVsActualItemAlert];
+
+
+export const BoqVsActualItemAlert = {
+  green: 'green',
+  amber: 'amber',
+  red: 'red',
+} as const;
+
+export interface BoqVsActualItem {
+  id: string;
+  estimateId: string;
+  projectId: string;
+  trade: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+  actualQuantity: number;
+  actualAmount: number;
+  actualRate: number;
+  variancePct: number;
+  alert: BoqVsActualItemAlert;
+  gstRate?: number;
+  /** @nullable */
+  hsnCode?: string | null;
+  locked?: boolean;
+  sortOrder?: number;
+  createdAt?: string;
+  /** @nullable */
+  wbsActivityId?: string | null;
+  /** @nullable */
+  dsrRateId?: string | null;
+  /** @nullable */
+  itemCode?: string | null;
+  levelType?: string;
+}
+
+export type BoqVsActualResultCounts = {
+  green: number;
+  amber: number;
+  red: number;
+};
+
+export interface BoqVsActualResult {
+  items: BoqVsActualItem[];
+  counts: BoqVsActualResultCounts;
+}
+
+export interface DsrRate {
+  id: string;
+  code: string;
+  description: string;
+  trade: string;
+  unit: string;
+  state: string;
+  cityTier: string;
+  rate: number;
+  effectiveYear: number;
+  source: string;
+  /** @nullable */
+  createdById: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DsrRateInput {
+  code: string;
+  description: string;
+  trade: string;
+  unit: string;
+  state: string;
+  cityTier?: string;
+  rate: number;
+  effectiveYear?: number;
+  source?: string;
+}
+
+export interface DsrRateUpdate {
+  description?: string;
+  trade?: string;
+  unit?: string;
+  state?: string;
+  cityTier?: string;
+  rate?: number;
+  effectiveYear?: number;
+  source?: string;
+}
+
+export interface VariationOrder {
+  id: string;
+  projectId: string;
+  /** @nullable */
+  estimateId: string | null;
+  voNumber: string;
+  title: string;
+  /** @nullable */
+  description: string | null;
+  /** @nullable */
+  scopeChange: string | null;
+  costImpact: number;
+  programmeImpactDays: number;
+  status: string;
+  /** @nullable */
+  raisedById: string | null;
+  /** @nullable */
+  approvedById: string | null;
+  createdAt: string;
+  /** @nullable */
+  approvedAt: string | null;
+}
+
+export interface VariationOrderInput {
+  /** @minLength 1 */
+  title: string;
+  description?: string;
+  scopeChange?: string;
+  costImpact?: number;
+  programmeImpactDays?: number;
+  estimateId?: string;
+}
+
+export interface VariationOrderUpdate {
+  title?: string;
+  description?: string;
+  scopeChange?: string;
+  costImpact?: number;
+  programmeImpactDays?: number;
+  status?: string;
+  estimateId?: string;
+}
+
 export interface PortfolioKpi {
   totalProjects: number;
   onTrack: number;
@@ -654,5 +951,12 @@ export type HandleBrowserLoginCallbackParams = {
 code?: string;
 state?: string;
 iss?: string;
+};
+
+export type ListDsrRatesParams = {
+q?: string;
+trade?: string;
+state?: string;
+cityTier?: string;
 };
 

@@ -21,13 +21,15 @@ import {
   Settings,
   HardHat,
   LogOut,
-  FolderOpen
+  FolderOpen,
+  BookOpen,
 } from "lucide-react";
 
 function getNavItems(role: string | undefined) {
   const items = [
     { title: "Dashboard", url: "/", icon: LayoutDashboard, roles: ["owner", "pm", "site_engineer", "qs", "finance", "contractor", "qc", "store", "hr", "admin"] },
     { title: "Projects", url: "/projects", icon: Building2, roles: ["owner", "pm", "site_engineer", "qs", "finance", "contractor", "qc", "store", "hr", "admin"] },
+    { title: "DSR Rates", url: "/dsr-rates", icon: BookOpen, roles: ["owner", "pm", "qs", "admin"] },
     { title: "Approvals", url: "/approvals", icon: ClipboardList, roles: ["owner", "pm", "qs", "finance"] },
     { title: "Organisations", url: "/organisations", icon: Users, roles: ["admin"] },
     { title: "Profile", url: "/profile", icon: Settings, roles: ["owner", "pm", "site_engineer", "qs", "finance", "contractor", "qc", "store", "hr", "admin"] },

@@ -15,6 +15,7 @@ import DprDetail from "@/pages/dpr-detail";
 import Approvals from "@/pages/approvals";
 import Organisations from "@/pages/organisations";
 import Profile from "@/pages/profile";
+import DsrRates from "@/pages/dsr-rates";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -50,6 +51,7 @@ function Router() {
       <Route path="/projects/:id" component={() => <ProtectedRoute component={ProjectDetail} />} />
       <Route path="/dprs/:id" component={() => <ProtectedRoute component={DprDetail} />} />
       <Route path="/approvals" component={() => <ProtectedRoute component={Approvals} />} />
+      <Route path="/dsr-rates" component={() => <ProtectedRoute component={DsrRates} />} />
       <Route path="/organisations" component={() => <ProtectedRoute component={Organisations} />} />
       <Route path="/profile" component={() => <ProtectedRoute component={Profile} />} />
       <Route component={NotFound} />

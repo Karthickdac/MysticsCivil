@@ -12,6 +12,9 @@ import documentsRouter from "./documents";
 import issuesRouter from "./issues";
 import dashboardRouter from "./dashboard";
 import approvalsRouter from "./approvals";
+import estimationRouter from "./estimation";
+import dsrRatesRouter from "./dsr-rates";
+import variationOrdersRouter from "./variation-orders";
 
 const router: IRouter = Router();
 
@@ -28,5 +31,8 @@ router.use(documentsRouter);
 router.use(issuesRouter);
 router.use(dashboardRouter);
 router.use(approvalsRouter);
+router.use(estimationRouter);
+router.use(dsrRatesRouter);
+router.use(variationOrdersRouter);
 
 export default router;
