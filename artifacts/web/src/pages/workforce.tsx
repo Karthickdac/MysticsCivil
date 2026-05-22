@@ -2082,12 +2082,12 @@ const VALID_WORKFORCE_TABS = ["workers","attendance","payroll","itp","inspection
 export default function WorkforcePage({ projectId }: { projectId: string }) {
   const search = useSearch();
   const initialTab = (() => {
-    const t = new URLSearchParams(search).get("tab");
+    const t = new URLSearchParams(search).get("wTab");
     return t && (VALID_WORKFORCE_TABS as readonly string[]).includes(t) ? t : "workers";
   })();
   const [tab, setTab] = useState<string>(initialTab);
   useEffect(() => {
-    const t = new URLSearchParams(search).get("tab");
+    const t = new URLSearchParams(search).get("wTab");
     if (t && (VALID_WORKFORCE_TABS as readonly string[]).includes(t) && t !== tab) setTab(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);

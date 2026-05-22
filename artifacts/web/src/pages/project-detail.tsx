@@ -1,5 +1,6 @@
 import { useGetProjectDashboard, getGetProjectDashboardQueryKey } from "@workspace/api-client-react";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useSearch } from "wouter";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -102,7 +103,23 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      <Tabs defaultValue="dashboard" className="space-y-6">
+      <ProjectTabs id={id} project={project} />
+    </div>
+  );
+}
+
+const VALID_PROJECT_TABS = ["dashboard","wbs","milestones","estimation","variation-orders","boq-actual","dprs","photos","documents","issues","financial","supply-chain","workforce"] as const;
+
+function ProjectTabs({ id, project }: { id: string; project: any }) {
+  const search = useSearch();
+  const readTab = () => {
+    const t = new URLSearchParams(search).get("tab");
+    return t && (VALID_PROJECT_TABS as readonly string[]).includes(t) ? t : "dashboard";
+  };
+  const [tab, setTab] = useState<string>(readTab());
+  useEffect(() => { setTab(readTab()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [search]);
+  return (
+      <Tabs value={tab} onValueChange={setTab} className="space-y-6">
         <TabsList className="bg-background border h-auto p-1 overflow-x-auto flex-nowrap w-full justify-start">
           <TabsTrigger value="dashboard" className="flex items-center gap-2"><LayoutDashboard className="h-4 w-4" /> Dashboard</TabsTrigger>
           <TabsTrigger value="wbs" className="flex items-center gap-2"><ListTodo className="h-4 w-4" /> WBS</TabsTrigger>
@@ -357,6 +374,5 @@ export default function ProjectDetail() {
         <TabsContent value="supply-chain"><SupplyChainPage projectId={id} /></TabsContent>
         <TabsContent value="workforce"><WorkforcePage projectId={id} /></TabsContent>
       </Tabs>
-    </div>
   );
 }

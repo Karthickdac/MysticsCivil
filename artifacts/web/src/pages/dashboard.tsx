@@ -131,7 +131,7 @@ export default function Dashboard() {
                 <div className="mt-3 space-y-1 border-t pt-2">
                   <div className="text-xs text-muted-foreground">Most at risk</div>
                   {safety.perProject.filter((p) => p.draftOverdue > 0).slice(0, 3).map((p) => (
-                    <Link key={p.projectId} href={`/projects/${p.projectId}/workforce?tab=jsa&status=draft`}>
+                    <Link key={p.projectId} href={`/projects/${p.projectId}?tab=workforce&wTab=jsa&status=draft`}>
                       <a className="flex items-center justify-between text-sm hover:text-primary">
                         <span className="truncate">{p.projectName}</span>
                         <span className="text-xs tabular-nums text-rose-700">{p.draftOverdue} overdue</span>
@@ -188,7 +188,7 @@ export default function Dashboard() {
                 <div className="mt-3 space-y-1 border-t pt-2">
                   <div className="text-xs text-muted-foreground">Lowest pass rate</div>
                   {safety.perProject.filter((p) => p.totalTests30 > 0 && p.passRate30 < 1).slice(0, 3).map((p) => (
-                    <Link key={p.projectId} href={`/projects/${p.projectId}/workforce?tab=material-test&result=fail`}>
+                    <Link key={p.projectId} href={`/projects/${p.projectId}?tab=workforce&wTab=material-test&result=fail`}>
                       <a className="flex items-center justify-between text-sm hover:text-primary">
                         <span className="truncate">{p.projectName}</span>
                         <span className="text-xs tabular-nums text-rose-700">{(p.passRate30 * 100).toFixed(0)}% · {p.totalTests30} tests</span>
