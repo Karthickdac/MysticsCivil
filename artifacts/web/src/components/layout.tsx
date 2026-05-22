@@ -115,18 +115,16 @@ function LangSwitcher({ compact = false }: { compact?: boolean }) {
 // ─── Logo ────────────────────────────────────────────────────────────────────
 function Logo({ collapsed, t }: { collapsed: boolean; t: (k: string) => string }) {
   return (
-    <Link href="/">
-      <a className="flex items-center gap-2.5 group" data-testid="logo-home">
-        <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 via-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/30 flex-shrink-0">
-          <HardHat className="h-5 w-5" />
-        </span>
-        {!collapsed && (
-          <div className="flex flex-col leading-tight overflow-hidden">
-            <span className="font-extrabold text-[15px] tracking-tight truncate">{t("app.name")}</span>
-            <span className="text-[10px] text-muted-foreground font-semibold truncate">Construction ERP</span>
-          </div>
-        )}
-      </a>
+    <Link href="/" className="flex items-center gap-2.5 group no-underline text-inherit" data-testid="logo-home">
+      <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 via-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/30 flex-shrink-0">
+        <HardHat className="h-5 w-5" />
+      </span>
+      {!collapsed && (
+        <div className="flex flex-col leading-tight overflow-hidden">
+          <span className="font-extrabold text-[15px] tracking-tight truncate">{t("app.name")}</span>
+          <span className="text-[10px] text-muted-foreground font-semibold truncate">Construction ERP</span>
+        </div>
+      )}
     </Link>
   );
 }
@@ -177,28 +175,25 @@ function Sidebar({
             <ul className="space-y-1">
               {group.items.map((item) => {
                 const isActive = location === item.url || (item.url !== "/" && location.startsWith(item.url));
-                const inner = (
-                  <a
-                    onClick={onClose}
-                    className={`
-                      group relative flex items-center gap-3 rounded-xl text-sm font-semibold transition-all
-                      ${collapsed && !mobile ? "px-0 py-2.5 justify-center" : "px-3 py-2.5"}
-                      ${isActive
-                        ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/25"
-                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                      }
-                    `}
-                    title={collapsed && !mobile ? t(item.titleKey) : undefined}
-                    data-testid={`nav-${item.titleKey}`}
-                  >
-                    <item.icon className={`h-[18px] w-[18px] flex-shrink-0 ${isActive ? "text-white" : ""}`} />
-                    {(!collapsed || mobile) && <span className="truncate">{t(item.titleKey)}</span>}
-                    {isActive && (!collapsed || mobile) && <span className="ml-auto h-2 w-2 rounded-full bg-white/70" />}
-                  </a>
-                );
                 return (
                   <li key={item.titleKey}>
-                    <Link href={item.url}>{inner}</Link>
+                    <Link
+                      href={item.url}
+                      onClick={onClose}
+                      className={`group relative flex items-center gap-3 rounded-xl text-sm font-semibold transition-all no-underline ${
+                        collapsed && !mobile ? "px-0 py-2.5 justify-center" : "px-3 py-2.5"
+                      } ${
+                        isActive
+                          ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/25"
+                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      }`}
+                      title={collapsed && !mobile ? t(item.titleKey) : undefined}
+                      data-testid={`nav-${item.titleKey}`}
+                    >
+                      <item.icon className={`h-[18px] w-[18px] flex-shrink-0 ${isActive ? "text-white" : ""}`} />
+                      {(!collapsed || mobile) && <span className="truncate">{t(item.titleKey)}</span>}
+                      {isActive && (!collapsed || mobile) && <span className="ml-auto h-2 w-2 rounded-full bg-white/70" />}
+                    </Link>
                   </li>
                 );
               })}

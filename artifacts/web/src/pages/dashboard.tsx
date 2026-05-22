@@ -387,11 +387,9 @@ export default function Dashboard() {
                   return (
                     <tr key={p.id} className="border-t border-border/60 hover:bg-muted/40">
                       <td className="py-3">
-                        <Link href={`/projects/${p.id}`}>
-                          <a className="hover:text-primary">
-                            <div className="font-semibold">{p.name}</div>
-                            <div className="text-[11px] text-muted-foreground">{p.code} · {p.location ?? "—"}</div>
-                          </a>
+                        <Link href={`/projects/${p.id}`} className="hover:text-primary block no-underline text-inherit">
+                          <div className="font-semibold">{p.name}</div>
+                          <div className="text-[11px] text-muted-foreground">{p.code} · {p.location ?? "—"}</div>
                         </Link>
                       </td>
                       <td className="py-3">
