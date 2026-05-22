@@ -97,6 +97,7 @@ router.post("/projects/:projectId/workers", requireAuth, async (req: Request, re
   const v = normStatutory(b);
   if (v.error) { res.status(400).json({ error: v.error }); return; }
   const orgId = await resolveOrgId(req.params.projectId);
+  if (!orgId) { res.status(400).json({ error: "Project is not linked to an organisation" }); return; }
   const dupErr = await checkDuplicates(orgId, v);
   if (dupErr) { res.status(409).json({ error: dupErr }); return; }
   const count = await db.select({ c: sql`count(*)` }).from(workersTable)
@@ -157,7 +158,11 @@ router.patch("/workers/:workerId", requireAuth, async (req: Request, res: Respon
     };
     const v = normStatutory(merged);
     if (v.error) { res.status(400).json({ error: v.error }); return; }
-    const orgId = (w as any).organisationId ?? await resolveOrgId(w.projectId);
+    let orgId = (w as any).organisationId as string | null;
+    if (!orgId) {
+      orgId = await resolveOrgId(w.projectId);
+      if (orgId) patch.organisationId = orgId; // heal legacy rows under uniqueness scope
+    }
     const dupErr = await checkDuplicates(orgId, v, w.id);
     if (dupErr) { res.status(409).json({ error: dupErr }); return; }
     if (b.aadhaarNumber !== undefined) patch.aadhaarNumber = v.aadhaar;
