@@ -939,6 +939,46 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/VariationOrder' }
 
+  /estimates/{estimateId}/boq-items/generate-abstract:
+    parameters:
+      - name: estimateId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Estimation]
+      operationId: generateAbstractBoqItems
+      summary: Generate trade-wise abstract BOQ rows from DSR benchmark rates (L2)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [builtUpArea]
+              properties:
+                builtUpArea:
+                  type: number
+                  description: Built-up area in sqm — used as quantity for each trade row
+                cityTier:
+                  type: string
+                  description: City tier for DSR rate selection (T1/T2/T3)
+                state:
+                  type: string
+                  description: State name for DSR rate selection
+      responses:
+        '200':
+          description: Generated abstract BOQ items (one per trade)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BoqItem' }
+        '404':
+          description: No DSR rates found for selected state/tier
+        '409':
+          description: Estimate is locked
+
   /estimates/{estimateId}/boq-items/import:
     parameters:
       - name: estimateId
@@ -961,7 +1001,7 @@ paths:
                   format: binary
               required: [file]
       responses:
-        '200':
+        '201':
           description: Imported BOQ items
           content:
             application/json:

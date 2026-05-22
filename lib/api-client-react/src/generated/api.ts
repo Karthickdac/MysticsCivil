@@ -44,6 +44,7 @@ import type {
   EstimateCostHeadInput,
   EstimateInput,
   EstimateUpdate,
+  GenerateAbstractBoqItemsBody,
   HandleBrowserLoginCallbackParams,
   HealthStatus,
   ImportBoqItemsXlsxBody,
@@ -4256,6 +4257,78 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdateVariationOrderMutationOptions(options));
+    }
+
+export const getGenerateAbstractBoqItemsUrl = (estimateId: string,) => {
+
+
+
+
+  return `/api/estimates/${estimateId}/boq-items/generate-abstract`
+}
+
+/**
+ * @summary Generate trade-wise abstract BOQ rows from DSR benchmark rates (L2)
+ */
+export const generateAbstractBoqItems = async (estimateId: string,
+    generateAbstractBoqItemsBody: GenerateAbstractBoqItemsBody, options?: RequestInit): Promise<BoqItem[]> => {
+
+  return customFetch<BoqItem[]>(getGenerateAbstractBoqItemsUrl(estimateId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      generateAbstractBoqItemsBody,)
+  }
+);}
+
+
+
+
+export const getGenerateAbstractBoqItemsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateAbstractBoqItems>>, TError,{estimateId: string;data: BodyType<GenerateAbstractBoqItemsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateAbstractBoqItems>>, TError,{estimateId: string;data: BodyType<GenerateAbstractBoqItemsBody>}, TContext> => {
+
+const mutationKey = ['generateAbstractBoqItems'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateAbstractBoqItems>>, {estimateId: string;data: BodyType<GenerateAbstractBoqItemsBody>}> = (props) => {
+          const {estimateId,data} = props ?? {};
+
+          return  generateAbstractBoqItems(estimateId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateAbstractBoqItemsMutationResult = NonNullable<Awaited<ReturnType<typeof generateAbstractBoqItems>>>
+    export type GenerateAbstractBoqItemsMutationBody = BodyType<GenerateAbstractBoqItemsBody>
+    export type GenerateAbstractBoqItemsMutationError = ErrorType<void>
+
+    /**
+ * @summary Generate trade-wise abstract BOQ rows from DSR benchmark rates (L2)
+ */
+export const useGenerateAbstractBoqItems = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateAbstractBoqItems>>, TError,{estimateId: string;data: BodyType<GenerateAbstractBoqItemsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateAbstractBoqItems>>,
+        TError,
+        {estimateId: string;data: BodyType<GenerateAbstractBoqItemsBody>},
+        TContext
+      > => {
+      return useMutation(getGenerateAbstractBoqItemsMutationOptions(options));
     }
 
 export const getImportBoqItemsXlsxUrl = (estimateId: string,) => {

@@ -374,6 +374,81 @@ router.get(
   },
 );
 
+// BOQ Abstract Generator ── POST /estimates/:estimateId/boq-items/generate-abstract
+router.post(
+  "/estimates/:estimateId/boq-items/generate-abstract",
+  requireAuth,
+  requireRole(...ROLE_GROUPS.OWNER_PM_QS),
+  async (req: Request, res: Response) => {
+    const b = req.body ?? {};
+    const builtUpArea = n(b.builtUpArea ?? 0);
+    if (builtUpArea <= 0) {
+      res.status(400).json({ error: "builtUpArea must be > 0 (sqm)" }); return;
+    }
+    const cityTier = b.cityTier ?? "T1";
+    const state = b.state ?? "Maharashtra";
+
+    const [est] = await db.select({ projectId: estimatesTable.projectId, status: estimatesTable.status })
+      .from(estimatesTable).where(eq(estimatesTable.id, req.params.estimateId));
+    if (!est) { res.status(404).json({ error: "Estimate not found" }); return; }
+    if (est.status === "locked") { res.status(409).json({ error: "Estimate is locked" }); return; }
+
+    // Fetch DSR rates for the given state/cityTier
+    const rates = await db.select().from(dsrRatesTable)
+      .where(and(eq(dsrRatesTable.cityTier, cityTier), eq(dsrRatesTable.state, state)));
+
+    // Group by trade: first item's description+unit as representative, average rate
+    const byTrade = new Map<string, { description: string; unit: string; avgRate: number; dsrRateId: string; count: number }>();
+    for (const r of rates) {
+      const ex = byTrade.get(r.trade);
+      if (!ex) {
+        byTrade.set(r.trade, { description: r.description, unit: r.unit, avgRate: Number(r.rate), dsrRateId: r.id, count: 1 });
+      } else {
+        byTrade.set(r.trade, { ...ex, avgRate: (ex.avgRate * ex.count + Number(r.rate)) / (ex.count + 1), count: ex.count + 1 });
+      }
+    }
+    if (byTrade.size === 0) {
+      res.status(404).json({ error: `No DSR rates found for state="${state}", cityTier="${cityTier}" — seed DSR rates first` }); return;
+    }
+
+    // Clear existing BOQ items for this estimate (fresh abstract regeneration)
+    await db.delete(boqItemsTable).where(eq(boqItemsTable.estimateId, req.params.estimateId));
+
+    // Create one abstract row per trade
+    const created: ReturnType<typeof serializeBoqItem>[] = [];
+    let i = 0;
+    for (const [trade, data] of byTrade) {
+      const rate = Math.round(data.avgRate);
+      const qty = builtUpArea;
+      const [item] = await db.insert(boqItemsTable).values({
+        estimateId: req.params.estimateId,
+        projectId: est.projectId,
+        dsrRateId: data.dsrRateId,
+        levelType: "L2",
+        trade,
+        description: `${trade} — abstract at DSR benchmark (${state}, ${cityTier})`,
+        unit: "sqm",
+        quantity: String(qty),
+        rate: String(rate),
+        amount: String(qty * rate),
+        actualQuantity: "0",
+        actualAmount: "0",
+        gstRate: "18",
+        sortOrder: i++,
+      }).returning();
+      created.push(serializeBoqItem(item));
+    }
+
+    // Recompute estimate totalAmount
+    const total = created.reduce((s, item) => s + item.amount, 0);
+    await db.update(estimatesTable)
+      .set({ totalAmount: String(total) })
+      .where(eq(estimatesTable.id, req.params.estimateId));
+
+    res.json(created);
+  },
+);
+
 // BOQ Excel Import ── POST /estimates/:estimateId/boq-items/import
 router.post(
   "/estimates/:estimateId/boq-items/import",

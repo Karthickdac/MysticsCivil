@@ -5,6 +5,7 @@ import {
   estimatesTable,
   estimateCostHeadsTable,
   boqItemsTable,
+  rateAnalysisComponentsTable,
   variationOrdersTable,
   workOrderEstimatesTable,
   workOrderEstimateItemsTable,
@@ -181,6 +182,46 @@ async function seedProjectEstimation(project: { id: string; name: string; contra
     }))
   );
 
+  // ── L2 Abstract Estimate ──────────────────────────────────────
+  const [l2] = await db.insert(estimatesTable).values({
+    projectId: project.id,
+    level: "L2",
+    name: `${project.name.split("—")[0].trim()} — L2 Abstract Estimate`,
+    status: "approved",
+    totalAmount: String(cv * 0.90),
+    notes: "Trade-wise abstract estimate using DSR/SSR benchmark rates — approved pre-tender",
+  }).returning();
+
+  const L2_ITEMS = [
+    { trade: "Earthwork", desc: "Earthwork and site preparation — DSR benchmark", unit: "sqm", qty: 18000, rate: 320 },
+    { trade: "Piling", desc: "Piling works — bored cast-in-situ — DSR benchmark", unit: "sqm", qty: 18000, rate: 1850 },
+    { trade: "RCC", desc: "RCC structural works incl. formwork — DSR benchmark", unit: "sqm", qty: 18000, rate: 4800 },
+    { trade: "Masonry", desc: "Masonry and blockwork — DSR benchmark", unit: "sqm", qty: 18000, rate: 680 },
+    { trade: "Waterproofing", desc: "Waterproofing and tanking works — DSR benchmark", unit: "sqm", qty: 18000, rate: 420 },
+    { trade: "MEP-Electrical", desc: "Electrical and ELV services — DSR benchmark", unit: "sqm", qty: 18000, rate: 2100 },
+    { trade: "MEP-Plumbing", desc: "Plumbing, drainage and fire-fighting — DSR benchmark", unit: "sqm", qty: 18000, rate: 1400 },
+    { trade: "Finishing & MEP", desc: "Finishing, fixtures and fittings — DSR benchmark", unit: "sqm", qty: 18000, rate: 3200 },
+    { trade: "Prelims", desc: "Preliminaries, site establishment and overheads — DSR benchmark", unit: "sqm", qty: 18000, rate: 1100 },
+  ];
+  await db.insert(boqItemsTable).values(
+    L2_ITEMS.map((item, i) => ({
+      estimateId: l2.id,
+      projectId: project.id,
+      levelType: "L2",
+      trade: item.trade,
+      description: item.desc,
+      unit: item.unit,
+      quantity: String(item.qty),
+      rate: String(item.rate),
+      amount: String(item.qty * item.rate),
+      actualQuantity: "0",
+      actualAmount: "0",
+      gstRate: "18",
+      sortOrder: i,
+    }))
+  );
+
+  // ── L3 Detailed BOQ ───────────────────────────────────────────
   const [l3] = await db.insert(estimatesTable).values({
     projectId: project.id,
     level: "L3",
@@ -227,6 +268,52 @@ async function seedProjectEstimation(project: { id: string; name: string; contra
       locked: true,
       sortOrder: i,
     });
+  }
+
+  // ── L4 Rate Analysis Estimate ─────────────────────────────────
+  const [l4] = await db.insert(estimatesTable).values({
+    projectId: project.id,
+    level: "L4",
+    name: `${project.name.split("—")[0].trim()} — L4 Rate Analysis`,
+    status: "approved",
+    totalAmount: String(cv * 0.85),
+    notes: "Detailed rate analysis for key civil and structural items — DSR-based breakdown",
+  }).returning();
+
+  const L4_ITEMS = [
+    { trade: "RCC", itemCode: "RA-01", desc: "RCC M30 in columns and shear walls incl. formwork and reinforcement — detailed rate analysis", unit: "cum", qty: 100, rate: 11500, gst: 12 },
+    { trade: "Piling", itemCode: "RA-02", desc: "Bored cast-in-situ RCC piles 600mm dia M30 incl. boring, concreting and testing — detailed rate analysis", unit: "Rm", qty: 100, rate: 8500, gst: 12 },
+    { trade: "Masonry", itemCode: "RA-03", desc: "AAC block masonry 200mm thick in CM 1:4 for external walls — detailed rate analysis", unit: "sqm", qty: 200, rate: 720, gst: 5 },
+  ];
+  const l4Items: { id: string }[] = [];
+  for (const [i, item] of L4_ITEMS.entries()) {
+    const [l4Item] = await db.insert(boqItemsTable).values({
+      estimateId: l4.id,
+      projectId: project.id,
+      levelType: "L3",
+      trade: item.trade,
+      itemCode: item.itemCode,
+      description: item.desc,
+      unit: item.unit,
+      quantity: String(item.qty),
+      rate: String(item.rate),
+      amount: String(item.qty * item.rate),
+      actualQuantity: "0",
+      actualAmount: "0",
+      gstRate: String(item.gst),
+      sortOrder: i,
+    }).returning({ id: boqItemsTable.id });
+    l4Items.push(l4Item);
+  }
+  // Rate analysis components for the first L4 BOQ item (RCC columns)
+  if (l4Items.length > 0) {
+    await db.insert(rateAnalysisComponentsTable).values([
+      { boqItemId: l4Items[0].id, componentType: "material", description: "RMC M30 ready-mix concrete (supply, pouring and curing)", unit: "cum", quantity: "1.03", marketRate: "6200", dsrRate: "5800" },
+      { boqItemId: l4Items[0].id, componentType: "material", description: "Steel formwork hire and erection (columns, walls)", unit: "sqm", quantity: "4.50", marketRate: "185", dsrRate: "165" },
+      { boqItemId: l4Items[0].id, componentType: "labour", description: "Labour — concrete placing, vibrating and finishing gang", unit: "cum", quantity: "1.00", marketRate: "1800", dsrRate: "1600" },
+      { boqItemId: l4Items[0].id, componentType: "plant", description: "Tower crane, concrete pump and vibrator hire", unit: "cum", quantity: "1.00", marketRate: "950", dsrRate: "900" },
+      { boqItemId: l4Items[0].id, componentType: "overhead", description: "Contractor overhead, profit and supervision (15%)", unit: "LS", quantity: "1.00", marketRate: "1350", dsrRate: "1250" },
+    ]);
   }
 
   // ── L5 Work Order Estimates ───────────────────────────────────
@@ -346,7 +433,7 @@ async function seedProjectEstimation(project: { id: string; name: string; contra
     },
   ]);
 
-  return { l0, l1, l3 };
+  return { l0, l1, l2, l3, l4 };
 }
 
 async function main() {

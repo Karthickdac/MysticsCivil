@@ -1018,6 +1018,15 @@ state?: string;
 cityTier?: string;
 };
 
+export type GenerateAbstractBoqItemsBody = {
+  /** Built-up area in sqm — used as quantity for each trade row */
+  builtUpArea: number;
+  /** City tier for DSR rate selection (T1/T2/T3) */
+  cityTier?: string;
+  /** State name for DSR rate selection */
+  state?: string;
+};
+
 export type ImportBoqItemsXlsxBody = {
   file: Blob;
 };

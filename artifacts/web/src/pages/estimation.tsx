@@ -13,6 +13,7 @@ import {
   useListRateAnalysisComponents,
   useReplaceRateAnalysisComponents,
   useListDsrRates,
+  useGenerateAbstractBoqItems,
   useListWorkOrders,
   useCreateWorkOrder,
   useListWorkOrderItems,
@@ -1081,13 +1082,94 @@ function L5Panel({ projectId, estimates }: { projectId: string; estimates: Estim
   );
 }
 
+function L2AbstractPanel({ estimate }: { estimate: Estimate }) {
+  const [open, setOpen] = useState(false);
+  const [builtUpArea, setBuiltUpArea] = useState("");
+  const [cityTier, setCityTier] = useState("T1");
+  const [state, setState] = useState("Maharashtra");
+  const generateAbstract = useGenerateAbstractBoqItems();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  const handleGenerate = () => {
+    const bua = Number(builtUpArea);
+    if (!bua || bua <= 0) {
+      toast({ title: "Enter a valid built-up area", variant: "destructive" }); return;
+    }
+    generateAbstract.mutate(
+      { estimateId: estimate.id, data: { builtUpArea: bua, cityTier, state } },
+      {
+        onSuccess: (items) => {
+          qc.invalidateQueries({ queryKey: getListBoqItemsQueryKey(estimate.id) });
+          qc.invalidateQueries({ queryKey: getListProjectEstimatesQueryKey(estimate.projectId) });
+          toast({ title: `Generated ${items.length} trade-wise abstract rows from DSR` });
+          setOpen(false);
+          setBuiltUpArea("");
+        },
+        onError: (e: any) => toast({ title: "Error", description: e?.message ?? "Failed to generate abstract", variant: "destructive" }),
+      }
+    );
+  };
+
+  return (
+    <div className="mb-4 p-3 rounded-lg border bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-300">L2 Abstract Estimate</p>
+          <p className="text-xs text-amber-700 dark:text-amber-400">Auto-generate trade-wise rows from DSR/SSR benchmark rates. Existing rows will be replaced.</p>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" variant="outline" className="shrink-0 border-amber-400 text-amber-800 hover:bg-amber-100 dark:text-amber-300 dark:border-amber-700">
+              <Calculator className="h-3.5 w-3.5 mr-1" /> Generate Abstract
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Generate Trade-wise Abstract from DSR</DialogTitle></DialogHeader>
+            <div className="space-y-4 mt-1">
+              <p className="text-sm text-muted-foreground">Creates one BOQ row per trade using DSR/SSR benchmark rates scaled to built-up area. Existing items will be replaced.</p>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Built-Up Area (sqm) <span className="text-destructive">*</span></label>
+                <Input type="number" min="1" placeholder="e.g. 12000" value={builtUpArea} onChange={e => setBuiltUpArea(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">City Tier</label>
+                <Select value={cityTier} onValueChange={setCityTier}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="T1">Tier 1 — Mumbai, Delhi, Bengaluru…</SelectItem>
+                    <SelectItem value="T2">Tier 2</SelectItem>
+                    <SelectItem value="T3">Tier 3</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">State</label>
+                <Input value={state} onChange={e => setState(e.target.value)} placeholder="Maharashtra" />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button onClick={handleGenerate} disabled={generateAbstract.isPending}>
+                  <Calculator className="h-4 w-4 mr-1.5" />
+                  {generateAbstract.isPending ? "Generating…" : "Generate from DSR"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </div>
+  );
+}
+
 export default function EstimationPage({ projectId: propProjectId }: { projectId?: string } = {}) {
   const params = useParams<{ id: string }>();
   const projectId = propProjectId ?? params.id;
   const { data: estimates = [], isLoading } = useListProjectEstimates(projectId);
-  const [selected, setSelected] = useState<Estimate | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const activeEst = selected ?? null;
+  // Derive from live query data — stays fresh after any mutation/invalidation
+  const activeEst = estimates.find(e => e.id === selectedId) ?? null;
 
   return (
     <div className="space-y-6">
@@ -1111,7 +1193,7 @@ export default function EstimationPage({ projectId: propProjectId }: { projectId
             return (
               <button
                 key={est.id}
-                onClick={() => setSelected(est)}
+                onClick={() => setSelectedId(est.id)}
                 className={`w-full text-left p-3 rounded-lg border transition-all ${activeEst?.id === est.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
               >
                 <div className="flex items-center gap-2">
@@ -1149,7 +1231,8 @@ export default function EstimationPage({ projectId: propProjectId }: { projectId
               <CardContent>
                 {activeEst.level === "L0" && <L0Panel estimate={activeEst} />}
                 {activeEst.level === "L1" && <L1Panel estimate={activeEst} />}
-                {(activeEst.level === "L2" || activeEst.level === "L3") && <BoqPanel estimate={activeEst} />}
+                {activeEst.level === "L2" && <><L2AbstractPanel estimate={activeEst} /><BoqPanel estimate={activeEst} /></>}
+                {activeEst.level === "L3" && <BoqPanel estimate={activeEst} />}
                 {activeEst.level === "L4" && <BoqPanel estimate={activeEst} />}
                 {activeEst.level === "L5" && <L5Panel projectId={projectId} estimates={estimates} />}
               </CardContent>

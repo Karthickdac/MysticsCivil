@@ -1406,17 +1406,19 @@ export const UpdateVariationOrderResponse = zod.object({
 
 
 /**
- * @summary Import BOQ items from Excel (xlsx)
+ * @summary Generate trade-wise abstract BOQ rows from DSR benchmark rates (L2)
  */
-export const ImportBoqItemsXlsxParams = zod.object({
+export const GenerateAbstractBoqItemsParams = zod.object({
   "estimateId": zod.coerce.string()
 })
 
-export const ImportBoqItemsXlsxBody = zod.object({
-  "file": zod.instanceof(File)
+export const GenerateAbstractBoqItemsBody = zod.object({
+  "builtUpArea": zod.number().describe('Built-up area in sqm — used as quantity for each trade row'),
+  "cityTier": zod.string().optional().describe('City tier for DSR rate selection (T1\/T2\/T3)'),
+  "state": zod.string().optional().describe('State name for DSR rate selection')
 })
 
-export const ImportBoqItemsXlsxResponseItem = zod.object({
+export const GenerateAbstractBoqItemsResponseItem = zod.object({
   "id": zod.string(),
   "estimateId": zod.string(),
   "projectId": zod.string(),
@@ -1438,7 +1440,19 @@ export const ImportBoqItemsXlsxResponseItem = zod.object({
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date()
 })
-export const ImportBoqItemsXlsxResponse = zod.array(ImportBoqItemsXlsxResponseItem)
+export const GenerateAbstractBoqItemsResponse = zod.array(GenerateAbstractBoqItemsResponseItem)
+
+
+/**
+ * @summary Import BOQ items from Excel (xlsx)
+ */
+export const ImportBoqItemsXlsxParams = zod.object({
+  "estimateId": zod.coerce.string()
+})
+
+export const ImportBoqItemsXlsxBody = zod.object({
+  "file": zod.instanceof(File)
+})
 
 
 /**
