@@ -65,7 +65,7 @@ function LangSwitcher() {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { logout } = useAuth();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { data: profile } = useGetMyProfile();
   const { t } = useT();
 
@@ -107,7 +107,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <SidebarFooter className="p-4 border-t border-sidebar-border">
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton onClick={logout} className="text-sidebar-foreground/70 hover:text-sidebar-foreground">
+                <SidebarMenuButton onClick={async () => { await logout(); setLocation("/login"); }} className="text-sidebar-foreground/70 hover:text-sidebar-foreground">
                   <LogOut className="h-4 w-4 mr-2" />
                   <span>{t("nav.logout")}</span>
                 </SidebarMenuButton>

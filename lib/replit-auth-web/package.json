@@ -10,9 +10,11 @@
     "@workspace/api-client-react": "workspace:*"
   },
   "peerDependencies": {
+    "@tanstack/react-query": ">=5",
     "react": ">=18"
   },
   "devDependencies": {
+    "@tanstack/react-query": "catalog:",
     "@types/react": "catalog:"
   }
 }

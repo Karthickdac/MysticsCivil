@@ -1,60 +1,77 @@
-import { useState, useEffect, useCallback } from "react";
-import type { AuthUser } from "@workspace/api-client-react";
+import { useCallback } from "react";
+import {
+  useGetCurrentAuthUser,
+  getGetCurrentAuthUserQueryKey,
+  type AuthUser,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 export type { AuthUser };
 
-interface AuthState {
-  user: AuthUser | null;
-  isLoading: boolean;
-  isAuthenticated: boolean;
-  login: () => void;
-  logout: () => void;
+type LoginInput = { email: string; password: string };
+type RegisterInput = {
+  email: string;
+  password: string;
+  orgName: string;
+  firstName?: string;
+  lastName?: string;
+};
+
+function apiBase(): string {
+  const base = (import.meta as any).env?.BASE_URL ?? "/";
+  return `${String(base).replace(/\/$/, "")}/api`;
 }
 
-export function useAuth(): AuthState {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+async function postJson(path: string, body: unknown): Promise<any> {
+  const res = await fetch(`${apiBase()}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body ?? {}),
+  });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new Error((data && data.error) || `Request failed (${res.status})`);
+  return data;
+}
 
-  useEffect(() => {
-    let cancelled = false;
+export function useAuth() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useGetCurrentAuthUser();
+  const user = (data as any)?.user ?? null;
 
-    fetch("/api/auth/user", { credentials: "include" })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json() as Promise<{ user: AuthUser | null }>;
-      })
-      .then((data) => {
-        if (!cancelled) {
-          setUser(data.user ?? null);
-          setIsLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setUser(null);
-          setIsLoading(false);
-        }
-      });
+  const invalidate = useCallback(() => {
+    qc.invalidateQueries({ queryKey: getGetCurrentAuthUserQueryKey() });
+  }, [qc]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const login = useCallback(
+    async (input: LoginInput) => {
+      await postJson("/auth/login", input);
+      await invalidate();
+    },
+    [invalidate]
+  );
 
-  const login = useCallback(() => {
-    const base = import.meta.env.BASE_URL.replace(/\/+$/, "") || "/";
-    window.location.href = `/api/login?returnTo=${encodeURIComponent(base)}`;
-  }, []);
+  const register = useCallback(
+    async (input: RegisterInput) => {
+      await postJson("/auth/register", input);
+      await invalidate();
+    },
+    [invalidate]
+  );
 
-  const logout = useCallback(() => {
-    window.location.href = "/api/logout";
-  }, []);
+  const logout = useCallback(async () => {
+    try { await postJson("/auth/logout", {}); } catch { /* ignore */ }
+    qc.setQueryData(getGetCurrentAuthUserQueryKey(), { user: null });
+    await invalidate();
+  }, [invalidate, qc]);
 
   return {
-    user,
-    isLoading,
+    user: user as AuthUser | null,
     isAuthenticated: !!user,
+    isLoading,
     login,
+    register,
     logout,
   };
 }

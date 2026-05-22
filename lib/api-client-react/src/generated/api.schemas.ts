@@ -25,21 +25,21 @@ export interface AuthUserEnvelope {
   user: AuthUser | null;
 }
 
-export interface MobileTokenExchangeRequest {
+export interface RegisterRequest {
+  /** @minLength 3 */
+  email: string;
+  /** @minLength 8 */
+  password: string;
+  firstName?: string;
+  lastName?: string;
   /** @minLength 1 */
-  code: string;
-  /** @minLength 1 */
-  code_verifier: string;
-  /** @minLength 1 */
-  redirect_uri: string;
-  /** @minLength 1 */
-  state: string;
-  /** @minLength 1 */
-  nonce?: string;
+  orgName: string;
 }
 
-export interface MobileTokenExchangeSuccess {
-  token: string;
+export interface LoginRequest {
+  email: string;
+  /** @minLength 1 */
+  password: string;
 }
 
 export const LogoutSuccessValue = {
@@ -1488,16 +1488,6 @@ export interface LabourContractorBill {
 }
 
 export type AuthorizationSessionHeaderParameter = string;
-
-export type BeginBrowserLoginParams = {
-returnTo?: string;
-};
-
-export type HandleBrowserLoginCallbackParams = {
-code?: string;
-state?: string;
-iss?: string;
-};
 
 export type ListDsrRatesParams = {
 q?: string;

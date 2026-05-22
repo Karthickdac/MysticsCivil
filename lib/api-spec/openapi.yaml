@@ -52,74 +52,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthUserEnvelope'
-  /login:
-    get:
-      tags: [Auth]
-      operationId: beginBrowserLogin
-      summary: Start the browser OIDC login flow
-      parameters:
-        - name: returnTo
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        '302':
-          description: Redirect to the OIDC authorization endpoint.
-  /callback:
-    get:
-      tags: [Auth]
-      operationId: handleBrowserLoginCallback
-      summary: Complete the browser OIDC login flow
-      parameters:
-        - name: code
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: state
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: iss
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uri
-      responses:
-        '302':
-          description: Redirect to the returnTo path.
-  /logout:
-    get:
-      tags: [Auth]
-      operationId: logoutBrowserSession
-      summary: Clear the session and begin OIDC logout
-      parameters:
-        - $ref: '#/components/parameters/AuthorizationSessionHeader'
-        - $ref: '#/components/parameters/SessionCookie'
-      responses:
-        '302':
-          description: Redirect to the OIDC provider logout URL.
-  /mobile-auth/token-exchange:
+  /auth/register:
     post:
       tags: [Auth]
-      operationId: exchangeMobileAuthorizationCode
-      summary: Exchange a mobile OIDC code for a session token
+      operationId: registerUser
+      summary: Create a new user account and organisation
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MobileTokenExchangeRequest'
+              $ref: '#/components/schemas/RegisterRequest'
       responses:
-        '200':
-          description: Session created successfully.
+        '201':
+          description: Account created and session started.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MobileTokenExchangeSuccess'
+                $ref: '#/components/schemas/AuthUserEnvelope'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: loginUser
+      summary: Sign in with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Session created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserEnvelope'
         '400':
           description: Bad request
           content:
@@ -127,24 +107,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '401':
-          description: Unauthorized
+          description: Invalid credentials
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
-        '500':
-          description: Server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-  /mobile-auth/logout:
+  /auth/logout:
     post:
       tags: [Auth]
-      operationId: logoutMobileSession
-      summary: Delete a mobile session token
-      parameters:
-        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      operationId: logoutUser
+      summary: Clear the current session
       responses:
         '200':
           description: Logout processed.
@@ -2854,20 +2826,21 @@ components:
           oneOf:
             - $ref: '#/components/schemas/AuthUser'
             - type: 'null'
-    MobileTokenExchangeRequest:
+    RegisterRequest:
       type: object
-      required: [code, code_verifier, redirect_uri, state]
+      required: [email, password, orgName]
       properties:
-        code: { type: string, minLength: 1 }
-        code_verifier: { type: string, minLength: 1 }
-        redirect_uri: { type: string, minLength: 1, format: uri }
-        state: { type: string, minLength: 1 }
-        nonce: { type: string, minLength: 1 }
-    MobileTokenExchangeSuccess:
+        email: { type: string, format: email, minLength: 3 }
+        password: { type: string, minLength: 8 }
+        firstName: { type: string }
+        lastName: { type: string }
+        orgName: { type: string, minLength: 1 }
+    LoginRequest:
       type: object
-      required: [token]
+      required: [email, password]
       properties:
-        token: { type: string }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 1 }
     LogoutSuccess:
       type: object
       required: [success]

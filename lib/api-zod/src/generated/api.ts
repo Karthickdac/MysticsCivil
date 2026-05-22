@@ -35,62 +35,50 @@ export const GetCurrentAuthUserResponse = zod.object({
 
 
 /**
- * @summary Start the browser OIDC login flow
+ * @summary Create a new user account and organisation
  */
-export const BeginBrowserLoginQueryParams = zod.object({
-  "returnTo": zod.coerce.string().optional()
+export const registerUserBodyEmailMin = 3;
+
+export const registerUserBodyPasswordMin = 8;
+
+
+
+
+export const RegisterUserBody = zod.object({
+  "email": zod.string().email().min(registerUserBodyEmailMin),
+  "password": zod.string().min(registerUserBodyPasswordMin),
+  "firstName": zod.string().optional(),
+  "lastName": zod.string().optional(),
+  "orgName": zod.string().min(1)
 })
 
 
 /**
- * @summary Complete the browser OIDC login flow
+ * @summary Sign in with email and password
  */
-export const HandleBrowserLoginCallbackQueryParams = zod.object({
-  "code": zod.coerce.string().optional(),
-  "state": zod.coerce.string().optional(),
-  "iss": zod.coerce.string().url().optional()
+
+
+
+export const LoginUserBody = zod.object({
+  "email": zod.string().email(),
+  "password": zod.string().min(1)
+})
+
+export const LoginUserResponse = zod.object({
+  "user": zod.union([zod.object({
+  "id": zod.string(),
+  "email": zod.string().email().nullable(),
+  "firstName": zod.string().nullable(),
+  "lastName": zod.string().nullable(),
+  "profileImageUrl": zod.string().nullable()
+}),zod.null()])
 })
 
 
 /**
- * @summary Clear the session and begin OIDC logout
+ * @summary Clear the current session
  */
-export const LogoutBrowserSessionHeader = zod.object({
-  "Authorization": zod.string().optional()
-})
-
-
-/**
- * @summary Exchange a mobile OIDC code for a session token
- */
-
-
-
-
-
-
-
-export const ExchangeMobileAuthorizationCodeBody = zod.object({
-  "code": zod.string().min(1),
-  "code_verifier": zod.string().min(1),
-  "redirect_uri": zod.string().url().min(1),
-  "state": zod.string().min(1),
-  "nonce": zod.string().min(1).optional()
-})
-
-export const ExchangeMobileAuthorizationCodeResponse = zod.object({
-  "token": zod.string()
-})
-
-
-/**
- * @summary Delete a mobile session token
- */
-export const LogoutMobileSessionHeader = zod.object({
-  "Authorization": zod.string().optional()
-})
-
-export const LogoutMobileSessionResponse = zod.object({
+export const LogoutUserResponse = zod.object({
   "success": zod.boolean()
 })
 
