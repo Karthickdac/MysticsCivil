@@ -1181,82 +1181,194 @@ function PpeTab({ projectId }: { projectId: string }) {
 }
 
 // ─── JSA Tab (Job Safety Analysis) ────────────────────────────────────────────
+type JsaStep = { seq: number; step: string; hazards: string; controls: string; ppe?: string };
+
 function JsaTab({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<Record<string,string>>({});
-  const f = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+  const [selected, setSelected] = useState<any>(null);
+  const blankStep = (seq: number): JsaStep => ({ seq, step: "", hazards: "", controls: "", ppe: "" });
+  const [form, setForm] = useState<{ activity: string; wbsActivityId: string; jsaDate: string; workersPresent: string; supervisorSignature: string; steps: JsaStep[] }>({
+    activity: "", wbsActivityId: "", jsaDate: new Date().toISOString().slice(0,10),
+    workersPresent: "", supervisorSignature: "", steps: [blankStep(1)],
+  });
+  const resetForm = () => setForm({ activity: "", wbsActivityId: "", jsaDate: new Date().toISOString().slice(0,10), workersPresent: "", supervisorSignature: "", steps: [blankStep(1)] });
+
   const { data: jsa = [], isLoading } = useQuery({ queryKey: ["jsa", projectId], queryFn: () => api(`/projects/${projectId}/jsa`), enabled: !!projectId });
+  const { data: activities = [] } = useQuery<any[]>({ queryKey: ["wbs-activities", projectId], queryFn: () => api(`/projects/${projectId}/wbs-activities`), enabled: !!projectId });
+
   const create = useMutation({
     mutationFn: (b: any) => api(`/projects/${projectId}/jsa`, { method: "POST", body: JSON.stringify(b) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["jsa", projectId] }); setOpen(false); setForm({}); toast({ title: "JSA created" }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["jsa", projectId] }); setOpen(false); resetForm(); toast({ title: "JSA saved as draft" }); },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
+  const patchJsa = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: any }) => api(`/jsa/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["jsa", projectId] }); setSelected(null); toast({ title: "JSA approved" }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const updateStep = (idx: number, key: keyof JsaStep, val: string) => setForm(p => ({ ...p, steps: p.steps.map((s, i) => i === idx ? { ...s, [key]: val } : s) }));
+  const addStep = () => setForm(p => ({ ...p, steps: [...p.steps, blankStep(p.steps.length + 1)] }));
+  const removeStep = (idx: number) => setForm(p => ({ ...p, steps: p.steps.filter((_, i) => i !== idx).map((s, i) => ({ ...s, seq: i + 1 })) }));
+
+  const submit = (status: "draft" | "approved") => {
+    const validSteps = form.steps.filter(s => s.step.trim());
+    if (validSteps.length === 0) { toast({ title: "Add at least one step", variant: "destructive" }); return; }
+    if (status === "approved" && !form.supervisorSignature.trim()) { toast({ title: "Supervisor signature required to approve", variant: "destructive" }); return; }
+    create.mutate({
+      jsaDate: form.jsaDate || new Date().toISOString().slice(0,10),
+      wbsActivityId: form.wbsActivityId || null,
+      workersPresent: parseInt(form.workersPresent || "0") || 0,
+      supervisorSignature: form.supervisorSignature || null,
+      steps: validSteps.map((s, i) => ({ ...s, seq: i + 1, activity: form.activity || undefined })),
+      status,
+    });
+  };
+
+  const draftCount = (jsa as any[]).filter(j => j.status === "draft").length;
+  const approvedCount = (jsa as any[]).filter(j => j.status === "approved").length;
+  const activityMap = Object.fromEntries((activities ?? []).map((a: any) => [a.id, `${a.code ?? ""} ${a.description ?? a.name ?? ""}`.trim()]));
+
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        <Card><CardContent className="pt-4"><div className="text-2xl font-bold">{(jsa as any[]).length}</div><div className="text-xs text-muted-foreground">Total JSAs</div></CardContent></Card>
+        <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-amber-600">{draftCount}</div><div className="text-xs text-muted-foreground">Drafts (awaiting approval)</div></CardContent></Card>
+        <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-green-600">{approvedCount}</div><div className="text-xs text-muted-foreground">Approved (work can start)</div></CardContent></Card>
+      </div>
+
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="font-semibold">Job Safety Analysis</h3>
-          <p className="text-xs text-muted-foreground">Activity-level hazard breakdown with controls and worker briefing</p>
+          <h3 className="font-semibold">Daily Job Safety Analysis</h3>
+          <p className="text-xs text-muted-foreground">Step-by-step hazard breakdown · supervisor signs before work starts</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
           <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" />New JSA</Button></DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle>Create JSA</DialogTitle></DialogHeader>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>Create Daily JSA</DialogTitle></DialogHeader>
             <div className="space-y-3 py-2">
-              <div className="space-y-1"><Label>Activity</Label><Input value={form.activity??""} onChange={e=>f("activity",e.target.value)} placeholder="e.g. Tower crane lift – Block A" /></div>
-              <div className="space-y-1"><Label>Work Steps (one per line)</Label><Textarea rows={3} value={form.workSteps??""} onChange={e=>f("workSteps",e.target.value)} placeholder="1. Rig load&#10;2. Signal banksman&#10;3. Hoist…" /></div>
-              <div className="space-y-1"><Label>Hazards Identified</Label><Textarea rows={2} value={form.hazardsIdentified??""} onChange={e=>f("hazardsIdentified",e.target.value)} placeholder="Falling load, swing impact, electrical line proximity" /></div>
-              <div className="space-y-1"><Label>Control Measures</Label><Textarea rows={2} value={form.controlMeasures??""} onChange={e=>f("controlMeasures",e.target.value)} placeholder="Certified rigger, tag lines, barricade zone" /></div>
-              <div className="space-y-1"><Label>PPE Required</Label><Input value={form.ppeRequired??""} onChange={e=>f("ppeRequired",e.target.value)} placeholder="Helmet, harness, gloves, boots" /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1"><Label>Workers Briefed</Label><Input type="number" value={form.workersBriefed??""} onChange={e=>f("workersBriefed",e.target.value)} /></div>
-                <div className="space-y-1"><Label>Date</Label><Input type="date" value={form.briefingDate??new Date().toISOString().slice(0,10)} onChange={e=>f("briefingDate",e.target.value)} /></div>
+                <div className="space-y-1">
+                  <Label>Activity (WBS)</Label>
+                  <Select value={form.wbsActivityId} onValueChange={v => setForm(p => ({ ...p, wbsActivityId: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Select WBS activity" /></SelectTrigger>
+                    <SelectContent>{(activities ?? []).map((a: any) => <SelectItem key={a.id} value={a.id}>{a.code ?? ""} {a.description ?? a.name ?? ""}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1"><Label>Activity Title</Label><Input value={form.activity} onChange={e => setForm(p => ({ ...p, activity: e.target.value }))} placeholder="e.g. Tower crane lift — Block A" /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label>JSA Date</Label><Input type="date" value={form.jsaDate} onChange={e => setForm(p => ({ ...p, jsaDate: e.target.value }))} /></div>
+                <div className="space-y-1"><Label>Workers Present</Label><Input type="number" value={form.workersPresent} onChange={e => setForm(p => ({ ...p, workersPresent: e.target.value }))} placeholder="0" /></div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex justify-between items-center"><Label>Steps · Hazards · Controls</Label>
+                  <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={addStep}><Plus className="h-3 w-3 mr-1" />Add Step</Button>
+                </div>
+                <div className="rounded border overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-2 py-1.5 text-left w-10">#</th>
+                        <th className="px-2 py-1.5 text-left">Task Step</th>
+                        <th className="px-2 py-1.5 text-left">Hazard</th>
+                        <th className="px-2 py-1.5 text-left">Control Measure</th>
+                        <th className="px-2 py-1.5 text-left w-32">PPE</th>
+                        <th className="w-8"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {form.steps.map((s, i) => (
+                        <tr key={i} className="border-t">
+                          <td className="px-2 py-1.5 text-center text-muted-foreground">{s.seq}</td>
+                          <td className="px-1 py-1"><Input className="h-7 text-xs" value={s.step} onChange={e => updateStep(i, "step", e.target.value)} placeholder="Describe step" /></td>
+                          <td className="px-1 py-1"><Input className="h-7 text-xs" value={s.hazards} onChange={e => updateStep(i, "hazards", e.target.value)} placeholder="Hazard for this step" /></td>
+                          <td className="px-1 py-1"><Input className="h-7 text-xs" value={s.controls} onChange={e => updateStep(i, "controls", e.target.value)} placeholder="Control" /></td>
+                          <td className="px-1 py-1"><Input className="h-7 text-xs" value={s.ppe ?? ""} onChange={e => updateStep(i, "ppe", e.target.value)} placeholder="Helmet…" /></td>
+                          <td className="px-1 py-1 text-center">{form.steps.length > 1 && <button type="button" className="text-red-600 text-xs" onClick={() => removeStep(i)}>×</button>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Supervisor Signature (name)</Label>
+                <Input value={form.supervisorSignature} onChange={e => setForm(p => ({ ...p, supervisorSignature: e.target.value }))} placeholder="Type supervisor name to sign — required for approval" />
               </div>
             </div>
-            <Button className="w-full" disabled={!form.activity || create.isPending} onClick={() => {
-              const steps = (form.workSteps ?? "").split(/\r?\n/).filter(s => s.trim()).map((s, i) => ({
-                seq: i + 1, step: s.trim(),
-                hazards: i === 0 ? (form.hazardsIdentified ?? "") : "",
-                controls: i === 0 ? (form.controlMeasures ?? "") : "",
-                ppe: i === 0 ? (form.ppeRequired ?? "") : "",
-              }));
-              create.mutate({
-                jsaDate: form.briefingDate || new Date().toISOString().slice(0,10),
-                workersPresent: parseInt(form.workersBriefed ?? "0") || 0,
-                steps: steps.length > 0 ? steps : [{ seq: 1, step: form.activity, hazards: form.hazardsIdentified ?? "", controls: form.controlMeasures ?? "", ppe: form.ppeRequired ?? "" }],
-                status: "approved",
-              });
-            }}>{create.isPending ? "Saving…" : "Create JSA"}</Button>
+            <div className="flex gap-2 pt-3 border-t">
+              <Button variant="outline" disabled={create.isPending} onClick={() => submit("draft")}>Save Draft</Button>
+              <Button disabled={create.isPending || !form.supervisorSignature.trim()} onClick={() => submit("approved")}><CheckCircle className="h-4 w-4 mr-1" />Save &amp; Approve</Button>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
+
       {isLoading ? <div className="text-sm text-muted-foreground">Loading…</div> :
       <div className="grid md:grid-cols-2 gap-3">
         {(jsa as any[]).map((j: any) => {
-          const firstStep = Array.isArray(j.steps) && j.steps[0] ? j.steps[0] : {};
-          const stepCount = Array.isArray(j.steps) ? j.steps.length : 0;
+          const steps: JsaStep[] = Array.isArray(j.steps) ? j.steps : [];
           return (
             <Card key={j.id}>
-              <CardContent className="pt-4">
+              <CardContent className="pt-4 space-y-2">
                 <div className="flex justify-between items-start">
                   <div>
-                    <div className="font-medium text-sm">{firstStep.step ?? `JSA — ${stepCount} steps`}</div>
-                    <div className="text-xs text-muted-foreground">{fmtDate(j.jsaDate ?? j.createdAt)} · <Badge variant="outline" className="ml-1">{j.status}</Badge></div>
+                    <div className="font-medium text-sm">{steps[0]?.activity ?? (j.wbsActivityId ? activityMap[j.wbsActivityId] : null) ?? `JSA — ${steps.length} steps`}</div>
+                    <div className="text-xs text-muted-foreground">{fmtDate(j.jsaDate ?? j.createdAt)} · <Badge className={statusBadge(j.status)}>{j.status}</Badge></div>
                   </div>
                   <Badge variant="outline">{j.workersPresent ?? 0} workers</Badge>
                 </div>
-                {firstStep.hazards && <div className="mt-2 text-xs"><span className="font-medium text-red-700">Hazards:</span> {firstStep.hazards}</div>}
-                {firstStep.controls && <div className="mt-1 text-xs"><span className="font-medium text-green-700">Controls:</span> {firstStep.controls}</div>}
-                {firstStep.ppe && <div className="mt-1 text-xs"><span className="font-medium">PPE:</span> {firstStep.ppe}</div>}
-                {stepCount > 1 && <div className="mt-1 text-xs text-muted-foreground">+ {stepCount - 1} more steps</div>}
+                {steps.length > 0 && (
+                  <div className="rounded border overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/40"><tr><th className="px-2 py-1 text-left w-6">#</th><th className="px-2 py-1 text-left">Step</th><th className="px-2 py-1 text-left">Hazard</th><th className="px-2 py-1 text-left">Control</th></tr></thead>
+                      <tbody>
+                        {steps.slice(0, 4).map((s, i) => (
+                          <tr key={i} className="border-t">
+                            <td className="px-2 py-1 text-muted-foreground">{s.seq}</td>
+                            <td className="px-2 py-1">{s.step || "—"}</td>
+                            <td className="px-2 py-1 text-red-700">{s.hazards || "—"}</td>
+                            <td className="px-2 py-1 text-green-700">{s.controls || "—"}</td>
+                          </tr>
+                        ))}
+                        {steps.length > 4 && <tr><td colSpan={4} className="px-2 py-1 text-muted-foreground border-t">+ {steps.length - 4} more steps</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {j.supervisorSignature && <div className="text-xs"><span className="text-muted-foreground">Supervisor signed:</span> <span className="font-medium">{j.supervisorSignature}</span></div>}
+                {j.status === "draft" && (
+                  <div className="pt-1 flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setSelected(j)}>Approve…</Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
         })}
         {(jsa as any[]).length === 0 && <div className="text-sm text-muted-foreground">No JSA entries yet</div>}
       </div>}
+
+      <Dialog open={!!selected} onOpenChange={(v) => !v && setSelected(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Approve JSA</DialogTitle></DialogHeader>
+          <div className="space-y-2 py-2">
+            <p className="text-sm text-muted-foreground">Confirm supervisor approval to release this JSA for work to start.</p>
+            <Label>Supervisor Signature</Label>
+            <Input id="approve-sig" defaultValue={selected?.supervisorSignature ?? ""} placeholder="Type supervisor name" />
+          </div>
+          <Button className="w-full" disabled={patchJsa.isPending} onClick={() => {
+            const sig = (document.getElementById("approve-sig") as HTMLInputElement | null)?.value?.trim() ?? "";
+            if (!sig) { toast({ title: "Signature required", variant: "destructive" }); return; }
+            patchJsa.mutate({ id: selected.id, body: { status: "approved", supervisorSignature: sig } });
+          }}>{patchJsa.isPending ? "Approving…" : "Approve & Release"}</Button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1267,8 +1379,18 @@ function MaterialTestingTab({ projectId }: { projectId: string }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<Record<string,string>>({ testType: "concrete_cube_28", testDate: new Date().toISOString().slice(0,10) });
+  const [filters, setFilters] = useState<{ testType: string; result: string; fromDate: string; toDate: string }>({ testType: "all", result: "all", fromDate: "", toDate: "" });
   const f = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
-  const { data: tests = [], isLoading } = useQuery({ queryKey: ["quality-tests", projectId], queryFn: () => api(`/projects/${projectId}/quality-tests`), enabled: !!projectId });
+  const filterQs = (() => {
+    const q = new URLSearchParams();
+    if (filters.testType !== "all") q.set("testType", filters.testType);
+    if (filters.result !== "all") q.set("result", filters.result);
+    if (filters.fromDate) q.set("fromDate", filters.fromDate);
+    if (filters.toDate) q.set("toDate", filters.toDate);
+    const s = q.toString();
+    return s ? `?${s}` : "";
+  })();
+  const { data: tests = [], isLoading } = useQuery({ queryKey: ["quality-tests", projectId, filterQs], queryFn: () => api(`/projects/${projectId}/quality-tests${filterQs}`), enabled: !!projectId });
   const create = useMutation({
     mutationFn: (b: any) => api(`/projects/${projectId}/quality-tests`, { method: "POST", body: JSON.stringify(b) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["quality-tests", projectId] }); setOpen(false); setForm({ testType: "concrete_cube_28", testDate: new Date().toISOString().slice(0,10) }); toast({ title: "Test recorded" }); },
@@ -1322,13 +1444,31 @@ function MaterialTestingTab({ projectId }: { projectId: string }) {
           </DialogContent>
         </Dialog>
       </div>
+      <Card>
+        <CardContent className="pt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="space-y-1"><Label className="text-xs">Material Type</Label>
+            <Select value={filters.testType} onValueChange={v => setFilters(p => ({ ...p, testType: v }))}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">All types</SelectItem>{IS_CODE_TEST_TYPES.map(t => <SelectItem key={t} value={t}>{IS_CODE_LABELS[t]}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1"><Label className="text-xs">Result</Label>
+            <Select value={filters.result} onValueChange={v => setFilters(p => ({ ...p, result: v }))}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="pass">Pass</SelectItem><SelectItem value="fail">Fail</SelectItem><SelectItem value="pending">Pending</SelectItem></SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1"><Label className="text-xs">From Date</Label><Input className="h-8 text-xs" type="date" value={filters.fromDate} onChange={e => setFilters(p => ({ ...p, fromDate: e.target.value }))} /></div>
+          <div className="space-y-1"><Label className="text-xs">To Date</Label><Input className="h-8 text-xs" type="date" value={filters.toDate} onChange={e => setFilters(p => ({ ...p, toDate: e.target.value }))} /></div>
+        </CardContent>
+      </Card>
       <div className="rounded-md border overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
-            <tr>{["Sample ID","Type","IS Code","Date","Value","Limit","Result"].map(h=><th key={h} className="px-3 py-2 text-left font-medium">{h}</th>)}</tr>
+            <tr>{["Sample ID","Type","IS Code","Date","Value","Limit","Result","Certificate"].map(h=><th key={h} className="px-3 py-2 text-left font-medium">{h}</th>)}</tr>
           </thead>
           <tbody>
-            {isLoading ? <tr><td colSpan={7} className="px-3 py-4 text-center text-muted-foreground">Loading…</td></tr> :
+            {isLoading ? <tr><td colSpan={8} className="px-3 py-4 text-center text-muted-foreground">Loading…</td></tr> :
             (tests as any[]).map((t: any) => (
               <tr key={t.id} className="border-t hover:bg-muted/30">
                 <td className="px-3 py-2 font-mono text-xs">{t.sampleId ?? "—"}</td>
@@ -1338,9 +1478,14 @@ function MaterialTestingTab({ projectId }: { projectId: string }) {
                 <td className="px-3 py-2 font-mono">{t.testValue ?? "—"} {t.testUnit ?? ""}</td>
                 <td className="px-3 py-2 text-xs text-muted-foreground">{t.minAcceptable && `≥${t.minAcceptable}`}{t.minAcceptable && t.maxAcceptable && " "}{t.maxAcceptable && `≤${t.maxAcceptable}`}</td>
                 <td className="px-3 py-2">{t.passed === true ? <Badge className="bg-green-100 text-green-800">PASS</Badge> : t.passed === false ? <Badge className="bg-red-100 text-red-800">FAIL</Badge> : <Badge variant="outline">—</Badge>}</td>
+                <td className="px-3 py-2">
+                  <a href={`${API}/quality-tests/${t.id}/certificate.pdf`} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" variant="outline" className="h-7 text-xs"><Download className="h-3 w-3 mr-1" />PDF</Button>
+                  </a>
+                </td>
               </tr>
             ))}
-            {(tests as any[]).length === 0 && !isLoading && <tr><td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">No tests yet — record your first IS-code test</td></tr>}
+            {(tests as any[]).length === 0 && !isLoading && <tr><td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">No tests match the filters</td></tr>}
           </tbody>
         </table>
       </div>

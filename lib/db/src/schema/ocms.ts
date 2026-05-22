@@ -1397,6 +1397,9 @@ export const jsaEntriesTable = pgTable("jsa_entries", {
   workersPresent: integer("workers_present").notNull().default(0),
   steps: jsonb("steps").notNull().default(sql`'[]'::jsonb`),
   status: varchar("status", { length: 16 }).notNull().default("draft"),
+  supervisorSignature: varchar("supervisor_signature", { length: 128 }),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  approvedById: varchar("approved_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type JsaEntry = typeof jsaEntriesTable.$inferSelect;

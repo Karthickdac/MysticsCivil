@@ -622,6 +622,7 @@ router.post("/projects/:projectId/jsa", requireAuth, async (req: Request, res: R
   if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
   const b = req.body ?? {};
   if (!b.jsaDate) { res.status(400).json({ error: "jsaDate required" }); return; }
+  const status = b.status ?? "draft";
   const [row] = await db.insert(jsaEntriesTable).values({
     projectId: req.params.projectId,
     wbsActivityId: b.wbsActivityId ?? null,
@@ -630,9 +631,32 @@ router.post("/projects/:projectId/jsa", requireAuth, async (req: Request, res: R
     supervisorId: b.supervisorId ?? null,
     workersPresent: b.workersPresent ?? 0,
     steps: b.steps ?? [],
-    status: b.status ?? "draft",
+    status,
+    supervisorSignature: b.supervisorSignature ?? null,
+    approvedAt: status === "approved" ? new Date() : null,
+    approvedById: status === "approved" ? (req.user?.id ?? null) : null,
   }).returning();
   res.status(201).json(row);
+});
+
+router.patch("/jsa/:id", requireAuth, async (req: Request, res: Response) => {
+  const [entry] = await db.select().from(jsaEntriesTable).where(eq(jsaEntriesTable.id, req.params.id));
+  if (!entry) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, entry.projectId)) return;
+  const b = req.body ?? {};
+  const patch: Record<string, any> = {};
+  if (b.steps !== undefined) patch.steps = b.steps;
+  if (b.workersPresent !== undefined) patch.workersPresent = b.workersPresent;
+  if (b.supervisorSignature !== undefined) patch.supervisorSignature = b.supervisorSignature;
+  if (b.status !== undefined) {
+    patch.status = b.status;
+    if (b.status === "approved") {
+      patch.approvedAt = new Date();
+      patch.approvedById = req.user?.id ?? null;
+    }
+  }
+  const [updated] = await db.update(jsaEntriesTable).set(patch).where(eq(jsaEntriesTable.id, entry.id)).returning();
+  res.json(updated);
 });
 
 // ─── PPE ISSUES ───────────────────────────────────────────────────────────────
@@ -1075,12 +1099,59 @@ router.get("/payroll-periods/:periodId/statutory-summary", requireAuth, async (r
 // ─── QUALITY TESTS ────────────────────────────────────────────────────────────
 router.get("/projects/:projectId/quality-tests", requireAuth, async (req: Request, res: Response) => {
   if (await denyIfNoProjectAccess(req, res, req.params.projectId)) return;
-  const { testType } = req.query as Record<string, string>;
+  const { testType, result, fromDate, toDate } = req.query as Record<string, string>;
   let cond: any = eq(qualityTestsTable.projectId, req.params.projectId);
   if (testType) cond = and(cond, eq(qualityTestsTable.testType, testType));
+  if (result === "pass") cond = and(cond, eq(qualityTestsTable.passed, true));
+  else if (result === "fail") cond = and(cond, eq(qualityTestsTable.passed, false));
+  else if (result === "pending") cond = and(cond, sql`${qualityTestsTable.passed} IS NULL`);
+  if (fromDate) cond = and(cond, sql`${qualityTestsTable.testDate} >= ${new Date(fromDate)}`);
+  if (toDate) cond = and(cond, sql`${qualityTestsTable.testDate} <= ${new Date(toDate)}`);
   const rows = await db.select().from(qualityTestsTable).where(cond)
     .orderBy(desc(qualityTestsTable.testDate));
   res.json(rows);
+});
+
+// ─── Quality Test Certificate PDF ─────────────────────────────────────────────
+router.get("/quality-tests/:id/certificate.pdf", requireAuth, async (req: Request, res: Response) => {
+  const [test] = await db.select().from(qualityTestsTable).where(eq(qualityTestsTable.id, req.params.id));
+  if (!test) { res.status(404).json({ error: "Not found" }); return; }
+  if (await denyIfNoProjectAccess(req, res, test.projectId)) return;
+  const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, test.projectId));
+  const [org] = project?.organisationId
+    ? await db.select().from(organisationsTable).where(eq(organisationsTable.id, project.organisationId))
+    : [null as any];
+  const resultText = test.passed === true ? "PASS" : test.passed === false ? "FAIL" : "PENDING";
+  const limitText = test.minAcceptable && test.maxAcceptable
+    ? `${test.minAcceptable} – ${test.maxAcceptable} ${test.testUnit ?? ""}`
+    : test.minAcceptable ? `≥ ${test.minAcceptable} ${test.testUnit ?? ""}`
+    : test.maxAcceptable ? `≤ ${test.maxAcceptable} ${test.testUnit ?? ""}` : "—";
+  const rows = [
+    { field: "Sample ID", value: test.sampleId ?? "—" },
+    { field: "Test Type", value: String(test.testType).replace(/_/g, " ") },
+    { field: "IS Code Reference", value: test.isCodeRef ?? "—" },
+    { field: "Sample Location", value: test.sampleLocation ?? "—" },
+    { field: "Laboratory", value: test.labName ?? "—" },
+    { field: "Sample Date", value: test.sampleDate ? new Date(test.sampleDate).toISOString().slice(0,10) : "—" },
+    { field: "Test Date", value: test.testDate ? new Date(test.testDate).toISOString().slice(0,10) : "—" },
+    { field: "Test Value", value: test.testValue != null ? `${test.testValue} ${test.testUnit ?? ""}` : "—" },
+    { field: "Acceptance Limit", value: limitText },
+    { field: "Result", value: resultText },
+    { field: "Remarks", value: test.remarks ?? "—" },
+  ];
+  const bytes = await buildTablePdf({
+    title: "MATERIAL TEST CERTIFICATE",
+    subtitle: `${org?.name ?? ""} · ${project?.name ?? ""} · Certificate #${test.id.slice(0,8).toUpperCase()}`,
+    columns: [
+      { header: "Particular", key: "field", width: 200 },
+      { header: "Value", key: "value", width: 320 },
+    ],
+    rows,
+    footer: `Generated ${new Date().toISOString()} · IS-code compliance certificate · System-generated, no signature required when used internally`,
+  });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="test-cert-${test.sampleId ?? test.id.slice(0,8)}.pdf"`);
+  res.end(Buffer.from(bytes));
 });
 
 router.post("/projects/:projectId/quality-tests", requireAuth, async (req: Request, res: Response) => {
