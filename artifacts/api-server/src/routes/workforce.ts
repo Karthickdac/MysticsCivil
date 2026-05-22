@@ -57,28 +57,63 @@ router.get("/projects/:projectId/workers", requireAuth, async (req: Request, res
   res.json(rows);
 });
 
+function normStatutory(b: any): { aadhaar: string | null; pf: string | null; uan: string | null; esi: string | null; error?: string } {
+  const aadhaar = b.aadhaarNumber ? String(b.aadhaarNumber).replace(/\s+/g, "") : null;
+  const pf = b.pfNumber ? String(b.pfNumber).trim().toUpperCase() : null;
+  const uan = b.uan ? String(b.uan).replace(/\s+/g, "") : null;
+  const esi = b.esiNumber ? String(b.esiNumber).replace(/\s+/g, "") : null;
+  if (aadhaar && !/^\d{12}$/.test(aadhaar)) return { aadhaar, pf, uan, esi, error: "Aadhaar must be 12 digits" };
+  if (uan && !/^\d{12}$/.test(uan)) return { aadhaar, pf, uan, esi, error: "UAN must be 12 digits" };
+  if (esi && !/^\d{10,17}$/.test(esi)) return { aadhaar, pf, uan, esi, error: "ESI number must be 10–17 digits" };
+  return { aadhaar, pf, uan, esi };
+}
+
+async function checkDuplicates(v: { aadhaar: string | null; pf: string | null; uan: string | null; esi: string | null }, excludeWorkerId?: string): Promise<string | null> {
+  const checks: Array<{ col: any; value: string; label: string }> = [];
+  if (v.aadhaar) checks.push({ col: workersTable.aadhaarNumber, value: v.aadhaar, label: "Aadhaar" });
+  if (v.pf) checks.push({ col: workersTable.pfNumber, value: v.pf, label: "PF number" });
+  if (v.uan) checks.push({ col: workersTable.uan, value: v.uan, label: "UAN" });
+  if (v.esi) checks.push({ col: workersTable.esiNumber, value: v.esi, label: "ESI number" });
+  for (const c of checks) {
+    const rows = await db.select({ id: workersTable.id, name: workersTable.name, code: workersTable.workerCode })
+      .from(workersTable).where(eq(c.col, c.value));
+    const dup = rows.find(r => r.id !== excludeWorkerId);
+    if (dup) return `${c.label} ${c.value} already belongs to ${dup.name} (${dup.code})`;
+  }
+  return null;
+}
+
 router.post("/projects/:projectId/workers", requireAuth, async (req: Request, res: Response) => {
   const b = req.body ?? {};
   if (!b.name || !b.trade) { res.status(400).json({ error: "name, trade required" }); return; }
+  const v = normStatutory(b);
+  if (v.error) { res.status(400).json({ error: v.error }); return; }
+  const dupErr = await checkDuplicates(v);
+  if (dupErr) { res.status(409).json({ error: dupErr }); return; }
   const count = await db.select({ c: sql`count(*)` }).from(workersTable)
     .where(eq(workersTable.projectId, req.params.projectId));
   const seq = Number(count[0]?.c ?? 0) + 1;
-  const [row] = await db.insert(workersTable).values({
-    projectId: req.params.projectId,
-    workerCode: b.workerCode ?? `WRK-${String(seq).padStart(4, "0")}`,
-    name: b.name, trade: b.trade ?? "helper",
-    skillLevel: b.skillLevel ?? "unskilled",
-    dailyRate: String(n(b.dailyRate)), otRate: String(n(b.otRate)),
-    aadhaarNumber: b.aadhaarNumber ?? null, phone: b.phone ?? null,
-    email: b.email ? String(b.email).trim().toLowerCase() : null,
-    gender: b.gender ?? null, state: b.state ?? null,
-    bocwRegNumber: b.bocwRegNumber ?? null,
-    pfNumber: b.pfNumber ?? null, esiNumber: b.esiNumber ?? null,
-    bankName: b.bankName ?? null, accountNumber: b.accountNumber ?? null,
-    ifscCode: b.ifscCode ?? null, contractorId: b.contractorId ?? null,
-    registeredById: req.user?.id ?? null,
-  }).returning();
-  res.status(201).json(row);
+  try {
+    const [row] = await db.insert(workersTable).values({
+      projectId: req.params.projectId,
+      workerCode: b.workerCode ?? `WRK-${String(seq).padStart(4, "0")}`,
+      name: b.name, trade: b.trade ?? "helper",
+      skillLevel: b.skillLevel ?? "unskilled",
+      dailyRate: String(n(b.dailyRate)), otRate: String(n(b.otRate)),
+      aadhaarNumber: v.aadhaar, phone: b.phone ?? null,
+      email: b.email ? String(b.email).trim().toLowerCase() : null,
+      gender: b.gender ?? null, state: b.state ?? null,
+      bocwRegNumber: b.bocwRegNumber ?? null,
+      pfNumber: v.pf, uan: v.uan, esiNumber: v.esi,
+      bankName: b.bankName ?? null, accountNumber: b.accountNumber ?? null,
+      ifscCode: b.ifscCode ?? null, contractorId: b.contractorId ?? null,
+      registeredById: req.user?.id ?? null,
+    }).returning();
+    res.status(201).json(row);
+  } catch (e: any) {
+    if (String(e?.code) === "23505") { res.status(409).json({ error: "Aadhaar / PF / UAN / ESI already exists for another worker" }); return; }
+    throw e;
+  }
 });
 
 router.get("/workers/:workerId", requireAuth, async (req: Request, res: Response) => {
@@ -94,7 +129,7 @@ router.patch("/workers/:workerId", requireAuth, async (req: Request, res: Respon
   const [w] = await db.select().from(workersTable).where(eq(workersTable.id, req.params.workerId));
   if (!w) { res.status(404).json({ error: "Not found" }); return; }
   if (await denyIfNoProjectAccess(req, res, w.projectId)) return;
-  const fields = ["name","trade","skillLevel","phone","gender","state","bocwRegNumber","pfNumber","esiNumber","bankName","accountNumber","ifscCode","status","contractorId"];
+  const fields = ["name","trade","skillLevel","phone","gender","state","bocwRegNumber","bankName","accountNumber","ifscCode","status","contractorId"];
   const patch: Record<string, any> = {};
   for (const f of fields) if (b[f] !== undefined) patch[f] = b[f];
   if (b.dailyRate !== undefined) patch.dailyRate = String(n(b.dailyRate));
@@ -103,8 +138,29 @@ router.patch("/workers/:workerId", requireAuth, async (req: Request, res: Respon
     const e = String(b.email ?? "").trim().toLowerCase();
     patch.email = e || null;
   }
-  const [updated] = await db.update(workersTable).set(patch).where(eq(workersTable.id, w.id)).returning();
-  res.json(updated);
+  if (b.aadhaarNumber !== undefined || b.pfNumber !== undefined || b.uan !== undefined || b.esiNumber !== undefined) {
+    const merged = {
+      aadhaarNumber: b.aadhaarNumber !== undefined ? b.aadhaarNumber : w.aadhaarNumber,
+      pfNumber: b.pfNumber !== undefined ? b.pfNumber : w.pfNumber,
+      uan: b.uan !== undefined ? b.uan : (w as any).uan,
+      esiNumber: b.esiNumber !== undefined ? b.esiNumber : w.esiNumber,
+    };
+    const v = normStatutory(merged);
+    if (v.error) { res.status(400).json({ error: v.error }); return; }
+    const dupErr = await checkDuplicates(v, w.id);
+    if (dupErr) { res.status(409).json({ error: dupErr }); return; }
+    if (b.aadhaarNumber !== undefined) patch.aadhaarNumber = v.aadhaar;
+    if (b.pfNumber !== undefined) patch.pfNumber = v.pf;
+    if (b.uan !== undefined) patch.uan = v.uan;
+    if (b.esiNumber !== undefined) patch.esiNumber = v.esi;
+  }
+  try {
+    const [updated] = await db.update(workersTable).set(patch).where(eq(workersTable.id, w.id)).returning();
+    res.json(updated);
+  } catch (e: any) {
+    if (String(e?.code) === "23505") { res.status(409).json({ error: "Aadhaar / PF / UAN / ESI already exists for another worker" }); return; }
+    throw e;
+  }
 });
 
 // ─── ATTENDANCE ────────────────────────────────────────────────────────────────
@@ -1006,6 +1062,7 @@ router.get("/payroll-periods/:periodId/form-a", requireAuth, async (req: Request
       name: w.name ?? "—",
       gender: w.gender ?? "—",
       aadhaar: w.aadhaarNumber ?? "—",
+      uan: w.uan ?? "—",
       trade: w.trade ?? "—",
       skillLevel: w.skillLevel ?? "—",
       bocwReg: w.bocwRegNumber ?? "—",
@@ -1024,6 +1081,7 @@ router.get("/payroll-periods/:periodId/form-a", requireAuth, async (req: Request
       { header: "Name", key: "name", width: 130 },
       { header: "Gender", key: "gender", width: 50, align: "center" },
       { header: "Aadhaar", key: "aadhaar", width: 90 },
+      { header: "UAN", key: "uan", width: 80 },
       { header: "Trade", key: "trade", width: 70 },
       { header: "Skill", key: "skillLevel", width: 75 },
       { header: "BOCW Reg.", key: "bocwReg", width: 80 },

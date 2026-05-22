@@ -141,7 +141,7 @@ function WorkersTab({ projectId }: { projectId: string }) {
                   <SelectContent>{SKILLS.map(s=><SelectItem key={s} value={s}>{s.replace(/_/g," ")}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
-              {[["dailyRate","Daily Rate (₹)"],["bocwRegNumber","BOCW Reg No."],["pfNumber","PF Number"],["bankName","Bank Name"],["accountNumber","Account No."],["ifscCode","IFSC"]].map(([k,lbl])=>(
+              {[["dailyRate","Daily Rate (₹)"],["bocwRegNumber","BOCW Reg No."],["pfNumber","PF Number"],["uan","UAN (12 digits)"],["esiNumber","ESI Number"],["bankName","Bank Name"],["accountNumber","Account No."],["ifscCode","IFSC"]].map(([k,lbl])=>(
                 <div key={k} className="space-y-1"><Label>{lbl}</Label><Input value={form[k]??""} onChange={e=>f(k,e.target.value)} /></div>
               ))}
             </div>
@@ -155,7 +155,7 @@ function WorkersTab({ projectId }: { projectId: string }) {
         <div className="rounded-md border overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
-              <tr>{["Code","Name","Trade","Skill","Daily Rate","PF No.","BOCW","Status"].map(h=><th key={h} className="px-3 py-2 text-left font-medium">{h}</th>)}</tr>
+              <tr>{["Code","Name","Trade","Skill","Daily Rate","UAN","PF No.","BOCW","Status"].map(h=><th key={h} className="px-3 py-2 text-left font-medium">{h}</th>)}</tr>
             </thead>
             <tbody>
               {workers.map((w: any) => (
@@ -165,6 +165,7 @@ function WorkersTab({ projectId }: { projectId: string }) {
                   <td className="px-3 py-2">{w.trade?.replace(/_/g," ")}</td>
                   <td className="px-3 py-2">{w.skillLevel?.replace(/_/g," ")}</td>
                   <td className="px-3 py-2">{fmtCur(w.dailyRate)}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{fmt(w.uan)}</td>
                   <td className="px-3 py-2 font-mono text-xs">{fmt(w.pfNumber)}</td>
                   <td className="px-3 py-2 font-mono text-xs">{fmt(w.bocwRegNumber)}</td>
                   <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadge(w.status)}`}>{w.status}</span></td>

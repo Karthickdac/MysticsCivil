@@ -8,6 +8,7 @@ import {
   text,
   timestamp,
   varchar,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -1148,7 +1149,12 @@ export const workersTable = pgTable("workers", {
   status: varchar("status", { length: 16 }).notNull().default("active"),
   registeredById: varchar("registered_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => ({
+  uniqAadhaar: uniqueIndex("workers_aadhaar_uq").on(t.aadhaarNumber).where(sql`${t.aadhaarNumber} IS NOT NULL`),
+  uniqPf: uniqueIndex("workers_pf_uq").on(t.pfNumber).where(sql`${t.pfNumber} IS NOT NULL`),
+  uniqUan: uniqueIndex("workers_uan_uq").on(t.uan).where(sql`${t.uan} IS NOT NULL`),
+  uniqEsi: uniqueIndex("workers_esi_uq").on(t.esiNumber).where(sql`${t.esiNumber} IS NOT NULL`),
+}));
 export type Worker = typeof workersTable.$inferSelect;
 
 export const workerDocumentsTable = pgTable("worker_documents", {
