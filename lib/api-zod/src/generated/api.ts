@@ -1657,3 +1657,700 @@ export const GetActivityFeedResponseItem = zod.object({
 export const GetActivityFeedResponse = zod.array(GetActivityFeedResponseItem)
 
 
+/**
+ * @summary List contractor RA bills for a project
+ */
+export const ListContractorBillsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListContractorBillsResponseItem = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "workOrderId": zod.string().nullish(),
+  "billNumber": zod.string(),
+  "billDate": zod.coerce.date(),
+  "periodFrom": zod.coerce.date().nullish(),
+  "periodTo": zod.coerce.date().nullish(),
+  "grossAmount": zod.number(),
+  "totalDeductions": zod.number(),
+  "gstAmount": zod.number(),
+  "netPayable": zod.number(),
+  "status": zod.string(),
+  "stepLabel": zod.string(),
+  "invoiceUrl": zod.string().nullish(),
+  "measurementUrl": zod.string().nullish(),
+  "irnNumber": zod.string().nullish(),
+  "remarks": zod.string().nullish(),
+  "technicalRemarks": zod.string().nullish(),
+  "qsRemarks": zod.string().nullish(),
+  "pmRemarks": zod.string().nullish(),
+  "submittedById": zod.string().nullish(),
+  "technicalCheckedById": zod.string().nullish(),
+  "qsScrutinizedById": zod.string().nullish(),
+  "pmCertifiedById": zod.string().nullish(),
+  "financeApprovedById": zod.string().nullish(),
+  "utr": zod.string().nullish(),
+  "paymentMode": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "closedAt": zod.coerce.date().nullish(),
+  "technicalCheckedAt": zod.coerce.date().nullish(),
+  "qsScrutinizedAt": zod.coerce.date().nullish(),
+  "pmCertifiedAt": zod.coerce.date().nullish(),
+  "financeApprovedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListContractorBillsResponse = zod.array(ListContractorBillsResponseItem)
+
+
+/**
+ * @summary Submit a new contractor RA bill
+ */
+export const CreateContractorBillParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateContractorBillBody = zod.object({
+  "billNumber": zod.string(),
+  "grossAmount": zod.number(),
+  "workOrderId": zod.string().optional(),
+  "billDate": zod.coerce.date().optional(),
+  "periodFrom": zod.coerce.date().optional(),
+  "periodTo": zod.coerce.date().optional(),
+  "invoiceUrl": zod.string().optional(),
+  "measurementUrl": zod.string().optional(),
+  "remarks": zod.string().optional()
+})
+
+
+export const GetContractorBillParams = zod.object({
+  "billId": zod.coerce.string()
+})
+
+export const GetContractorBillResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "workOrderId": zod.string().nullish(),
+  "billNumber": zod.string(),
+  "billDate": zod.coerce.date(),
+  "periodFrom": zod.coerce.date().nullish(),
+  "periodTo": zod.coerce.date().nullish(),
+  "grossAmount": zod.number(),
+  "totalDeductions": zod.number(),
+  "gstAmount": zod.number(),
+  "netPayable": zod.number(),
+  "status": zod.string(),
+  "stepLabel": zod.string(),
+  "invoiceUrl": zod.string().nullish(),
+  "measurementUrl": zod.string().nullish(),
+  "irnNumber": zod.string().nullish(),
+  "remarks": zod.string().nullish(),
+  "technicalRemarks": zod.string().nullish(),
+  "qsRemarks": zod.string().nullish(),
+  "pmRemarks": zod.string().nullish(),
+  "submittedById": zod.string().nullish(),
+  "technicalCheckedById": zod.string().nullish(),
+  "qsScrutinizedById": zod.string().nullish(),
+  "pmCertifiedById": zod.string().nullish(),
+  "financeApprovedById": zod.string().nullish(),
+  "utr": zod.string().nullish(),
+  "paymentMode": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "closedAt": zod.coerce.date().nullish(),
+  "technicalCheckedAt": zod.coerce.date().nullish(),
+  "qsScrutinizedAt": zod.coerce.date().nullish(),
+  "pmCertifiedAt": zod.coerce.date().nullish(),
+  "financeApprovedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const UpdateContractorBillParams = zod.object({
+  "billId": zod.coerce.string()
+})
+
+export const UpdateContractorBillBody = zod.object({
+  "remarks": zod.string().optional(),
+  "invoiceUrl": zod.string().optional(),
+  "measurementUrl": zod.string().optional(),
+  "grossAmount": zod.number().optional()
+})
+
+export const UpdateContractorBillResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "workOrderId": zod.string().nullish(),
+  "billNumber": zod.string(),
+  "billDate": zod.coerce.date(),
+  "periodFrom": zod.coerce.date().nullish(),
+  "periodTo": zod.coerce.date().nullish(),
+  "grossAmount": zod.number(),
+  "totalDeductions": zod.number(),
+  "gstAmount": zod.number(),
+  "netPayable": zod.number(),
+  "status": zod.string(),
+  "stepLabel": zod.string(),
+  "invoiceUrl": zod.string().nullish(),
+  "measurementUrl": zod.string().nullish(),
+  "irnNumber": zod.string().nullish(),
+  "remarks": zod.string().nullish(),
+  "technicalRemarks": zod.string().nullish(),
+  "qsRemarks": zod.string().nullish(),
+  "pmRemarks": zod.string().nullish(),
+  "submittedById": zod.string().nullish(),
+  "technicalCheckedById": zod.string().nullish(),
+  "qsScrutinizedById": zod.string().nullish(),
+  "pmCertifiedById": zod.string().nullish(),
+  "financeApprovedById": zod.string().nullish(),
+  "utr": zod.string().nullish(),
+  "paymentMode": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "closedAt": zod.coerce.date().nullish(),
+  "technicalCheckedAt": zod.coerce.date().nullish(),
+  "qsScrutinizedAt": zod.coerce.date().nullish(),
+  "pmCertifiedAt": zod.coerce.date().nullish(),
+  "financeApprovedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Advance bill to next workflow step
+ */
+export const AdvanceContractorBillParams = zod.object({
+  "billId": zod.coerce.string()
+})
+
+export const AdvanceContractorBillBody = zod.object({
+  "remarks": zod.string().optional(),
+  "utr": zod.string().optional(),
+  "paymentMode": zod.enum(['neft', 'rtgs', 'upi', 'cheque']).optional()
+})
+
+export const AdvanceContractorBillResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "workOrderId": zod.string().nullish(),
+  "billNumber": zod.string(),
+  "billDate": zod.coerce.date(),
+  "periodFrom": zod.coerce.date().nullish(),
+  "periodTo": zod.coerce.date().nullish(),
+  "grossAmount": zod.number(),
+  "totalDeductions": zod.number(),
+  "gstAmount": zod.number(),
+  "netPayable": zod.number(),
+  "status": zod.string(),
+  "stepLabel": zod.string(),
+  "invoiceUrl": zod.string().nullish(),
+  "measurementUrl": zod.string().nullish(),
+  "irnNumber": zod.string().nullish(),
+  "remarks": zod.string().nullish(),
+  "technicalRemarks": zod.string().nullish(),
+  "qsRemarks": zod.string().nullish(),
+  "pmRemarks": zod.string().nullish(),
+  "submittedById": zod.string().nullish(),
+  "technicalCheckedById": zod.string().nullish(),
+  "qsScrutinizedById": zod.string().nullish(),
+  "pmCertifiedById": zod.string().nullish(),
+  "financeApprovedById": zod.string().nullish(),
+  "utr": zod.string().nullish(),
+  "paymentMode": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "closedAt": zod.coerce.date().nullish(),
+  "technicalCheckedAt": zod.coerce.date().nullish(),
+  "qsScrutinizedAt": zod.coerce.date().nullish(),
+  "pmCertifiedAt": zod.coerce.date().nullish(),
+  "financeApprovedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const ListBillDeductionsParams = zod.object({
+  "billId": zod.coerce.string()
+})
+
+export const ListBillDeductionsResponseItem = zod.object({
+  "id": zod.string(),
+  "billId": zod.string(),
+  "deductionType": zod.string(),
+  "description": zod.string(),
+  "rate": zod.number(),
+  "baseAmount": zod.number(),
+  "amount": zod.number(),
+  "legalRef": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListBillDeductionsResponse = zod.array(ListBillDeductionsResponseItem)
+
+
+/**
+ * @summary Release payment (Finance role)
+ */
+export const ReleaseContractorPaymentParams = zod.object({
+  "billId": zod.coerce.string()
+})
+
+export const ReleaseContractorPaymentBody = zod.object({
+  "mode": zod.enum(['neft', 'rtgs', 'upi', 'cheque']).optional(),
+  "utr": zod.string().optional(),
+  "bankName": zod.string().optional(),
+  "accountNumber": zod.string().optional(),
+  "ifscCode": zod.string().optional()
+})
+
+export const ReleaseContractorPaymentResponse = zod.object({
+  "bill": zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "workOrderId": zod.string().nullish(),
+  "billNumber": zod.string(),
+  "billDate": zod.coerce.date(),
+  "periodFrom": zod.coerce.date().nullish(),
+  "periodTo": zod.coerce.date().nullish(),
+  "grossAmount": zod.number(),
+  "totalDeductions": zod.number(),
+  "gstAmount": zod.number(),
+  "netPayable": zod.number(),
+  "status": zod.string(),
+  "stepLabel": zod.string(),
+  "invoiceUrl": zod.string().nullish(),
+  "measurementUrl": zod.string().nullish(),
+  "irnNumber": zod.string().nullish(),
+  "remarks": zod.string().nullish(),
+  "technicalRemarks": zod.string().nullish(),
+  "qsRemarks": zod.string().nullish(),
+  "pmRemarks": zod.string().nullish(),
+  "submittedById": zod.string().nullish(),
+  "technicalCheckedById": zod.string().nullish(),
+  "qsScrutinizedById": zod.string().nullish(),
+  "pmCertifiedById": zod.string().nullish(),
+  "financeApprovedById": zod.string().nullish(),
+  "utr": zod.string().nullish(),
+  "paymentMode": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "closedAt": zod.coerce.date().nullish(),
+  "technicalCheckedAt": zod.coerce.date().nullish(),
+  "qsScrutinizedAt": zod.coerce.date().nullish(),
+  "pmCertifiedAt": zod.coerce.date().nullish(),
+  "financeApprovedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).optional(),
+  "voucher": zod.object({
+  "id": zod.string(),
+  "billId": zod.string(),
+  "projectId": zod.string(),
+  "voucherNumber": zod.string(),
+  "amount": zod.number(),
+  "mode": zod.string(),
+  "bankName": zod.string().nullish(),
+  "accountNumber": zod.string().nullish(),
+  "ifscCode": zod.string().nullish(),
+  "utr": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "releasedById": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+}).optional()
+})
+
+
+export const ListPaymentVouchersParams = zod.object({
+  "billId": zod.coerce.string()
+})
+
+export const ListPaymentVouchersResponseItem = zod.object({
+  "id": zod.string(),
+  "billId": zod.string(),
+  "projectId": zod.string(),
+  "voucherNumber": zod.string(),
+  "amount": zod.number(),
+  "mode": zod.string(),
+  "bankName": zod.string().nullish(),
+  "accountNumber": zod.string().nullish(),
+  "ifscCode": zod.string().nullish(),
+  "utr": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "releasedById": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListPaymentVouchersResponse = zod.array(ListPaymentVouchersResponseItem)
+
+
+export const ListClientInvoicesParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListClientInvoicesResponseItem = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "invoiceNumber": zod.string(),
+  "clientName": zod.string(),
+  "invoiceDate": zod.coerce.date(),
+  "dueDate": zod.coerce.date().nullish(),
+  "milestoneId": zod.string().nullish(),
+  "grossAmount": zod.number(),
+  "cgstRate": zod.number(),
+  "sgstRate": zod.number(),
+  "igstRate": zod.number(),
+  "gstAmount": zod.number(),
+  "netAmount": zod.number(),
+  "retentionHeld": zod.number(),
+  "amountReceived": zod.number(),
+  "status": zod.string(),
+  "irnNumber": zod.string().nullish(),
+  "reraReference": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListClientInvoicesResponse = zod.array(ListClientInvoicesResponseItem)
+
+
+export const CreateClientInvoiceParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateClientInvoiceBody = zod.object({
+  "invoiceNumber": zod.string(),
+  "clientName": zod.string(),
+  "grossAmount": zod.number(),
+  "invoiceDate": zod.coerce.date().optional(),
+  "dueDate": zod.coerce.date().optional(),
+  "milestoneId": zod.string().optional(),
+  "cgstRate": zod.number().optional(),
+  "sgstRate": zod.number().optional(),
+  "igstRate": zod.number().optional(),
+  "reraReference": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+
+export const GetClientInvoiceParams = zod.object({
+  "invoiceId": zod.coerce.string()
+})
+
+export const GetClientInvoiceResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "invoiceNumber": zod.string(),
+  "clientName": zod.string(),
+  "invoiceDate": zod.coerce.date(),
+  "dueDate": zod.coerce.date().nullish(),
+  "milestoneId": zod.string().nullish(),
+  "grossAmount": zod.number(),
+  "cgstRate": zod.number(),
+  "sgstRate": zod.number(),
+  "igstRate": zod.number(),
+  "gstAmount": zod.number(),
+  "netAmount": zod.number(),
+  "retentionHeld": zod.number(),
+  "amountReceived": zod.number(),
+  "status": zod.string(),
+  "irnNumber": zod.string().nullish(),
+  "reraReference": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const UpdateClientInvoiceParams = zod.object({
+  "invoiceId": zod.coerce.string()
+})
+
+export const UpdateClientInvoiceBody = zod.object({
+  "status": zod.enum(['draft', 'sent', 'acknowledged', 'paid', 'overdue']).optional(),
+  "irnNumber": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "amountReceived": zod.number().optional()
+})
+
+export const UpdateClientInvoiceResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "invoiceNumber": zod.string(),
+  "clientName": zod.string(),
+  "invoiceDate": zod.coerce.date(),
+  "dueDate": zod.coerce.date().nullish(),
+  "milestoneId": zod.string().nullish(),
+  "grossAmount": zod.number(),
+  "cgstRate": zod.number(),
+  "sgstRate": zod.number(),
+  "igstRate": zod.number(),
+  "gstAmount": zod.number(),
+  "netAmount": zod.number(),
+  "retentionHeld": zod.number(),
+  "amountReceived": zod.number(),
+  "status": zod.string(),
+  "irnNumber": zod.string().nullish(),
+  "reraReference": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const ListLedgerAccountsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListLedgerAccountsResponseItem = zod.object({
+  "id": zod.string(),
+  "organisationId": zod.string().nullish(),
+  "projectId": zod.string().nullish(),
+  "accountCode": zod.string(),
+  "accountName": zod.string(),
+  "accountType": zod.string(),
+  "parentAccountId": zod.string().nullish(),
+  "openingBalance": zod.number(),
+  "currentBalance": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+export const ListLedgerAccountsResponse = zod.array(ListLedgerAccountsResponseItem)
+
+
+export const CreateLedgerAccountParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateLedgerAccountBody = zod.object({
+  "accountCode": zod.string(),
+  "accountName": zod.string(),
+  "accountType": zod.enum(['asset', 'liability', 'capital', 'revenue', 'expenditure', 'tax']),
+  "parentAccountId": zod.string().optional(),
+  "openingBalance": zod.number().optional()
+})
+
+
+export const ListLedgerEntriesParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListLedgerEntriesResponseItem = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "entryNumber": zod.string(),
+  "entryDate": zod.coerce.date(),
+  "entityType": zod.string().nullish(),
+  "entityId": zod.string().nullish(),
+  "narration": zod.string(),
+  "debitAccountId": zod.string().nullish(),
+  "creditAccountId": zod.string().nullish(),
+  "amount": zod.number(),
+  "createdById": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListLedgerEntriesResponse = zod.array(ListLedgerEntriesResponseItem)
+
+
+export const CreateLedgerEntryParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const CreateLedgerEntryBody = zod.object({
+  "entryNumber": zod.string(),
+  "narration": zod.string(),
+  "amount": zod.number(),
+  "entryDate": zod.coerce.date().optional(),
+  "entityType": zod.string().optional(),
+  "entityId": zod.string().optional(),
+  "debitAccountId": zod.string().optional(),
+  "creditAccountId": zod.string().optional()
+})
+
+
+/**
+ * @summary Payment analytics — 5 KPI tiles + aging + trend
+ */
+export const GetPaymentAnalyticsParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const GetPaymentAnalyticsResponse = zod.object({
+  "received": zod.number(),
+  "underProcess": zod.number(),
+  "overdueUnpaid": zod.number(),
+  "paidThisMonth": zod.number(),
+  "tdsYtd": zod.number(),
+  "aging": zod.object({
+  "_0_30": zod.number(),
+  "_31_60": zod.number(),
+  "_61_90": zod.number(),
+  "_over90": zod.number()
+}),
+  "trend": zod.array(zod.object({
+  "month": zod.string(),
+  "paid": zod.number()
+}))
+})
+
+
+/**
+ * @summary P&L summary, trial balance, payables, receivables
+ */
+export const GetFinancialSummaryParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const GetFinancialSummaryResponse = zod.object({
+  "contractValue": zod.number(),
+  "totalBilled": zod.number(),
+  "totalPaid": zod.number(),
+  "totalDeducted": zod.number(),
+  "totalGstOnBills": zod.number(),
+  "totalClientBilled": zod.number(),
+  "totalClientReceived": zod.number(),
+  "totalTds": zod.number(),
+  "retentionBalance": zod.number(),
+  "pAndL": zod.object({
+  "revenue": zod.number(),
+  "expenditure": zod.number(),
+  "grossProfit": zod.number(),
+  "grossMarginPct": zod.number()
+}),
+  "trialBalance": zod.array(zod.object({
+  "accountCode": zod.string(),
+  "accountName": zod.string(),
+  "accountType": zod.string(),
+  "openingBalance": zod.number(),
+  "currentBalance": zod.number()
+})),
+  "payableToContractors": zod.number(),
+  "receivableFromClient": zod.number()
+})
+
+
+export const ListTdsEntriesParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListTdsEntriesResponseItem = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "billId": zod.string().nullish(),
+  "vendorName": zod.string(),
+  "pan": zod.string().nullish(),
+  "sectionCode": zod.string(),
+  "grossAmount": zod.number(),
+  "tdsRate": zod.number(),
+  "tdsAmount": zod.number(),
+  "depositedAt": zod.coerce.date().nullish(),
+  "challanNumber": zod.string().nullish(),
+  "quarter": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListTdsEntriesResponse = zod.array(ListTdsEntriesResponseItem)
+
+
+export const ListGstEntriesParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListGstEntriesResponseItem = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "entityType": zod.string(),
+  "entityId": zod.string(),
+  "invoiceNumber": zod.string(),
+  "invoiceDate": zod.coerce.date(),
+  "partyGstin": zod.string().nullish(),
+  "partyName": zod.string(),
+  "taxableValue": zod.number(),
+  "cgstRate": zod.number(),
+  "cgstAmount": zod.number(),
+  "sgstRate": zod.number(),
+  "sgstAmount": zod.number(),
+  "igstRate": zod.number(),
+  "igstAmount": zod.number(),
+  "totalGst": zod.number(),
+  "hsnCode": zod.string().nullish(),
+  "entryType": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListGstEntriesResponse = zod.array(ListGstEntriesResponseItem)
+
+
+export const ListRetentionLedgerParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListRetentionLedgerResponseItem = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "workOrderId": zod.string().nullish(),
+  "billId": zod.string().nullish(),
+  "transactionType": zod.string(),
+  "retentionHeld": zod.number(),
+  "retentionReleased": zod.number(),
+  "balance": zod.number(),
+  "remarks": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListRetentionLedgerResponse = zod.array(ListRetentionLedgerResponseItem)
+
+
+export const ListAdvanceLedgerParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListAdvanceLedgerResponseItem = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string(),
+  "workOrderId": zod.string().nullish(),
+  "billId": zod.string().nullish(),
+  "transactionType": zod.string(),
+  "amount": zod.number(),
+  "balance": zod.number(),
+  "remarks": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAdvanceLedgerResponse = zod.array(ListAdvanceLedgerResponseItem)
+
+
+/**
+ * @summary Outstanding bills aging by 0-30/31-60/61-90/>90 days
+ */
+export const GetAgingReportParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const GetAgingReportResponse = zod.object({
+  "0-30": zod.object({
+  "count": zod.number(),
+  "amount": zod.number(),
+  "bills": zod.array(zod.object({
+
+}).passthrough())
+}),
+  "31-60": zod.object({
+  "count": zod.number(),
+  "amount": zod.number(),
+  "bills": zod.array(zod.object({
+
+}).passthrough())
+}),
+  "61-90": zod.object({
+  "count": zod.number(),
+  "amount": zod.number(),
+  "bills": zod.array(zod.object({
+
+}).passthrough())
+}),
+  ">90": zod.object({
+  "count": zod.number(),
+  "amount": zod.number(),
+  "bills": zod.array(zod.object({
+
+}).passthrough())
+})
+})
+
+

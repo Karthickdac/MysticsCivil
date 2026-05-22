@@ -20,6 +20,7 @@ tags:
   - name: Issues
   - name: Approvals
   - name: Dashboard
+  - name: Financial
 paths:
   /healthz:
     get:
@@ -1149,6 +1150,443 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/ActivityFeedItem' }
 
+  # ── Financial: Contractor Bills ──────────────────────────────────────────────
+  /projects/{projectId}/contractor-bills:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Financial]
+      operationId: listContractorBills
+      summary: List contractor RA bills for a project
+      responses:
+        '200':
+          description: Contractor bills
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ContractorBill' }
+    post:
+      tags: [Financial]
+      operationId: createContractorBill
+      summary: Submit a new contractor RA bill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [billNumber, grossAmount]
+              properties:
+                billNumber: { type: string }
+                grossAmount: { type: number }
+                workOrderId: { type: string }
+                billDate: { type: string, format: date-time }
+                periodFrom: { type: string, format: date-time }
+                periodTo: { type: string, format: date-time }
+                invoiceUrl: { type: string }
+                measurementUrl: { type: string }
+                remarks: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContractorBill' }
+
+  /contractor-bills/{billId}:
+    parameters:
+      - name: billId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Financial]
+      operationId: getContractorBill
+      responses:
+        '200':
+          description: Bill
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContractorBill' }
+    patch:
+      tags: [Financial]
+      operationId: updateContractorBill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                remarks: { type: string }
+                invoiceUrl: { type: string }
+                measurementUrl: { type: string }
+                grossAmount: { type: number }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContractorBill' }
+
+  /contractor-bills/{billId}/advance:
+    parameters:
+      - name: billId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Financial]
+      operationId: advanceContractorBill
+      summary: Advance bill to next workflow step
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                remarks: { type: string }
+                utr: { type: string }
+                paymentMode: { type: string, enum: [neft, rtgs, upi, cheque] }
+      responses:
+        '200':
+          description: Advanced
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContractorBill' }
+
+  /contractor-bills/{billId}/deductions:
+    parameters:
+      - name: billId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Financial]
+      operationId: listBillDeductions
+      responses:
+        '200':
+          description: Deductions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BillDeduction' }
+
+  /contractor-bills/{billId}/release-payment:
+    parameters:
+      - name: billId
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Financial]
+      operationId: releaseContractorPayment
+      summary: Release payment (Finance role)
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode: { type: string, enum: [neft, rtgs, upi, cheque] }
+                utr: { type: string }
+                bankName: { type: string }
+                accountNumber: { type: string }
+                ifscCode: { type: string }
+      responses:
+        '200':
+          description: Payment released
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bill: { $ref: '#/components/schemas/ContractorBill' }
+                  voucher: { $ref: '#/components/schemas/PaymentVoucher' }
+
+  /contractor-bills/{billId}/vouchers:
+    parameters:
+      - name: billId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Financial]
+      operationId: listPaymentVouchers
+      responses:
+        '200':
+          description: Vouchers
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PaymentVoucher' }
+
+  # ── Financial: Client Invoices ────────────────────────────────────────────────
+  /projects/{projectId}/client-invoices:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Financial]
+      operationId: listClientInvoices
+      responses:
+        '200':
+          description: Client invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ClientInvoice' }
+    post:
+      tags: [Financial]
+      operationId: createClientInvoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoiceNumber, clientName, grossAmount]
+              properties:
+                invoiceNumber: { type: string }
+                clientName: { type: string }
+                grossAmount: { type: number }
+                invoiceDate: { type: string, format: date-time }
+                dueDate: { type: string, format: date-time }
+                milestoneId: { type: string }
+                cgstRate: { type: number }
+                sgstRate: { type: number }
+                igstRate: { type: number }
+                reraReference: { type: string }
+                notes: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClientInvoice' }
+
+  /client-invoices/{invoiceId}:
+    parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Financial]
+      operationId: getClientInvoice
+      responses:
+        '200':
+          description: Invoice
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClientInvoice' }
+    patch:
+      tags: [Financial]
+      operationId: updateClientInvoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [draft, sent, acknowledged, paid, overdue] }
+                irnNumber: { type: string }
+                notes: { type: string }
+                amountReceived: { type: number }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClientInvoice' }
+
+  # ── Financial: Ledger ─────────────────────────────────────────────────────────
+  /projects/{projectId}/ledger-accounts:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Financial]
+      operationId: listLedgerAccounts
+      responses:
+        '200':
+          description: Chart of accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LedgerAccount' }
+    post:
+      tags: [Financial]
+      operationId: createLedgerAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accountCode, accountName, accountType]
+              properties:
+                accountCode: { type: string }
+                accountName: { type: string }
+                accountType: { type: string, enum: [asset, liability, capital, revenue, expenditure, tax] }
+                parentAccountId: { type: string }
+                openingBalance: { type: number }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LedgerAccount' }
+
+  /projects/{projectId}/ledger-entries:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Financial]
+      operationId: listLedgerEntries
+      responses:
+        '200':
+          description: Journal entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LedgerEntry' }
+    post:
+      tags: [Financial]
+      operationId: createLedgerEntry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entryNumber, narration, amount]
+              properties:
+                entryNumber: { type: string }
+                narration: { type: string }
+                amount: { type: number }
+                entryDate: { type: string, format: date-time }
+                entityType: { type: string }
+                entityId: { type: string }
+                debitAccountId: { type: string }
+                creditAccountId: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LedgerEntry' }
+
+  # ── Financial: Reports & Analytics ───────────────────────────────────────────
+  /projects/{projectId}/payment-analytics:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Financial]
+      operationId: getPaymentAnalytics
+      summary: Payment analytics — 5 KPI tiles + aging + trend
+      responses:
+        '200':
+          description: Analytics
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentAnalytics' }
+
+  /projects/{projectId}/financial-summary:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Financial]
+      operationId: getFinancialSummary
+      summary: P&L summary, trial balance, payables, receivables
+      responses:
+        '200':
+          description: Financial summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FinancialSummary' }
+
+  /projects/{projectId}/tds-register:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Financial]
+      operationId: listTdsEntries
+      responses:
+        '200':
+          description: TDS register
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TdsEntry' }
+
+  /projects/{projectId}/gst-register:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Financial]
+      operationId: listGstEntries
+      responses:
+        '200':
+          description: GST register (GSTR-1/3B)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/GstEntry' }
+
+  /projects/{projectId}/retention-ledger:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Financial]
+      operationId: listRetentionLedger
+      responses:
+        '200':
+          description: Retention ledger entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RetentionLedgerEntry' }
+
+  /projects/{projectId}/advance-ledger:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Financial]
+      operationId: listAdvanceLedger
+      responses:
+        '200':
+          description: Advance ledger entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AdvanceLedgerEntry' }
+
+  /projects/{projectId}/aging-report:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [Financial]
+      operationId: getAgingReport
+      summary: Outstanding bills aging by 0-30/31-60/61-90/>90 days
+      responses:
+        '200':
+          description: Aging report
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgingReport' }
+
 components:
   parameters:
     AuthorizationSessionHeader:
@@ -2053,3 +2491,301 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Milestone'
             - type: 'null'
+
+    # ── Financial Schemas ──────────────────────────────────────────────────────
+    ContractorBill:
+      type: object
+      required: [id, projectId, billNumber, billDate, grossAmount, totalDeductions, gstAmount, netPayable, status, stepLabel, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        workOrderId: { type: [string, 'null'] }
+        billNumber: { type: string }
+        billDate: { type: string, format: date-time }
+        periodFrom: { type: [string, 'null'], format: date-time }
+        periodTo: { type: [string, 'null'], format: date-time }
+        grossAmount: { type: number }
+        totalDeductions: { type: number }
+        gstAmount: { type: number }
+        netPayable: { type: number }
+        status: { type: string }
+        stepLabel: { type: string }
+        invoiceUrl: { type: [string, 'null'] }
+        measurementUrl: { type: [string, 'null'] }
+        irnNumber: { type: [string, 'null'] }
+        remarks: { type: [string, 'null'] }
+        technicalRemarks: { type: [string, 'null'] }
+        qsRemarks: { type: [string, 'null'] }
+        pmRemarks: { type: [string, 'null'] }
+        submittedById: { type: [string, 'null'] }
+        technicalCheckedById: { type: [string, 'null'] }
+        qsScrutinizedById: { type: [string, 'null'] }
+        pmCertifiedById: { type: [string, 'null'] }
+        financeApprovedById: { type: [string, 'null'] }
+        utr: { type: [string, 'null'] }
+        paymentMode: { type: [string, 'null'] }
+        paidAt: { type: [string, 'null'], format: date-time }
+        closedAt: { type: [string, 'null'], format: date-time }
+        technicalCheckedAt: { type: [string, 'null'], format: date-time }
+        qsScrutinizedAt: { type: [string, 'null'], format: date-time }
+        pmCertifiedAt: { type: [string, 'null'], format: date-time }
+        financeApprovedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    BillDeduction:
+      type: object
+      required: [id, billId, deductionType, description, rate, baseAmount, amount, createdAt]
+      properties:
+        id: { type: string }
+        billId: { type: string }
+        deductionType: { type: string }
+        description: { type: string }
+        rate: { type: number }
+        baseAmount: { type: number }
+        amount: { type: number }
+        legalRef: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+
+    PaymentVoucher:
+      type: object
+      required: [id, billId, projectId, voucherNumber, amount, mode, createdAt]
+      properties:
+        id: { type: string }
+        billId: { type: string }
+        projectId: { type: string }
+        voucherNumber: { type: string }
+        amount: { type: number }
+        mode: { type: string }
+        bankName: { type: [string, 'null'] }
+        accountNumber: { type: [string, 'null'] }
+        ifscCode: { type: [string, 'null'] }
+        utr: { type: [string, 'null'] }
+        paidAt: { type: [string, 'null'], format: date-time }
+        releasedById: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+
+    LedgerAccount:
+      type: object
+      required: [id, accountCode, accountName, accountType, openingBalance, currentBalance, isActive, createdAt]
+      properties:
+        id: { type: string }
+        organisationId: { type: [string, 'null'] }
+        projectId: { type: [string, 'null'] }
+        accountCode: { type: string }
+        accountName: { type: string }
+        accountType: { type: string }
+        parentAccountId: { type: [string, 'null'] }
+        openingBalance: { type: number }
+        currentBalance: { type: number }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    LedgerEntry:
+      type: object
+      required: [id, projectId, entryNumber, entryDate, narration, amount, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        entryNumber: { type: string }
+        entryDate: { type: string, format: date-time }
+        entityType: { type: [string, 'null'] }
+        entityId: { type: [string, 'null'] }
+        narration: { type: string }
+        debitAccountId: { type: [string, 'null'] }
+        creditAccountId: { type: [string, 'null'] }
+        amount: { type: number }
+        createdById: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+
+    ClientInvoice:
+      type: object
+      required: [id, projectId, invoiceNumber, clientName, invoiceDate, grossAmount, cgstRate, sgstRate, igstRate, gstAmount, netAmount, retentionHeld, amountReceived, status, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        invoiceNumber: { type: string }
+        clientName: { type: string }
+        invoiceDate: { type: string, format: date-time }
+        dueDate: { type: [string, 'null'], format: date-time }
+        milestoneId: { type: [string, 'null'] }
+        grossAmount: { type: number }
+        cgstRate: { type: number }
+        sgstRate: { type: number }
+        igstRate: { type: number }
+        gstAmount: { type: number }
+        netAmount: { type: number }
+        retentionHeld: { type: number }
+        amountReceived: { type: number }
+        status: { type: string }
+        irnNumber: { type: [string, 'null'] }
+        reraReference: { type: [string, 'null'] }
+        notes: { type: [string, 'null'] }
+        paidAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    GstEntry:
+      type: object
+      required: [id, projectId, entityType, entityId, invoiceNumber, invoiceDate, partyName, taxableValue, cgstRate, cgstAmount, sgstRate, sgstAmount, igstRate, igstAmount, totalGst, entryType, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        entityType: { type: string }
+        entityId: { type: string }
+        invoiceNumber: { type: string }
+        invoiceDate: { type: string, format: date-time }
+        partyGstin: { type: [string, 'null'] }
+        partyName: { type: string }
+        taxableValue: { type: number }
+        cgstRate: { type: number }
+        cgstAmount: { type: number }
+        sgstRate: { type: number }
+        sgstAmount: { type: number }
+        igstRate: { type: number }
+        igstAmount: { type: number }
+        totalGst: { type: number }
+        hsnCode: { type: [string, 'null'] }
+        entryType: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    TdsEntry:
+      type: object
+      required: [id, projectId, vendorName, sectionCode, grossAmount, tdsRate, tdsAmount, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        billId: { type: [string, 'null'] }
+        vendorName: { type: string }
+        pan: { type: [string, 'null'] }
+        sectionCode: { type: string }
+        grossAmount: { type: number }
+        tdsRate: { type: number }
+        tdsAmount: { type: number }
+        depositedAt: { type: [string, 'null'], format: date-time }
+        challanNumber: { type: [string, 'null'] }
+        quarter: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+
+    RetentionLedgerEntry:
+      type: object
+      required: [id, projectId, transactionType, retentionHeld, retentionReleased, balance, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        workOrderId: { type: [string, 'null'] }
+        billId: { type: [string, 'null'] }
+        transactionType: { type: string }
+        retentionHeld: { type: number }
+        retentionReleased: { type: number }
+        balance: { type: number }
+        remarks: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+
+    AdvanceLedgerEntry:
+      type: object
+      required: [id, projectId, transactionType, amount, balance, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        workOrderId: { type: [string, 'null'] }
+        billId: { type: [string, 'null'] }
+        transactionType: { type: string }
+        amount: { type: number }
+        balance: { type: number }
+        remarks: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+
+    PaymentAnalytics:
+      type: object
+      required: [received, underProcess, overdueUnpaid, paidThisMonth, tdsYtd, aging, trend]
+      properties:
+        received: { type: integer }
+        underProcess: { type: integer }
+        overdueUnpaid: { type: integer }
+        paidThisMonth: { type: number }
+        tdsYtd: { type: number }
+        aging:
+          type: object
+          required: [_0_30, _31_60, _61_90, _over90]
+          properties:
+            _0_30: { type: integer }
+            _31_60: { type: integer }
+            _61_90: { type: integer }
+            _over90: { type: integer }
+        trend:
+          type: array
+          items:
+            type: object
+            required: [month, paid]
+            properties:
+              month: { type: string }
+              paid: { type: number }
+
+    FinancialSummary:
+      type: object
+      required: [contractValue, totalBilled, totalPaid, totalDeducted, totalGstOnBills, totalClientBilled, totalClientReceived, totalTds, retentionBalance, pAndL, trialBalance, payableToContractors, receivableFromClient]
+      properties:
+        contractValue: { type: number }
+        totalBilled: { type: number }
+        totalPaid: { type: number }
+        totalDeducted: { type: number }
+        totalGstOnBills: { type: number }
+        totalClientBilled: { type: number }
+        totalClientReceived: { type: number }
+        totalTds: { type: number }
+        retentionBalance: { type: number }
+        pAndL:
+          type: object
+          required: [revenue, expenditure, grossProfit, grossMarginPct]
+          properties:
+            revenue: { type: number }
+            expenditure: { type: number }
+            grossProfit: { type: number }
+            grossMarginPct: { type: number }
+        trialBalance:
+          type: array
+          items:
+            type: object
+            required: [accountCode, accountName, accountType, openingBalance, currentBalance]
+            properties:
+              accountCode: { type: string }
+              accountName: { type: string }
+              accountType: { type: string }
+              openingBalance: { type: number }
+              currentBalance: { type: number }
+        payableToContractors: { type: number }
+        receivableFromClient: { type: number }
+
+    AgingReport:
+      type: object
+      required: ["0-30", "31-60", "61-90", ">90"]
+      properties:
+        "0-30":
+          type: object
+          required: [count, amount, bills]
+          properties:
+            count: { type: integer }
+            amount: { type: number }
+            bills: { type: array, items: { type: object } }
+        "31-60":
+          type: object
+          required: [count, amount, bills]
+          properties:
+            count: { type: integer }
+            amount: { type: number }
+            bills: { type: array, items: { type: object } }
+        "61-90":
+          type: object
+          required: [count, amount, bills]
+          properties:
+            count: { type: integer }
+            amount: { type: number }
+            bills: { type: array, items: { type: object } }
+        ">90":
+          type: object
+          required: [count, amount, bills]
+          properties:
+            count: { type: integer }
+            amount: { type: number }
+            bills: { type: array, items: { type: object } }

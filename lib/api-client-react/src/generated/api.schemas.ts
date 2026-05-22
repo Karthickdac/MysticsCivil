@@ -999,6 +999,338 @@ export interface ProjectDashboard {
   nextMilestone: Milestone | null;
 }
 
+export interface ContractorBill {
+  id: string;
+  projectId: string;
+  /** @nullable */
+  workOrderId?: string | null;
+  billNumber: string;
+  billDate: string;
+  /** @nullable */
+  periodFrom?: string | null;
+  /** @nullable */
+  periodTo?: string | null;
+  grossAmount: number;
+  totalDeductions: number;
+  gstAmount: number;
+  netPayable: number;
+  status: string;
+  stepLabel: string;
+  /** @nullable */
+  invoiceUrl?: string | null;
+  /** @nullable */
+  measurementUrl?: string | null;
+  /** @nullable */
+  irnNumber?: string | null;
+  /** @nullable */
+  remarks?: string | null;
+  /** @nullable */
+  technicalRemarks?: string | null;
+  /** @nullable */
+  qsRemarks?: string | null;
+  /** @nullable */
+  pmRemarks?: string | null;
+  /** @nullable */
+  submittedById?: string | null;
+  /** @nullable */
+  technicalCheckedById?: string | null;
+  /** @nullable */
+  qsScrutinizedById?: string | null;
+  /** @nullable */
+  pmCertifiedById?: string | null;
+  /** @nullable */
+  financeApprovedById?: string | null;
+  /** @nullable */
+  utr?: string | null;
+  /** @nullable */
+  paymentMode?: string | null;
+  /** @nullable */
+  paidAt?: string | null;
+  /** @nullable */
+  closedAt?: string | null;
+  /** @nullable */
+  technicalCheckedAt?: string | null;
+  /** @nullable */
+  qsScrutinizedAt?: string | null;
+  /** @nullable */
+  pmCertifiedAt?: string | null;
+  /** @nullable */
+  financeApprovedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BillDeduction {
+  id: string;
+  billId: string;
+  deductionType: string;
+  description: string;
+  rate: number;
+  baseAmount: number;
+  amount: number;
+  /** @nullable */
+  legalRef?: string | null;
+  createdAt: string;
+}
+
+export interface PaymentVoucher {
+  id: string;
+  billId: string;
+  projectId: string;
+  voucherNumber: string;
+  amount: number;
+  mode: string;
+  /** @nullable */
+  bankName?: string | null;
+  /** @nullable */
+  accountNumber?: string | null;
+  /** @nullable */
+  ifscCode?: string | null;
+  /** @nullable */
+  utr?: string | null;
+  /** @nullable */
+  paidAt?: string | null;
+  /** @nullable */
+  releasedById?: string | null;
+  createdAt: string;
+}
+
+export interface LedgerAccount {
+  id: string;
+  /** @nullable */
+  organisationId?: string | null;
+  /** @nullable */
+  projectId?: string | null;
+  accountCode: string;
+  accountName: string;
+  accountType: string;
+  /** @nullable */
+  parentAccountId?: string | null;
+  openingBalance: number;
+  currentBalance: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface LedgerEntry {
+  id: string;
+  projectId: string;
+  entryNumber: string;
+  entryDate: string;
+  /** @nullable */
+  entityType?: string | null;
+  /** @nullable */
+  entityId?: string | null;
+  narration: string;
+  /** @nullable */
+  debitAccountId?: string | null;
+  /** @nullable */
+  creditAccountId?: string | null;
+  amount: number;
+  /** @nullable */
+  createdById?: string | null;
+  createdAt: string;
+}
+
+export interface ClientInvoice {
+  id: string;
+  projectId: string;
+  invoiceNumber: string;
+  clientName: string;
+  invoiceDate: string;
+  /** @nullable */
+  dueDate?: string | null;
+  /** @nullable */
+  milestoneId?: string | null;
+  grossAmount: number;
+  cgstRate: number;
+  sgstRate: number;
+  igstRate: number;
+  gstAmount: number;
+  netAmount: number;
+  retentionHeld: number;
+  amountReceived: number;
+  status: string;
+  /** @nullable */
+  irnNumber?: string | null;
+  /** @nullable */
+  reraReference?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  paidAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GstEntry {
+  id: string;
+  projectId: string;
+  entityType: string;
+  entityId: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  /** @nullable */
+  partyGstin?: string | null;
+  partyName: string;
+  taxableValue: number;
+  cgstRate: number;
+  cgstAmount: number;
+  sgstRate: number;
+  sgstAmount: number;
+  igstRate: number;
+  igstAmount: number;
+  totalGst: number;
+  /** @nullable */
+  hsnCode?: string | null;
+  entryType: string;
+  createdAt: string;
+}
+
+export interface TdsEntry {
+  id: string;
+  projectId: string;
+  /** @nullable */
+  billId?: string | null;
+  vendorName: string;
+  /** @nullable */
+  pan?: string | null;
+  sectionCode: string;
+  grossAmount: number;
+  tdsRate: number;
+  tdsAmount: number;
+  /** @nullable */
+  depositedAt?: string | null;
+  /** @nullable */
+  challanNumber?: string | null;
+  /** @nullable */
+  quarter?: string | null;
+  createdAt: string;
+}
+
+export interface RetentionLedgerEntry {
+  id: string;
+  projectId: string;
+  /** @nullable */
+  workOrderId?: string | null;
+  /** @nullable */
+  billId?: string | null;
+  transactionType: string;
+  retentionHeld: number;
+  retentionReleased: number;
+  balance: number;
+  /** @nullable */
+  remarks?: string | null;
+  createdAt: string;
+}
+
+export interface AdvanceLedgerEntry {
+  id: string;
+  projectId: string;
+  /** @nullable */
+  workOrderId?: string | null;
+  /** @nullable */
+  billId?: string | null;
+  transactionType: string;
+  amount: number;
+  balance: number;
+  /** @nullable */
+  remarks?: string | null;
+  createdAt: string;
+}
+
+export type PaymentAnalyticsAging = {
+  _0_30: number;
+  _31_60: number;
+  _61_90: number;
+  _over90: number;
+};
+
+export type PaymentAnalyticsTrendItem = {
+  month: string;
+  paid: number;
+};
+
+export interface PaymentAnalytics {
+  received: number;
+  underProcess: number;
+  overdueUnpaid: number;
+  paidThisMonth: number;
+  tdsYtd: number;
+  aging: PaymentAnalyticsAging;
+  trend: PaymentAnalyticsTrendItem[];
+}
+
+export type FinancialSummaryPAndL = {
+  revenue: number;
+  expenditure: number;
+  grossProfit: number;
+  grossMarginPct: number;
+};
+
+export type FinancialSummaryTrialBalanceItem = {
+  accountCode: string;
+  accountName: string;
+  accountType: string;
+  openingBalance: number;
+  currentBalance: number;
+};
+
+export interface FinancialSummary {
+  contractValue: number;
+  totalBilled: number;
+  totalPaid: number;
+  totalDeducted: number;
+  totalGstOnBills: number;
+  totalClientBilled: number;
+  totalClientReceived: number;
+  totalTds: number;
+  retentionBalance: number;
+  pAndL: FinancialSummaryPAndL;
+  trialBalance: FinancialSummaryTrialBalanceItem[];
+  payableToContractors: number;
+  receivableFromClient: number;
+}
+
+export type AgingReport030BillsItem = { [key: string]: unknown };
+
+export type AgingReport030 = {
+  count: number;
+  amount: number;
+  bills: AgingReport030BillsItem[];
+};
+
+export type AgingReport3160BillsItem = { [key: string]: unknown };
+
+export type AgingReport3160 = {
+  count: number;
+  amount: number;
+  bills: AgingReport3160BillsItem[];
+};
+
+export type AgingReport6190BillsItem = { [key: string]: unknown };
+
+export type AgingReport6190 = {
+  count: number;
+  amount: number;
+  bills: AgingReport6190BillsItem[];
+};
+
+export type AgingReport90BillsItem = { [key: string]: unknown };
+
+export type AgingReport90 = {
+  count: number;
+  amount: number;
+  bills: AgingReport90BillsItem[];
+};
+
+export interface AgingReport {
+  '0-30': AgingReport030;
+  '31-60': AgingReport3160;
+  '61-90': AgingReport6190;
+  '>90': AgingReport90;
+}
+
 export type AuthorizationSessionHeaderParameter = string;
 
 export type BeginBrowserLoginParams = {
@@ -1029,5 +1361,126 @@ export type GenerateAbstractBoqItemsBody = {
 
 export type ImportBoqItemsXlsxBody = {
   file: Blob;
+};
+
+export type CreateContractorBillBody = {
+  billNumber: string;
+  grossAmount: number;
+  workOrderId?: string;
+  billDate?: string;
+  periodFrom?: string;
+  periodTo?: string;
+  invoiceUrl?: string;
+  measurementUrl?: string;
+  remarks?: string;
+};
+
+export type UpdateContractorBillBody = {
+  remarks?: string;
+  invoiceUrl?: string;
+  measurementUrl?: string;
+  grossAmount?: number;
+};
+
+export type AdvanceContractorBillBodyPaymentMode = typeof AdvanceContractorBillBodyPaymentMode[keyof typeof AdvanceContractorBillBodyPaymentMode];
+
+
+export const AdvanceContractorBillBodyPaymentMode = {
+  neft: 'neft',
+  rtgs: 'rtgs',
+  upi: 'upi',
+  cheque: 'cheque',
+} as const;
+
+export type AdvanceContractorBillBody = {
+  remarks?: string;
+  utr?: string;
+  paymentMode?: AdvanceContractorBillBodyPaymentMode;
+};
+
+export type ReleaseContractorPaymentBodyMode = typeof ReleaseContractorPaymentBodyMode[keyof typeof ReleaseContractorPaymentBodyMode];
+
+
+export const ReleaseContractorPaymentBodyMode = {
+  neft: 'neft',
+  rtgs: 'rtgs',
+  upi: 'upi',
+  cheque: 'cheque',
+} as const;
+
+export type ReleaseContractorPaymentBody = {
+  mode?: ReleaseContractorPaymentBodyMode;
+  utr?: string;
+  bankName?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+};
+
+export type ReleaseContractorPayment200 = {
+  bill?: ContractorBill;
+  voucher?: PaymentVoucher;
+};
+
+export type CreateClientInvoiceBody = {
+  invoiceNumber: string;
+  clientName: string;
+  grossAmount: number;
+  invoiceDate?: string;
+  dueDate?: string;
+  milestoneId?: string;
+  cgstRate?: number;
+  sgstRate?: number;
+  igstRate?: number;
+  reraReference?: string;
+  notes?: string;
+};
+
+export type UpdateClientInvoiceBodyStatus = typeof UpdateClientInvoiceBodyStatus[keyof typeof UpdateClientInvoiceBodyStatus];
+
+
+export const UpdateClientInvoiceBodyStatus = {
+  draft: 'draft',
+  sent: 'sent',
+  acknowledged: 'acknowledged',
+  paid: 'paid',
+  overdue: 'overdue',
+} as const;
+
+export type UpdateClientInvoiceBody = {
+  status?: UpdateClientInvoiceBodyStatus;
+  irnNumber?: string;
+  notes?: string;
+  amountReceived?: number;
+};
+
+export type CreateLedgerAccountBodyAccountType = typeof CreateLedgerAccountBodyAccountType[keyof typeof CreateLedgerAccountBodyAccountType];
+
+
+export const CreateLedgerAccountBodyAccountType = {
+  asset: 'asset',
+  liability: 'liability',
+  capital: 'capital',
+  revenue: 'revenue',
+  expenditure: 'expenditure',
+  tax: 'tax',
+} as const;
+
+export type CreateLedgerAccountBody = {
+  accountCode: string;
+  accountName: string;
+  accountType: CreateLedgerAccountBodyAccountType;
+  parentAccountId?: string;
+  openingBalance?: number;
+};
+
+export type CreateLedgerEntryBody = {
+  entryNumber: string;
+  narration: string;
+  amount: number;
+  entryDate?: string;
+  entityType?: string;
+  entityId?: string;
+  debitAccountId?: string;
+  creditAccountId?: string;
 };
 

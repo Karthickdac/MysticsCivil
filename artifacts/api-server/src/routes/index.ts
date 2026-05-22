@@ -15,6 +15,7 @@ import approvalsRouter from "./approvals";
 import estimationRouter from "./estimation";
 import dsrRatesRouter from "./dsr-rates";
 import variationOrdersRouter from "./variation-orders";
+import financialRouter from "./financial";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(approvalsRouter);
 router.use(estimationRouter);
 router.use(dsrRatesRouter);
 router.use(variationOrdersRouter);
+router.use(financialRouter);
 
 export default router;

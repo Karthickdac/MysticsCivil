@@ -470,4 +470,224 @@ export const variationOrdersTable = pgTable("variation_orders", {
 });
 export type VariationOrder = typeof variationOrdersTable.$inferSelect;
 
+// ─────────────────────────────────────────────
+// Phase 3 — Financial Core
+// ─────────────────────────────────────────────
+
+export const BILL_STATUSES = [
+  "draft", "submitted", "technical_check", "qs_scrutiny", "pm_certification",
+  "auto_deductions", "gst_invoice", "finance_approval", "payment_released", "closed",
+] as const;
+export type BillStatus = (typeof BILL_STATUSES)[number];
+
+export const DEDUCTION_TYPES = [
+  "tds_194c", "advance_recovery", "retention", "material_issued", "penalty", "lwf",
+] as const;
+export type DeductionType = (typeof DEDUCTION_TYPES)[number];
+
+export const PAYMENT_MODES = ["neft", "rtgs", "upi", "cheque"] as const;
+export type PaymentMode = (typeof PAYMENT_MODES)[number];
+
+export const LEDGER_ACCOUNT_TYPES = [
+  "asset", "liability", "capital", "revenue", "expenditure", "tax",
+] as const;
+export type LedgerAccountType = (typeof LEDGER_ACCOUNT_TYPES)[number];
+
+export const CLIENT_INVOICE_STATUSES = [
+  "draft", "sent", "acknowledged", "paid", "overdue",
+] as const;
+export type ClientInvoiceStatus = (typeof CLIENT_INVOICE_STATUSES)[number];
+
+export const contractorBillsTable = pgTable("contractor_bills", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  workOrderId: varchar("work_order_id").references(() => workOrderEstimatesTable.id, { onDelete: "set null" }),
+  billNumber: varchar("bill_number", { length: 32 }).notNull(),
+  billDate: timestamp("bill_date", { withTimezone: true }).notNull().defaultNow(),
+  periodFrom: timestamp("period_from", { withTimezone: true }),
+  periodTo: timestamp("period_to", { withTimezone: true }),
+  grossAmount: numeric("gross_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  totalDeductions: numeric("total_deductions", { precision: 18, scale: 2 }).notNull().default("0"),
+  gstAmount: numeric("gst_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  netPayable: numeric("net_payable", { precision: 18, scale: 2 }).notNull().default("0"),
+  status: varchar("status", { length: 32 }).notNull().default("draft"),
+  invoiceUrl: varchar("invoice_url"),
+  measurementUrl: varchar("measurement_url"),
+  irnNumber: varchar("irn_number", { length: 128 }),
+  remarks: text("remarks"),
+  technicalRemarks: text("technical_remarks"),
+  qsRemarks: text("qs_remarks"),
+  pmRemarks: text("pm_remarks"),
+  submittedById: varchar("submitted_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  technicalCheckedById: varchar("technical_checked_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  qsScrutinizedById: varchar("qs_scrutinized_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  pmCertifiedById: varchar("pm_certified_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  financeApprovedById: varchar("finance_approved_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  utr: varchar("utr", { length: 64 }),
+  paymentMode: varchar("payment_mode", { length: 16 }),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  technicalCheckedAt: timestamp("technical_checked_at", { withTimezone: true }),
+  qsScrutinizedAt: timestamp("qs_scrutinized_at", { withTimezone: true }),
+  pmCertifiedAt: timestamp("pm_certified_at", { withTimezone: true }),
+  financeApprovedAt: timestamp("finance_approved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+export type ContractorBill = typeof contractorBillsTable.$inferSelect;
+
+export const billDeductionsTable = pgTable("bill_deductions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  billId: varchar("bill_id").notNull().references(() => contractorBillsTable.id, { onDelete: "cascade" }),
+  deductionType: varchar("deduction_type", { length: 32 }).notNull(),
+  description: varchar("description", { length: 256 }).notNull(),
+  rate: numeric("rate", { precision: 6, scale: 3 }).notNull().default("0"),
+  baseAmount: numeric("base_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  legalRef: varchar("legal_ref", { length: 128 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type BillDeduction = typeof billDeductionsTable.$inferSelect;
+
+export const paymentVouchersTable = pgTable("payment_vouchers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  billId: varchar("bill_id").notNull().references(() => contractorBillsTable.id, { onDelete: "cascade" }),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  voucherNumber: varchar("voucher_number", { length: 32 }).notNull(),
+  amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  mode: varchar("mode", { length: 16 }).notNull().default("neft"),
+  bankName: varchar("bank_name", { length: 128 }),
+  accountNumber: varchar("account_number", { length: 32 }),
+  ifscCode: varchar("ifsc_code", { length: 16 }),
+  utr: varchar("utr", { length: 64 }),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  releasedById: varchar("released_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type PaymentVoucher = typeof paymentVouchersTable.$inferSelect;
+
+export const ledgerAccountsTable = pgTable("ledger_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  organisationId: varchar("organisation_id").references(() => organisationsTable.id, { onDelete: "cascade" }),
+  projectId: varchar("project_id").references(() => projectsTable.id, { onDelete: "cascade" }),
+  accountCode: varchar("account_code", { length: 16 }).notNull(),
+  accountName: varchar("account_name", { length: 128 }).notNull(),
+  accountType: varchar("account_type", { length: 32 }).notNull(),
+  parentAccountId: varchar("parent_account_id"),
+  openingBalance: numeric("opening_balance", { precision: 18, scale: 2 }).notNull().default("0"),
+  currentBalance: numeric("current_balance", { precision: 18, scale: 2 }).notNull().default("0"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type LedgerAccount = typeof ledgerAccountsTable.$inferSelect;
+
+export const ledgerEntriesTable = pgTable("ledger_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  entryNumber: varchar("entry_number", { length: 32 }).notNull(),
+  entryDate: timestamp("entry_date", { withTimezone: true }).notNull().defaultNow(),
+  entityType: varchar("entity_type", { length: 32 }),
+  entityId: varchar("entity_id"),
+  narration: text("narration").notNull(),
+  debitAccountId: varchar("debit_account_id").references(() => ledgerAccountsTable.id, { onDelete: "set null" }),
+  creditAccountId: varchar("credit_account_id").references(() => ledgerAccountsTable.id, { onDelete: "set null" }),
+  amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type LedgerEntry = typeof ledgerEntriesTable.$inferSelect;
+
+export const clientInvoicesTable = pgTable("client_invoices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  invoiceNumber: varchar("invoice_number", { length: 32 }).notNull(),
+  clientName: varchar("client_name", { length: 256 }).notNull(),
+  invoiceDate: timestamp("invoice_date", { withTimezone: true }).notNull().defaultNow(),
+  dueDate: timestamp("due_date", { withTimezone: true }),
+  milestoneId: varchar("milestone_id").references(() => milestonesTable.id, { onDelete: "set null" }),
+  grossAmount: numeric("gross_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  cgstRate: numeric("cgst_rate", { precision: 5, scale: 2 }).notNull().default("9"),
+  sgstRate: numeric("sgst_rate", { precision: 5, scale: 2 }).notNull().default("9"),
+  igstRate: numeric("igst_rate", { precision: 5, scale: 2 }).notNull().default("0"),
+  gstAmount: numeric("gst_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  netAmount: numeric("net_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  retentionHeld: numeric("retention_held", { precision: 18, scale: 2 }).notNull().default("0"),
+  amountReceived: numeric("amount_received", { precision: 18, scale: 2 }).notNull().default("0"),
+  status: varchar("status", { length: 32 }).notNull().default("draft"),
+  irnNumber: varchar("irn_number", { length: 128 }),
+  reraReference: varchar("rera_reference", { length: 64 }),
+  notes: text("notes"),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+export type ClientInvoice = typeof clientInvoicesTable.$inferSelect;
+
+export const gstEntriesTable = pgTable("gst_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  entityType: varchar("entity_type", { length: 32 }).notNull(),
+  entityId: varchar("entity_id").notNull(),
+  invoiceNumber: varchar("invoice_number", { length: 32 }).notNull(),
+  invoiceDate: timestamp("invoice_date", { withTimezone: true }).notNull().defaultNow(),
+  partyGstin: varchar("party_gstin", { length: 32 }),
+  partyName: varchar("party_name", { length: 256 }).notNull(),
+  taxableValue: numeric("taxable_value", { precision: 18, scale: 2 }).notNull().default("0"),
+  cgstRate: numeric("cgst_rate", { precision: 5, scale: 2 }).notNull().default("0"),
+  cgstAmount: numeric("cgst_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  sgstRate: numeric("sgst_rate", { precision: 5, scale: 2 }).notNull().default("0"),
+  sgstAmount: numeric("sgst_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  igstRate: numeric("igst_rate", { precision: 5, scale: 2 }).notNull().default("0"),
+  igstAmount: numeric("igst_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  totalGst: numeric("total_gst", { precision: 18, scale: 2 }).notNull().default("0"),
+  hsnCode: varchar("hsn_code", { length: 16 }),
+  entryType: varchar("entry_type", { length: 16 }).notNull().default("purchase"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type GstEntry = typeof gstEntriesTable.$inferSelect;
+
+export const tdsEntriesTable = pgTable("tds_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  billId: varchar("bill_id").references(() => contractorBillsTable.id, { onDelete: "set null" }),
+  vendorName: varchar("vendor_name", { length: 256 }).notNull(),
+  pan: varchar("pan", { length: 16 }),
+  sectionCode: varchar("section_code", { length: 16 }).notNull().default("194C"),
+  grossAmount: numeric("gross_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  tdsRate: numeric("tds_rate", { precision: 5, scale: 3 }).notNull().default("1"),
+  tdsAmount: numeric("tds_amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  depositedAt: timestamp("deposited_at", { withTimezone: true }),
+  challanNumber: varchar("challan_number", { length: 32 }),
+  quarter: varchar("quarter", { length: 8 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type TdsEntry = typeof tdsEntriesTable.$inferSelect;
+
+export const retentionLedgerTable = pgTable("retention_ledger", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  workOrderId: varchar("work_order_id").references(() => workOrderEstimatesTable.id, { onDelete: "set null" }),
+  billId: varchar("bill_id").references(() => contractorBillsTable.id, { onDelete: "set null" }),
+  transactionType: varchar("transaction_type", { length: 32 }).notNull(),
+  retentionHeld: numeric("retention_held", { precision: 18, scale: 2 }).notNull().default("0"),
+  retentionReleased: numeric("retention_released", { precision: 18, scale: 2 }).notNull().default("0"),
+  balance: numeric("balance", { precision: 18, scale: 2 }).notNull().default("0"),
+  remarks: text("remarks"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type RetentionLedger = typeof retentionLedgerTable.$inferSelect;
+
+export const advanceLedgerTable = pgTable("advance_ledger", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  workOrderId: varchar("work_order_id").references(() => workOrderEstimatesTable.id, { onDelete: "set null" }),
+  billId: varchar("bill_id").references(() => contractorBillsTable.id, { onDelete: "set null" }),
+  transactionType: varchar("transaction_type", { length: 32 }).notNull(),
+  amount: numeric("amount", { precision: 18, scale: 2 }).notNull().default("0"),
+  balance: numeric("balance", { precision: 18, scale: 2 }).notNull().default("0"),
+  remarks: text("remarks"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type AdvanceLedger = typeof advanceLedgerTable.$inferSelect;
+
 export const _zUserRole = z.enum(USER_ROLES);

@@ -3,7 +3,7 @@ import { useParams, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Building2, Calendar, FileText, LayoutDashboard, ListTodo, MapPin, AlertCircle, Camera, FolderOpen, Calculator, GitBranch, TrendingUp } from "lucide-react";
+import { ArrowLeft, Building2, Calendar, FileText, LayoutDashboard, ListTodo, MapPin, AlertCircle, Camera, FolderOpen, Calculator, GitBranch, TrendingUp, Banknote } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { WbsTab } from "@/components/project-tabs/wbs-tab";
@@ -15,6 +15,7 @@ import { IssuesTab } from "@/components/project-tabs/issues-tab";
 import EstimationPage from "@/pages/estimation";
 import VariationOrdersPage from "@/pages/variation-orders";
 import BoqVsActualPage from "@/pages/boq-vs-actual";
+import FinancialPage from "@/pages/financial";
 
 export default function ProjectDetail() {
   const params = useParams();
@@ -111,6 +112,7 @@ export default function ProjectDetail() {
           <TabsTrigger value="photos" className="flex items-center gap-2"><Camera className="h-4 w-4" /> Photos</TabsTrigger>
           <TabsTrigger value="documents" className="flex items-center gap-2"><FolderOpen className="h-4 w-4" /> Documents</TabsTrigger>
           <TabsTrigger value="issues" className="flex items-center gap-2"><AlertCircle className="h-4 w-4" /> Issues</TabsTrigger>
+          <TabsTrigger value="financial" className="flex items-center gap-2"><Banknote className="h-4 w-4" /> Financial</TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard" className="space-y-6">
@@ -347,6 +349,7 @@ export default function ProjectDetail() {
         <TabsContent value="photos"><PhotosTab projectId={id} /></TabsContent>
         <TabsContent value="documents"><DocumentsTab projectId={id} /></TabsContent>
         <TabsContent value="issues"><IssuesTab projectId={id} /></TabsContent>
+        <TabsContent value="financial"><FinancialPage projectId={id} /></TabsContent>
       </Tabs>
     </div>
   );
