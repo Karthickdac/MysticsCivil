@@ -38,17 +38,22 @@ type RangeValue = (typeof RANGE_OPTIONS)[number]["value"];
 // ─── Reusable card shell ─────────────────────────────────────────────────────
 function PanelCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-white rounded-3xl border border-border/60 shadow-[0_2px_16px_-4px_rgba(76,29,149,0.06)] p-5 ${className}`}>
+    <div className={`bg-card text-card-foreground rounded-3xl border border-border/70 shadow-[0_2px_16px_-4px_rgba(76,29,149,0.08)] p-5 ${className}`}>
       {children}
     </div>
   );
 }
 
-function PanelHeader({ title, right }: { title: string; right?: React.ReactNode }) {
+function PanelHeader({ title, subtitle, right }: { title: string; subtitle?: string; right?: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between mb-4">
-      <h3 className="text-lg font-extrabold tracking-tight">{title}</h3>
-      <div className="flex items-center gap-1.5">{right}</div>
+    <div className="flex items-start justify-between gap-3 mb-4 pb-3 border-b border-border/50">
+      <div className="min-w-0">
+        <h3 className="text-[17px] font-extrabold tracking-tight text-foreground leading-tight truncate">{title}</h3>
+        {subtitle && (
+          <p className="text-[11px] text-muted-foreground font-semibold mt-0.5 truncate">{subtitle}</p>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 flex-shrink-0">{right}</div>
     </div>
   );
 }

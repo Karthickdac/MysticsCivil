@@ -230,19 +230,24 @@ function ProjectsTree({
     <div>
       {/* Root: Projects */}
       <div
-        className={`group flex items-center gap-1 rounded-xl pr-1 ${
+        data-active={isProjectsActive ? "true" : "false"}
+        className={`group relative flex items-center gap-1 rounded-xl pr-1 transition-all ${
           isProjectsActive
-            ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/25"
-            : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/30 ring-1 ring-violet-400/40"
+            : "text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         }`}
       >
+        {isProjectsActive && (
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white/90" aria-hidden />
+        )}
         <Link
           href="/projects"
           onClick={onNavigate}
+          aria-current={isProjectsActive ? "page" : undefined}
           className="flex-1 flex items-center gap-3 px-3 py-2.5 text-sm font-semibold no-underline rounded-l-xl"
           data-testid="nav-projects"
         >
-          <Building2 className={`h-[18px] w-[18px] flex-shrink-0 ${isProjectsActive ? "text-white" : ""}`} />
+          <Building2 className={`h-[18px] w-[18px] flex-shrink-0 ${isProjectsActive ? "text-white" : "text-sidebar-foreground/70"}`} />
           <span className="truncate">Projects</span>
         </Link>
         <button
@@ -363,15 +368,20 @@ function ProjectsTree({
 
 // Compact Projects entry when sidebar is collapsed (icon only, no tree)
 function ProjectsCompact({ location, onNavigate }: { location: string; onNavigate?: () => void }) {
-  const isActive = location === "/projects" || location.startsWith("/projects/");
+  const isActive =
+    location === "/projects" ||
+    location.startsWith("/projects/") ||
+    location.startsWith("/projects?");
   return (
     <Link
       href="/projects"
       onClick={onNavigate}
+      aria-current={isActive ? "page" : undefined}
+      data-active={isActive ? "true" : "false"}
       className={`flex items-center justify-center rounded-xl px-0 py-2.5 transition no-underline ${
         isActive
-          ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/25"
-          : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/30 ring-1 ring-violet-400/40"
+          : "text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
       }`}
       title="Projects"
       data-testid="nav-projects-compact"
@@ -452,25 +462,33 @@ function Sidebar({
               {expandedGroup && (
                 <ul className="space-y-1">
                   {group.items.map((item) => {
-                    const isActive = location === item.url || (item.url !== "/" && location.startsWith(item.url));
+                    const isActive =
+                      item.url === "/"
+                        ? location === "/" || location === "" || location.startsWith("/?")
+                        : location === item.url || location.startsWith(`${item.url}/`) || location.startsWith(`${item.url}?`);
                     return (
                       <li key={item.titleKey}>
                         <Link
                           href={item.url}
                           onClick={onClose}
+                          aria-current={isActive ? "page" : undefined}
+                          data-active={isActive ? "true" : "false"}
                           className={`group relative flex items-center gap-3 rounded-xl text-sm font-semibold transition-all no-underline ${
                             isCompact ? "px-0 py-2.5 justify-center" : "px-3 py-2.5"
                           } ${
                             isActive
-                              ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/25"
-                              : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                              ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/30 ring-1 ring-violet-400/40"
+                              : "text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                           }`}
                           title={isCompact ? t(item.titleKey) : undefined}
                           data-testid={`nav-${item.titleKey}`}
                         >
-                          <item.icon className={`h-[18px] w-[18px] flex-shrink-0 ${isActive ? "text-white" : ""}`} />
+                          {isActive && !isCompact && (
+                            <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white/90" aria-hidden />
+                          )}
+                          <item.icon className={`h-[18px] w-[18px] flex-shrink-0 ${isActive ? "text-white" : "text-sidebar-foreground/70 group-hover:text-sidebar-accent-foreground"}`} />
                           {!isCompact && <span className="truncate">{t(item.titleKey)}</span>}
-                          {isActive && !isCompact && <span className="ml-auto h-2 w-2 rounded-full bg-white/70" />}
+                          {isActive && !isCompact && <span className="ml-auto h-2 w-2 rounded-full bg-white/80" />}
                         </Link>
                       </li>
                     );

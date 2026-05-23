@@ -586,7 +586,7 @@ function SourceRow({ src }: { src: RateSource }) {
 }
 
 function RateSourcesPanel() {
-  const { data: sources = [], isLoading } = useListRateSources({ query: { enabled: true } });
+  const { data: sources = [], isLoading } = useListRateSources({ query: { enabled: true } as any });
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
@@ -659,7 +659,7 @@ export default function DsrRatesPage() {
   const canManageSources = role === "admin" || role === "owner" || role === "qs";
   const canDeleteRates = role === "admin" || role === "owner";
   const { data: rates = [], isLoading } = useListDsrRates({ q: q || undefined, trade: filterTrade !== "all" ? filterTrade : undefined, state: filterState !== "all" ? filterState : undefined, cityTier: filterTier !== "all" ? filterTier : undefined });
-  const { data: sources = [] } = useListRateSources({ query: { enabled: canManageSources } });
+  const { data: sources = [] } = useListRateSources({ query: { enabled: canManageSources } as any });
 
   const tradeGroups = useMemo(() => {
     const g: Record<string, number> = {};
