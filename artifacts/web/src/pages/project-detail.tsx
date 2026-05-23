@@ -1,10 +1,18 @@
-import { useGetProjectDashboard, getGetProjectDashboardQueryKey } from "@workspace/api-client-react";
+import {
+  useGetProjectDashboard,
+  getGetProjectDashboardQueryKey,
+  useReverseGeocode,
+  useUpdateProject,
+  getGetProjectQueryKey,
+} from "@workspace/api-client-react";
 import { useParams, Link, useSearch } from "wouter";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Building2, Calendar, FileText, LayoutDashboard, ListTodo, MapPin, AlertCircle, Camera, FolderOpen, Calculator, GitBranch, TrendingUp, Banknote, ShoppingCart, HardHat } from "lucide-react";
+import { ArrowLeft, Building2, Calendar, FileText, LayoutDashboard, ListTodo, MapPin, AlertCircle, Camera, FolderOpen, Calculator, GitBranch, TrendingUp, Banknote, ShoppingCart, HardHat, Loader2 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { WbsTab } from "@/components/project-tabs/wbs-tab";
@@ -103,6 +111,14 @@ export default function ProjectDetail() {
         </div>
       </div>
 
+      <ProjectLocationPanel
+        projectId={id}
+        latitude={project.latitude}
+        longitude={project.longitude}
+        location={project.location}
+      />
+
+
       <ProjectTabs
         id={id}
         project={project}
@@ -118,6 +134,164 @@ export default function ProjectDetail() {
         cost={cost}
       />
     </div>
+  );
+}
+
+function ProjectLocationPanel({
+  projectId,
+  latitude,
+  longitude,
+  location,
+}: {
+  projectId: string;
+  latitude: number | null;
+  longitude: number | null;
+  location: string | null;
+}) {
+  const lat = typeof latitude === "number" && Number.isFinite(latitude) ? latitude : null;
+  const lon = typeof longitude === "number" && Number.isFinite(longitude) ? longitude : null;
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const geocode = useReverseGeocode();
+  const updateProject = useUpdateProject();
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "error" | "done">("idle");
+  const lastReqKey = useRef<string>("");
+
+  useEffect(() => {
+    if (lat === null || lon === null) {
+      setSuggestion(null);
+      setState("idle");
+      lastReqKey.current = "";
+      return;
+    }
+    const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+    if (key === lastReqKey.current) return;
+    lastReqKey.current = key;
+    setState("loading");
+    geocode.mutate(
+      { data: { lat, lon } },
+      {
+        onSuccess: (resp) => {
+          if (resp.address) {
+            setSuggestion(resp.address);
+            setState("done");
+          } else {
+            setSuggestion(null);
+            setState("error");
+          }
+        },
+        onError: () => {
+          setSuggestion(null);
+          setState("error");
+        },
+      },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lat, lon]);
+
+  if (lat === null || lon === null) return null;
+
+  const matchesCurrent = suggestion !== null && location !== null && suggestion.trim() === location.trim();
+  const delta = 0.005;
+  const bbox = `${lon - delta},${lat - delta},${lon + delta},${lat + delta}`;
+  const mapSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${lat},${lon}`;
+  const osmLink = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`;
+
+  const onUse = () => {
+    if (!suggestion) return;
+    updateProject.mutate(
+      { projectId, data: { location: suggestion } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetProjectDashboardQueryKey(projectId) });
+          queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
+          toast({ title: "Address updated", description: "Project site address replaced with the suggestion." });
+        },
+        onError: (err: any) => {
+          toast({ title: "Update failed", description: err?.message ?? "Could not update address", variant: "destructive" });
+        },
+      },
+    );
+  };
+
+  return (
+    <Card data-testid="project-location-panel">
+      <CardHeader>
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <MapPin className="h-4 w-4" /> Site Location
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-4 md:grid-cols-[1fr_320px]">
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Coordinates:</span>{" "}
+              <span className="font-mono">{lat.toFixed(6)}, {lon.toFixed(6)}</span>
+            </div>
+            <div
+              className={`rounded-lg border px-3 py-2 text-xs flex items-start gap-2 ${
+                state === "done"
+                  ? matchesCurrent
+                    ? "border-border bg-muted/40 text-muted-foreground"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-900"
+                  : "border-border bg-muted/40 text-muted-foreground"
+              }`}
+              data-testid="address-suggestion"
+            >
+              <MapPin className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                {state === "loading" && (
+                  <span className="inline-flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Looking up address from coordinates…
+                  </span>
+                )}
+                {state === "done" && suggestion && (
+                  <>
+                    <span className="font-medium">Suggested:</span>{" "}
+                    <span className="break-words">{suggestion}</span>
+                    {matchesCurrent && <span className="ml-1 text-emerald-700">(matches current)</span>}
+                  </>
+                )}
+                {state === "error" && <span>Could not resolve address from these coordinates.</span>}
+              </div>
+              {state === "done" && suggestion && !matchesCurrent && (
+                <button
+                  type="button"
+                  className="text-emerald-700 hover:text-emerald-900 font-semibold underline whitespace-nowrap disabled:opacity-60"
+                  onClick={onUse}
+                  disabled={updateProject.isPending}
+                  data-testid="address-use-suggestion"
+                >
+                  {updateProject.isPending ? "Saving…" : "Use this"}
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <div className="aspect-video w-full rounded-lg overflow-hidden border bg-muted">
+              <iframe
+                title="Site map preview"
+                src={mapSrc}
+                className="w-full h-full"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                data-testid="map-preview"
+              />
+            </div>
+            <a
+              href={osmLink}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[10px] text-muted-foreground hover:text-foreground underline"
+            >
+              View larger map on OpenStreetMap
+            </a>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
