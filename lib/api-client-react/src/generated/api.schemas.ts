@@ -853,6 +853,136 @@ export interface DsrRateUpdate {
   source?: string;
 }
 
+export type RateSourceType = typeof RateSourceType[keyof typeof RateSourceType];
+
+
+export const RateSourceType = {
+  csv: 'csv',
+  json: 'json',
+  gsheet: 'gsheet',
+  escalation: 'escalation',
+} as const;
+
+export type RateSourceLastSyncStatus = typeof RateSourceLastSyncStatus[keyof typeof RateSourceLastSyncStatus];
+
+
+export const RateSourceLastSyncStatus = {
+  never: 'never',
+  success: 'success',
+  partial: 'partial',
+  error: 'error',
+} as const;
+
+export interface RateSource {
+  id: string;
+  label: string;
+  type: RateSourceType;
+  /** @nullable */
+  url?: string | null;
+  /** @nullable */
+  defaultState?: string | null;
+  defaultSource: string;
+  /** @nullable */
+  defaultEffectiveYear?: number | null;
+  enabled: boolean;
+  /** @nullable */
+  escalationPct?: number | null;
+  /** @nullable */
+  escalationFilterTrade?: string | null;
+  /** @nullable */
+  escalationFilterState?: string | null;
+  /** @nullable */
+  escalationFromYear?: number | null;
+  /** @nullable */
+  escalationToYear?: number | null;
+  /** @nullable */
+  lastSyncAt?: string | null;
+  lastSyncStatus: RateSourceLastSyncStatus;
+  lastSyncRowsInserted: number;
+  lastSyncRowsUpdated: number;
+  lastSyncRowsSkipped: number;
+  /** @nullable */
+  lastSyncError?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type RateSourceInputType = typeof RateSourceInputType[keyof typeof RateSourceInputType];
+
+
+export const RateSourceInputType = {
+  csv: 'csv',
+  json: 'json',
+  gsheet: 'gsheet',
+  escalation: 'escalation',
+} as const;
+
+export interface RateSourceInput {
+  /** @minLength 1 */
+  label: string;
+  type: RateSourceInputType;
+  url?: string;
+  defaultState?: string;
+  defaultSource?: string;
+  defaultEffectiveYear?: number;
+  enabled?: boolean;
+  escalationPct?: number;
+  escalationFilterTrade?: string;
+  escalationFilterState?: string;
+  escalationFromYear?: number;
+  escalationToYear?: number;
+}
+
+export type RateSourceUpdateType = typeof RateSourceUpdateType[keyof typeof RateSourceUpdateType];
+
+
+export const RateSourceUpdateType = {
+  csv: 'csv',
+  json: 'json',
+  gsheet: 'gsheet',
+  escalation: 'escalation',
+} as const;
+
+export interface RateSourceUpdate {
+  label?: string;
+  type?: RateSourceUpdateType;
+  url?: string;
+  defaultState?: string;
+  defaultSource?: string;
+  defaultEffectiveYear?: number;
+  enabled?: boolean;
+  escalationPct?: number;
+  escalationFilterTrade?: string;
+  escalationFilterState?: string;
+  escalationFromYear?: number;
+  escalationToYear?: number;
+}
+
+export interface RateSyncResult {
+  sourceId?: string;
+  inserted: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+}
+
+export type BulkRateUpsertInputRowsItem = { [key: string]: unknown };
+
+export interface BulkRateUpsertInput {
+  rows: BulkRateUpsertInputRowsItem[];
+  defaultState?: string;
+  defaultSource?: string;
+  defaultEffectiveYear?: number;
+}
+
+export interface EscalationInput {
+  pct: number;
+  trade?: string;
+  state?: string;
+  fromYear?: number;
+  toYear?: number;
+}
+
 export interface VariationOrder {
   id: string;
   projectId: string;

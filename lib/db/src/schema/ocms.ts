@@ -339,8 +339,49 @@ export const dsrRatesTable = pgTable("dsr_rates", {
   createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => ({
+  dsrRateCodeStateYearUq: uniqueIndex("dsr_rate_code_state_year_uq").on(t.code, t.state, t.effectiveYear),
+}));
 export type DsrRate = typeof dsrRatesTable.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DSR/SSR Rate Sources — configurable auto-sync sources (CSV, JSON, Google
+// Sheet, or annual-escalation rule). A daily cron loops enabled sources and
+// upserts into dsrRatesTable.
+// ─────────────────────────────────────────────────────────────────────────────
+export const RATE_SOURCE_TYPES = ["csv", "json", "gsheet", "escalation"] as const;
+export type RateSourceType = (typeof RATE_SOURCE_TYPES)[number];
+
+export const RATE_SYNC_STATUSES = ["never", "success", "partial", "error"] as const;
+export type RateSyncStatus = (typeof RATE_SYNC_STATUSES)[number];
+
+export const rateSourcesTable = pgTable("rate_sources", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  label: varchar("label", { length: 128 }).notNull(),
+  type: varchar("type", { length: 16 }).notNull().default("csv"),
+  url: text("url"),
+  defaultState: varchar("default_state", { length: 64 }),
+  defaultSource: varchar("default_source", { length: 64 }).notNull().default("DSR"),
+  defaultEffectiveYear: integer("default_effective_year"),
+  enabled: boolean("enabled").notNull().default(true),
+  // Only used when type = "escalation"
+  escalationPct: numeric("escalation_pct", { precision: 6, scale: 3 }),
+  escalationFilterTrade: varchar("escalation_filter_trade", { length: 64 }),
+  escalationFilterState: varchar("escalation_filter_state", { length: 64 }),
+  escalationFromYear: integer("escalation_from_year"),
+  escalationToYear: integer("escalation_to_year"),
+  // Last sync results
+  lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+  lastSyncStatus: varchar("last_sync_status", { length: 16 }).notNull().default("never"),
+  lastSyncRowsInserted: integer("last_sync_rows_inserted").notNull().default(0),
+  lastSyncRowsUpdated: integer("last_sync_rows_updated").notNull().default(0),
+  lastSyncRowsSkipped: integer("last_sync_rows_skipped").notNull().default(0),
+  lastSyncError: text("last_sync_error"),
+  createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+export type RateSource = typeof rateSourcesTable.$inferSelect;
 
 export const estimatesTable = pgTable("estimates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

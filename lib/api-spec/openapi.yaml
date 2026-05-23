@@ -1007,6 +1007,108 @@ paths:
         '204':
           description: Deleted
 
+  /dsr-rates/bulk-upsert:
+    post:
+      tags: [DSR]
+      operationId: bulkUpsertDsrRates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BulkRateUpsertInput' }
+      responses:
+        '200':
+          description: Upsert result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RateSyncResult' }
+
+  /dsr-rates/escalate:
+    post:
+      tags: [DSR]
+      operationId: escalateDsrRates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EscalationInput' }
+      responses:
+        '200':
+          description: Escalation result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RateSyncResult' }
+
+  /rate-sources:
+    get:
+      tags: [DSR]
+      operationId: listRateSources
+      responses:
+        '200':
+          description: Rate sources
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RateSource' }
+    post:
+      tags: [DSR]
+      operationId: createRateSource
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RateSourceInput' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RateSource' }
+
+  /rate-sources/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [DSR]
+      operationId: updateRateSource
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RateSourceUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RateSource' }
+    delete:
+      tags: [DSR]
+      operationId: deleteRateSource
+      responses:
+        '204':
+          description: Deleted
+
+  /rate-sources/{id}/sync:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [DSR]
+      operationId: syncRateSource
+      responses:
+        '200':
+          description: Sync result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RateSyncResult' }
+
   /projects/{projectId}/variation-orders:
     parameters:
       - $ref: '#/components/parameters/ProjectIdParam'
@@ -3683,6 +3785,95 @@ components:
         rate: { type: number }
         effectiveYear: { type: integer }
         source: { type: string }
+
+    RateSource:
+      type: object
+      required: [id, label, type, enabled, defaultSource, lastSyncStatus, lastSyncRowsInserted, lastSyncRowsUpdated, lastSyncRowsSkipped, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        type: { type: string, enum: [csv, json, gsheet, escalation] }
+        url: { type: [string, 'null'] }
+        defaultState: { type: [string, 'null'] }
+        defaultSource: { type: string }
+        defaultEffectiveYear: { type: [integer, 'null'] }
+        enabled: { type: boolean }
+        escalationPct: { type: [number, 'null'] }
+        escalationFilterTrade: { type: [string, 'null'] }
+        escalationFilterState: { type: [string, 'null'] }
+        escalationFromYear: { type: [integer, 'null'] }
+        escalationToYear: { type: [integer, 'null'] }
+        lastSyncAt: { type: [string, 'null'], format: date-time }
+        lastSyncStatus: { type: string, enum: [never, success, partial, error] }
+        lastSyncRowsInserted: { type: integer }
+        lastSyncRowsUpdated: { type: integer }
+        lastSyncRowsSkipped: { type: integer }
+        lastSyncError: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    RateSourceInput:
+      type: object
+      required: [label, type]
+      properties:
+        label: { type: string, minLength: 1 }
+        type: { type: string, enum: [csv, json, gsheet, escalation] }
+        url: { type: string }
+        defaultState: { type: string }
+        defaultSource: { type: string }
+        defaultEffectiveYear: { type: integer }
+        enabled: { type: boolean }
+        escalationPct: { type: number }
+        escalationFilterTrade: { type: string }
+        escalationFilterState: { type: string }
+        escalationFromYear: { type: integer }
+        escalationToYear: { type: integer }
+    RateSourceUpdate:
+      type: object
+      properties:
+        label: { type: string }
+        type: { type: string, enum: [csv, json, gsheet, escalation] }
+        url: { type: string }
+        defaultState: { type: string }
+        defaultSource: { type: string }
+        defaultEffectiveYear: { type: integer }
+        enabled: { type: boolean }
+        escalationPct: { type: number }
+        escalationFilterTrade: { type: string }
+        escalationFilterState: { type: string }
+        escalationFromYear: { type: integer }
+        escalationToYear: { type: integer }
+    RateSyncResult:
+      type: object
+      required: [inserted, updated, skipped, errors]
+      properties:
+        sourceId: { type: string }
+        inserted: { type: integer }
+        updated: { type: integer }
+        skipped: { type: integer }
+        errors:
+          type: array
+          items: { type: string }
+    BulkRateUpsertInput:
+      type: object
+      required: [rows]
+      properties:
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        defaultState: { type: string }
+        defaultSource: { type: string }
+        defaultEffectiveYear: { type: integer }
+    EscalationInput:
+      type: object
+      required: [pct]
+      properties:
+        pct: { type: number }
+        trade: { type: string }
+        state: { type: string }
+        fromYear: { type: integer }
+        toYear: { type: integer }
 
     VariationOrder:
       type: object

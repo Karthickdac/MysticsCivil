@@ -57,6 +57,7 @@ import type {
   BoqItemInput,
   BoqItemUpdate,
   BoqVsActualResult,
+  BulkRateUpsertInput,
   BulkRecordAttendance201,
   BulkRecordAttendanceBody,
   ClientInvoice,
@@ -116,6 +117,7 @@ import type {
   DsrRateInput,
   DsrRateUpdate,
   ErrorEnvelope,
+  EscalationInput,
   Estimate,
   EstimateCostHead,
   EstimateCostHeadInput,
@@ -205,6 +207,10 @@ import type {
   QueryMaterialIndentBody,
   RateAnalysisComponent,
   RateAnalysisComponentInput,
+  RateSource,
+  RateSourceInput,
+  RateSourceUpdate,
+  RateSyncResult,
   RecordAttendance201,
   RecordAttendanceBody,
   RecordInspectionResult200,
@@ -4475,6 +4481,466 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getDeleteDsrRateMutationOptions(options));
+    }
+
+export const getBulkUpsertDsrRatesUrl = () => {
+
+
+
+
+  return `/api/dsr-rates/bulk-upsert`
+}
+
+export const bulkUpsertDsrRates = async (bulkRateUpsertInput: BulkRateUpsertInput, options?: RequestInit): Promise<RateSyncResult> => {
+
+  return customFetch<RateSyncResult>(getBulkUpsertDsrRatesUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      bulkRateUpsertInput,)
+  }
+);}
+
+
+
+
+export const getBulkUpsertDsrRatesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkUpsertDsrRates>>, TError,{data: BodyType<BulkRateUpsertInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkUpsertDsrRates>>, TError,{data: BodyType<BulkRateUpsertInput>}, TContext> => {
+
+const mutationKey = ['bulkUpsertDsrRates'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkUpsertDsrRates>>, {data: BodyType<BulkRateUpsertInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkUpsertDsrRates(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkUpsertDsrRatesMutationResult = NonNullable<Awaited<ReturnType<typeof bulkUpsertDsrRates>>>
+    export type BulkUpsertDsrRatesMutationBody = BodyType<BulkRateUpsertInput>
+    export type BulkUpsertDsrRatesMutationError = ErrorType<unknown>
+
+    export const useBulkUpsertDsrRates = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkUpsertDsrRates>>, TError,{data: BodyType<BulkRateUpsertInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkUpsertDsrRates>>,
+        TError,
+        {data: BodyType<BulkRateUpsertInput>},
+        TContext
+      > => {
+      return useMutation(getBulkUpsertDsrRatesMutationOptions(options));
+    }
+
+export const getEscalateDsrRatesUrl = () => {
+
+
+
+
+  return `/api/dsr-rates/escalate`
+}
+
+export const escalateDsrRates = async (escalationInput: EscalationInput, options?: RequestInit): Promise<RateSyncResult> => {
+
+  return customFetch<RateSyncResult>(getEscalateDsrRatesUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      escalationInput,)
+  }
+);}
+
+
+
+
+export const getEscalateDsrRatesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof escalateDsrRates>>, TError,{data: BodyType<EscalationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof escalateDsrRates>>, TError,{data: BodyType<EscalationInput>}, TContext> => {
+
+const mutationKey = ['escalateDsrRates'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof escalateDsrRates>>, {data: BodyType<EscalationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  escalateDsrRates(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EscalateDsrRatesMutationResult = NonNullable<Awaited<ReturnType<typeof escalateDsrRates>>>
+    export type EscalateDsrRatesMutationBody = BodyType<EscalationInput>
+    export type EscalateDsrRatesMutationError = ErrorType<unknown>
+
+    export const useEscalateDsrRates = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof escalateDsrRates>>, TError,{data: BodyType<EscalationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof escalateDsrRates>>,
+        TError,
+        {data: BodyType<EscalationInput>},
+        TContext
+      > => {
+      return useMutation(getEscalateDsrRatesMutationOptions(options));
+    }
+
+export const getListRateSourcesUrl = () => {
+
+
+
+
+  return `/api/rate-sources`
+}
+
+export const listRateSources = async ( options?: RequestInit): Promise<RateSource[]> => {
+
+  return customFetch<RateSource[]>(getListRateSourcesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListRateSourcesQueryKey = () => {
+    return [
+    `/api/rate-sources`
+    ] as const;
+    }
+
+
+export const getListRateSourcesQueryOptions = <TData = Awaited<ReturnType<typeof listRateSources>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listRateSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListRateSourcesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listRateSources>>> = ({ signal }) => listRateSources({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listRateSources>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListRateSourcesQueryResult = NonNullable<Awaited<ReturnType<typeof listRateSources>>>
+export type ListRateSourcesQueryError = ErrorType<unknown>
+
+
+
+export function useListRateSources<TData = Awaited<ReturnType<typeof listRateSources>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listRateSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListRateSourcesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateRateSourceUrl = () => {
+
+
+
+
+  return `/api/rate-sources`
+}
+
+export const createRateSource = async (rateSourceInput: RateSourceInput, options?: RequestInit): Promise<RateSource> => {
+
+  return customFetch<RateSource>(getCreateRateSourceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      rateSourceInput,)
+  }
+);}
+
+
+
+
+export const getCreateRateSourceMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRateSource>>, TError,{data: BodyType<RateSourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createRateSource>>, TError,{data: BodyType<RateSourceInput>}, TContext> => {
+
+const mutationKey = ['createRateSource'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createRateSource>>, {data: BodyType<RateSourceInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createRateSource(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateRateSourceMutationResult = NonNullable<Awaited<ReturnType<typeof createRateSource>>>
+    export type CreateRateSourceMutationBody = BodyType<RateSourceInput>
+    export type CreateRateSourceMutationError = ErrorType<unknown>
+
+    export const useCreateRateSource = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRateSource>>, TError,{data: BodyType<RateSourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createRateSource>>,
+        TError,
+        {data: BodyType<RateSourceInput>},
+        TContext
+      > => {
+      return useMutation(getCreateRateSourceMutationOptions(options));
+    }
+
+export const getUpdateRateSourceUrl = (id: string,) => {
+
+
+
+
+  return `/api/rate-sources/${id}`
+}
+
+export const updateRateSource = async (id: string,
+    rateSourceUpdate: RateSourceUpdate, options?: RequestInit): Promise<RateSource> => {
+
+  return customFetch<RateSource>(getUpdateRateSourceUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      rateSourceUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateRateSourceMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRateSource>>, TError,{id: string;data: BodyType<RateSourceUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateRateSource>>, TError,{id: string;data: BodyType<RateSourceUpdate>}, TContext> => {
+
+const mutationKey = ['updateRateSource'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateRateSource>>, {id: string;data: BodyType<RateSourceUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateRateSource(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateRateSourceMutationResult = NonNullable<Awaited<ReturnType<typeof updateRateSource>>>
+    export type UpdateRateSourceMutationBody = BodyType<RateSourceUpdate>
+    export type UpdateRateSourceMutationError = ErrorType<unknown>
+
+    export const useUpdateRateSource = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateRateSource>>, TError,{id: string;data: BodyType<RateSourceUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateRateSource>>,
+        TError,
+        {id: string;data: BodyType<RateSourceUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateRateSourceMutationOptions(options));
+    }
+
+export const getDeleteRateSourceUrl = (id: string,) => {
+
+
+
+
+  return `/api/rate-sources/${id}`
+}
+
+export const deleteRateSource = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteRateSourceUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteRateSourceMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRateSource>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteRateSource>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteRateSource'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteRateSource>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteRateSource(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteRateSourceMutationResult = NonNullable<Awaited<ReturnType<typeof deleteRateSource>>>
+
+    export type DeleteRateSourceMutationError = ErrorType<unknown>
+
+    export const useDeleteRateSource = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteRateSource>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteRateSource>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteRateSourceMutationOptions(options));
+    }
+
+export const getSyncRateSourceUrl = (id: string,) => {
+
+
+
+
+  return `/api/rate-sources/${id}/sync`
+}
+
+export const syncRateSource = async (id: string, options?: RequestInit): Promise<RateSyncResult> => {
+
+  return customFetch<RateSyncResult>(getSyncRateSourceUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getSyncRateSourceMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncRateSource>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof syncRateSource>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['syncRateSource'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncRateSource>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  syncRateSource(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SyncRateSourceMutationResult = NonNullable<Awaited<ReturnType<typeof syncRateSource>>>
+
+    export type SyncRateSourceMutationError = ErrorType<unknown>
+
+    export const useSyncRateSource = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncRateSource>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof syncRateSource>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getSyncRateSourceMutationOptions(options));
     }
 
 export const getListVariationOrdersUrl = (projectId: string,) => {

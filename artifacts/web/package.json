@@ -45,6 +45,7 @@
     "@tailwindcss/vite": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@types/node": "catalog:",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
@@ -56,6 +57,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
+    "exceljs": "^4.4.0",
     "framer-motion": "catalog:",
     "input-otp": "^1.4.2",
     "lucide-react": "catalog:",
@@ -74,13 +76,13 @@
     "vaul": "^1.1.2",
     "vite": "catalog:",
     "wouter": "^3.3.5",
-    "exceljs": "^4.4.0",
     "zod": "catalog:"
   },
   "dependencies": {
     "@uppy/aws-s3": "^5.1.0",
     "@uppy/core": "^5.2.0",
     "@uppy/dashboard": "^5.1.1",
-    "@uppy/react": "^5.2.0"
+    "@uppy/react": "^5.2.0",
+    "papaparse": "^5.5.3"
   }
 }

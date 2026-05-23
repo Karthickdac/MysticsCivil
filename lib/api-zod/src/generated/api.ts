@@ -1425,6 +1425,146 @@ export const DeleteDsrRateParams = zod.object({
 })
 
 
+export const BulkUpsertDsrRatesBody = zod.object({
+  "rows": zod.array(zod.record(zod.string(), zod.unknown())),
+  "defaultState": zod.string().optional(),
+  "defaultSource": zod.string().optional(),
+  "defaultEffectiveYear": zod.number().optional()
+})
+
+export const BulkUpsertDsrRatesResponse = zod.object({
+  "sourceId": zod.string().optional(),
+  "inserted": zod.number(),
+  "updated": zod.number(),
+  "skipped": zod.number(),
+  "errors": zod.array(zod.string())
+})
+
+
+export const EscalateDsrRatesBody = zod.object({
+  "pct": zod.number(),
+  "trade": zod.string().optional(),
+  "state": zod.string().optional(),
+  "fromYear": zod.number().optional(),
+  "toYear": zod.number().optional()
+})
+
+export const EscalateDsrRatesResponse = zod.object({
+  "sourceId": zod.string().optional(),
+  "inserted": zod.number(),
+  "updated": zod.number(),
+  "skipped": zod.number(),
+  "errors": zod.array(zod.string())
+})
+
+
+export const ListRateSourcesResponseItem = zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "type": zod.enum(['csv', 'json', 'gsheet', 'escalation']),
+  "url": zod.string().nullish(),
+  "defaultState": zod.string().nullish(),
+  "defaultSource": zod.string(),
+  "defaultEffectiveYear": zod.number().nullish(),
+  "enabled": zod.boolean(),
+  "escalationPct": zod.number().nullish(),
+  "escalationFilterTrade": zod.string().nullish(),
+  "escalationFilterState": zod.string().nullish(),
+  "escalationFromYear": zod.number().nullish(),
+  "escalationToYear": zod.number().nullish(),
+  "lastSyncAt": zod.coerce.date().nullish(),
+  "lastSyncStatus": zod.enum(['never', 'success', 'partial', 'error']),
+  "lastSyncRowsInserted": zod.number(),
+  "lastSyncRowsUpdated": zod.number(),
+  "lastSyncRowsSkipped": zod.number(),
+  "lastSyncError": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListRateSourcesResponse = zod.array(ListRateSourcesResponseItem)
+
+
+
+
+
+export const CreateRateSourceBody = zod.object({
+  "label": zod.string().min(1),
+  "type": zod.enum(['csv', 'json', 'gsheet', 'escalation']),
+  "url": zod.string().optional(),
+  "defaultState": zod.string().optional(),
+  "defaultSource": zod.string().optional(),
+  "defaultEffectiveYear": zod.number().optional(),
+  "enabled": zod.boolean().optional(),
+  "escalationPct": zod.number().optional(),
+  "escalationFilterTrade": zod.string().optional(),
+  "escalationFilterState": zod.string().optional(),
+  "escalationFromYear": zod.number().optional(),
+  "escalationToYear": zod.number().optional()
+})
+
+
+export const UpdateRateSourceParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UpdateRateSourceBody = zod.object({
+  "label": zod.string().optional(),
+  "type": zod.enum(['csv', 'json', 'gsheet', 'escalation']).optional(),
+  "url": zod.string().optional(),
+  "defaultState": zod.string().optional(),
+  "defaultSource": zod.string().optional(),
+  "defaultEffectiveYear": zod.number().optional(),
+  "enabled": zod.boolean().optional(),
+  "escalationPct": zod.number().optional(),
+  "escalationFilterTrade": zod.string().optional(),
+  "escalationFilterState": zod.string().optional(),
+  "escalationFromYear": zod.number().optional(),
+  "escalationToYear": zod.number().optional()
+})
+
+export const UpdateRateSourceResponse = zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "type": zod.enum(['csv', 'json', 'gsheet', 'escalation']),
+  "url": zod.string().nullish(),
+  "defaultState": zod.string().nullish(),
+  "defaultSource": zod.string(),
+  "defaultEffectiveYear": zod.number().nullish(),
+  "enabled": zod.boolean(),
+  "escalationPct": zod.number().nullish(),
+  "escalationFilterTrade": zod.string().nullish(),
+  "escalationFilterState": zod.string().nullish(),
+  "escalationFromYear": zod.number().nullish(),
+  "escalationToYear": zod.number().nullish(),
+  "lastSyncAt": zod.coerce.date().nullish(),
+  "lastSyncStatus": zod.enum(['never', 'success', 'partial', 'error']),
+  "lastSyncRowsInserted": zod.number(),
+  "lastSyncRowsUpdated": zod.number(),
+  "lastSyncRowsSkipped": zod.number(),
+  "lastSyncError": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const DeleteRateSourceParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+export const SyncRateSourceParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const SyncRateSourceResponse = zod.object({
+  "sourceId": zod.string().optional(),
+  "inserted": zod.number(),
+  "updated": zod.number(),
+  "skipped": zod.number(),
+  "errors": zod.array(zod.string())
+})
+
+
 export const ListVariationOrdersParams = zod.object({
   "projectId": zod.coerce.string()
 })
