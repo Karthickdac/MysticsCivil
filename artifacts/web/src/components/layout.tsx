@@ -1,8 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
-import { useGetMyProfile } from "@workspace/api-client-react";
+import {
+  useGetMyProfile,
+  useListProjects,
+  useListOrganisations,
+} from "@workspace/api-client-react";
 import { useT, type Lang } from "@/lib/i18n";
+import { PROJECT_TABS } from "@/lib/project-tabs";
 import {
   Home,
   Building2,
@@ -20,8 +25,10 @@ import {
   X,
   ChevronsLeft,
   ChevronDown,
+  ChevronRight,
   HardHat,
   ShieldCheck,
+  FolderTree,
 } from "lucide-react";
 
 const ALL_ROLES = ["owner", "pm", "site_engineer", "qs", "finance", "contractor", "qc", "store", "hr", "admin"];
@@ -29,8 +36,6 @@ const ALL_ROLES = ["owner", "pm", "site_engineer", "qs", "finance", "contractor"
 type NavItem = { titleKey: string; url: string; icon: any; roles: string[] };
 type NavGroup = { key: string; labelKey: string; items: NavItem[] };
 
-// IA reorder: "what you act on" (Operations) → "money & contracts" (Commercial) → "settings" (Admin).
-// "People" is intentionally omitted — workforce is per-project (lives inside the project detail page).
 function getNavGroups(role: string | undefined): NavGroup[] {
   const groups: NavGroup[] = [
     {
@@ -38,7 +43,6 @@ function getNavGroups(role: string | undefined): NavGroup[] {
       labelKey: "nav.group.operations",
       items: [
         { titleKey: "nav.dashboard", url: "/", icon: Home, roles: ALL_ROLES },
-        { titleKey: "nav.projects", url: "/projects", icon: Building2, roles: ALL_ROLES },
         { titleKey: "nav.approvals", url: "/approvals", icon: ClipboardList, roles: ["owner", "pm", "qs", "finance"] },
       ],
     },
@@ -79,7 +83,25 @@ function useCollapsedGroups() {
   return { collapsed, toggle };
 }
 
-// ─── Dark-mode hook (persisted) ──────────────────────────────────────────────
+// Generic expanded-set hook (tree nodes)
+const EXPANDED_KEY = "mc.sidebar.expandedNodes";
+function useExpandedNodes() {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = window.localStorage.getItem(EXPANDED_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(EXPANDED_KEY, JSON.stringify(expanded)); } catch {}
+  }, [expanded]);
+  const toggle = (key: string) => setExpanded((c) => ({ ...c, [key]: !c[key] }));
+  const setOpen = (key: string, open: boolean) =>
+    setExpanded((c) => (c[key] === open ? c : { ...c, [key]: open }));
+  return { expanded, toggle, setOpen };
+}
+
 function useDarkMode() {
   const [dark, setDark] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -96,7 +118,6 @@ function useDarkMode() {
   return { dark, toggle: () => setDark((d) => !d) };
 }
 
-// ─── Lang switcher (icon-only when collapsed) ────────────────────────────────
 function LangSwitcher({ compact = false }: { compact?: boolean }) {
   const { lang, setLang } = useT();
   const opts: Lang[] = ["en", "ta"];
@@ -128,7 +149,6 @@ function LangSwitcher({ compact = false }: { compact?: boolean }) {
   );
 }
 
-// ─── Logo ────────────────────────────────────────────────────────────────────
 function Logo({ collapsed, t }: { collapsed: boolean; t: (k: string) => string }) {
   return (
     <Link href="/" className="flex items-center gap-2.5 group no-underline text-inherit" data-testid="logo-home">
@@ -141,6 +161,222 @@ function Logo({ collapsed, t }: { collapsed: boolean; t: (k: string) => string }
           <span className="text-[10px] text-muted-foreground font-semibold truncate">Construction ERP</span>
         </div>
       )}
+    </Link>
+  );
+}
+
+// ─── Projects tree ───────────────────────────────────────────────────────────
+function ProjectsTree({
+  location,
+  onNavigate,
+  expanded,
+  toggle,
+  setOpen,
+}: {
+  location: string;
+  onNavigate?: () => void;
+  expanded: Record<string, boolean>;
+  toggle: (k: string) => void;
+  setOpen: (k: string, open: boolean) => void;
+}) {
+  const { data: projects } = useListProjects();
+  const { data: orgs } = useListOrganisations();
+
+  // Match /projects, /projects/:id and read ?tab=
+  const activeMatch = useMemo(() => {
+    const m = location.match(/^\/projects\/([^?]+)/);
+    return m ? { projectId: m[1] } : null;
+  }, [location]);
+  const activeTab = useMemo(() => {
+    const q = typeof window !== "undefined" ? window.location.search : "";
+    const t = new URLSearchParams(q).get("tab");
+    return t || "dashboard";
+  }, [location]);
+
+  // Auto-expand to active project
+  useEffect(() => {
+    if (!activeMatch || !projects) return;
+    const p = projects.find((p: any) => p.id === activeMatch.projectId);
+    if (!p) return;
+    setOpen("projects-root", true);
+    if (p.organisationId) setOpen(`org:${p.organisationId}`, true);
+    setOpen(`proj:${p.id}`, true);
+  }, [activeMatch?.projectId, projects, setOpen]);
+
+  const rootOpen = expanded["projects-root"] ?? true;
+  const isProjectsActive = location === "/projects" || location.startsWith("/projects/") || location.startsWith("/projects?");
+
+  // Group projects by organisation
+  const grouped = useMemo(() => {
+    if (!projects) return [] as Array<{ orgId: string; orgName: string; projects: any[] }>;
+    const orgMap = new Map<string, string>();
+    (orgs || []).forEach((o: any) => orgMap.set(o.id, o.name));
+    const buckets = new Map<string, any[]>();
+    for (const p of projects) {
+      const k = p.organisationId || "_none";
+      if (!buckets.has(k)) buckets.set(k, []);
+      buckets.get(k)!.push(p);
+    }
+    return Array.from(buckets.entries())
+      .map(([orgId, items]) => ({
+        orgId,
+        orgName: orgMap.get(orgId) || "Unassigned",
+        projects: items.slice().sort((a, b) => (a.name || "").localeCompare(b.name || "")),
+      }))
+      .sort((a, b) => a.orgName.localeCompare(b.orgName));
+  }, [projects, orgs]);
+
+  return (
+    <div>
+      {/* Root: Projects */}
+      <div
+        className={`group flex items-center gap-1 rounded-xl pr-1 ${
+          isProjectsActive
+            ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/25"
+            : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        }`}
+      >
+        <Link
+          href="/projects"
+          onClick={onNavigate}
+          className="flex-1 flex items-center gap-3 px-3 py-2.5 text-sm font-semibold no-underline rounded-l-xl"
+          data-testid="nav-projects"
+        >
+          <Building2 className={`h-[18px] w-[18px] flex-shrink-0 ${isProjectsActive ? "text-white" : ""}`} />
+          <span className="truncate">Projects</span>
+        </Link>
+        <button
+          type="button"
+          onClick={() => toggle("projects-root")}
+          className={`h-7 w-7 flex items-center justify-center rounded-lg ${
+            isProjectsActive ? "hover:bg-white/15" : "hover:bg-sidebar-accent"
+          }`}
+          aria-expanded={rootOpen}
+          aria-label={rootOpen ? "Collapse projects" : "Expand projects"}
+          data-testid="nav-projects-toggle"
+        >
+          <ChevronRight className={`h-3.5 w-3.5 transition-transform ${rootOpen ? "rotate-90" : ""}`} />
+        </button>
+      </div>
+
+      {rootOpen && (
+        <ul className="mt-1 ml-2 pl-2 border-l border-sidebar-border/60 space-y-0.5">
+          {!projects && (
+            <li className="px-2 py-1.5 text-xs text-muted-foreground italic">Loading…</li>
+          )}
+          {projects && projects.length === 0 && (
+            <li className="px-2 py-1.5 text-xs text-muted-foreground italic">No projects yet</li>
+          )}
+          {grouped.map((g) => {
+            const orgKey = `org:${g.orgId}`;
+            const orgOpen = expanded[orgKey] ?? true;
+            return (
+              <li key={g.orgId}>
+                <button
+                  type="button"
+                  onClick={() => toggle(orgKey)}
+                  className="w-full flex items-center gap-1.5 px-1.5 py-1 rounded-md text-[11px] uppercase tracking-wider font-bold text-muted-foreground/80 hover:text-foreground transition"
+                  data-testid={`nav-org-${g.orgId}`}
+                >
+                  <ChevronRight className={`h-3 w-3 transition-transform ${orgOpen ? "rotate-90" : ""}`} />
+                  <span className="truncate">{g.orgName}</span>
+                  <span className="ml-auto text-[10px] font-bold text-muted-foreground/60">{g.projects.length}</span>
+                </button>
+                {orgOpen && (
+                  <ul className="ml-1.5 pl-2 border-l border-sidebar-border/40 space-y-0.5">
+                    {g.projects.map((p: any) => {
+                      const projKey = `proj:${p.id}`;
+                      const projOpen = expanded[projKey] ?? false;
+                      const isProjActive = activeMatch?.projectId === p.id;
+                      return (
+                        <li key={p.id}>
+                          <div
+                            className={`group flex items-center gap-1 rounded-lg pr-1 ${
+                              isProjActive && !location.includes("tab=")
+                                ? "bg-violet-500/15 text-violet-600 dark:text-violet-300"
+                                : ""
+                            }`}
+                          >
+                            <Link
+                              href={`/projects/${p.id}`}
+                              onClick={onNavigate}
+                              className="flex-1 flex items-center gap-2 px-2 py-1.5 text-[13px] font-medium no-underline rounded-l-lg hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                              title={p.name}
+                              data-testid={`nav-project-${p.id}`}
+                            >
+                              <FolderTree className="h-3.5 w-3.5 flex-shrink-0 opacity-70" />
+                              <span className="truncate">{p.name}</span>
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => toggle(projKey)}
+                              className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-sidebar-accent"
+                              aria-expanded={projOpen}
+                              data-testid={`nav-project-${p.id}-toggle`}
+                            >
+                              <ChevronRight className={`h-3 w-3 transition-transform ${projOpen ? "rotate-90" : ""}`} />
+                            </button>
+                          </div>
+                          {projOpen && (
+                            <ul className="ml-2 pl-2 border-l border-sidebar-border/30 mt-0.5 space-y-0.5">
+                              {PROJECT_TABS.map((tab) => {
+                                const Icon = tab.icon;
+                                const isLeafActive =
+                                  isProjActive && activeTab === tab.value;
+                                return (
+                                  <li key={tab.value}>
+                                    <Link
+                                      href={
+                                        tab.value === "dashboard"
+                                          ? `/projects/${p.id}`
+                                          : `/projects/${p.id}?tab=${tab.value}`
+                                      }
+                                      onClick={onNavigate}
+                                      className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-[12.5px] no-underline transition ${
+                                        isLeafActive
+                                          ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white font-semibold shadow-sm"
+                                          : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                                      }`}
+                                      data-testid={`nav-project-${p.id}-tab-${tab.value}`}
+                                    >
+                                      <Icon className="h-3.5 w-3.5 flex-shrink-0 opacity-90" />
+                                      <span className="truncate">{tab.label}</span>
+                                    </Link>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Compact Projects entry when sidebar is collapsed (icon only, no tree)
+function ProjectsCompact({ location, onNavigate }: { location: string; onNavigate?: () => void }) {
+  const isActive = location === "/projects" || location.startsWith("/projects/");
+  return (
+    <Link
+      href="/projects"
+      onClick={onNavigate}
+      className={`flex items-center justify-center rounded-xl px-0 py-2.5 transition no-underline ${
+        isActive
+          ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/25"
+          : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+      }`}
+      title="Projects"
+      data-testid="nav-projects-compact"
+    >
+      <Building2 className="h-[18px] w-[18px]" />
     </Link>
   );
 }
@@ -161,18 +397,21 @@ function Sidebar({
 }) {
   const [location] = useLocation();
   const { collapsed: collapsedGroups, toggle: toggleGroup } = useCollapsedGroups();
+  const { expanded, toggle: toggleNode, setOpen } = useExpandedNodes();
+  const isCompact = collapsed && !mobile;
+
   return (
     <aside
       className={`
         ${mobile ? "fixed inset-y-0 left-0 z-50 w-72" : "sticky top-0 h-screen"}
-        ${collapsed && !mobile ? "w-[78px]" : "w-72"}
+        ${isCompact ? "w-[78px]" : "w-72"}
         flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-[width] duration-200
       `}
       data-testid="sidebar"
     >
       {/* Header */}
-      <div className={`flex items-center ${collapsed && !mobile ? "justify-center" : "justify-between"} px-4 py-5 border-b border-sidebar-border`}>
-        <Logo collapsed={collapsed && !mobile} t={t} />
+      <div className={`flex items-center ${isCompact ? "justify-center" : "justify-between"} px-4 py-5 border-b border-sidebar-border`}>
+        <Logo collapsed={isCompact} t={t} />
         {mobile && (
           <button onClick={onClose} className="h-8 w-8 rounded-lg hover:bg-sidebar-accent flex items-center justify-center" data-testid="mobile-close">
             <X className="h-4 w-4" />
@@ -183,13 +422,17 @@ function Sidebar({
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-4">
         {groups.map((group) => {
-          const showHeader = !collapsed || mobile;
+          const showHeader = !isCompact;
           const isFolded = showHeader && !!collapsedGroups[group.key];
-          // Any active item inside this group keeps the group expanded visually even if user collapsed it
           const hasActiveItem = group.items.some(
             (i) => location === i.url || (i.url !== "/" && location.startsWith(i.url)),
           );
-          const expanded = !isFolded || hasActiveItem;
+          // Operations group also hosts the Projects tree → treat as having content
+          const showProjectsTree = group.key === "operations";
+          const projectsActiveInGroup =
+            showProjectsTree && (location === "/projects" || location.startsWith("/projects/"));
+          const expandedGroup = !isFolded || hasActiveItem || projectsActiveInGroup;
+
           return (
             <div key={group.key}>
               {showHeader && (
@@ -197,16 +440,16 @@ function Sidebar({
                   type="button"
                   onClick={() => toggleGroup(group.key)}
                   className="w-full flex items-center justify-between px-2 mb-1.5 text-[10px] uppercase tracking-wider font-bold text-muted-foreground/70 hover:text-foreground transition group"
-                  aria-expanded={expanded}
+                  aria-expanded={expandedGroup}
                   data-testid={`nav-group-${group.key}`}
                 >
                   <span>{t(group.labelKey)}</span>
                   <ChevronDown
-                    className={`h-3 w-3 transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`}
+                    className={`h-3 w-3 transition-transform duration-200 ${expandedGroup ? "" : "-rotate-90"}`}
                   />
                 </button>
               )}
-              {expanded && (
+              {expandedGroup && (
                 <ul className="space-y-1">
                   {group.items.map((item) => {
                     const isActive = location === item.url || (item.url !== "/" && location.startsWith(item.url));
@@ -216,22 +459,39 @@ function Sidebar({
                           href={item.url}
                           onClick={onClose}
                           className={`group relative flex items-center gap-3 rounded-xl text-sm font-semibold transition-all no-underline ${
-                            collapsed && !mobile ? "px-0 py-2.5 justify-center" : "px-3 py-2.5"
+                            isCompact ? "px-0 py-2.5 justify-center" : "px-3 py-2.5"
                           } ${
                             isActive
                               ? "bg-gradient-to-r from-violet-500 to-indigo-600 text-white shadow-md shadow-violet-500/25"
                               : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                           }`}
-                          title={collapsed && !mobile ? t(item.titleKey) : undefined}
+                          title={isCompact ? t(item.titleKey) : undefined}
                           data-testid={`nav-${item.titleKey}`}
                         >
                           <item.icon className={`h-[18px] w-[18px] flex-shrink-0 ${isActive ? "text-white" : ""}`} />
-                          {(!collapsed || mobile) && <span className="truncate">{t(item.titleKey)}</span>}
-                          {isActive && (!collapsed || mobile) && <span className="ml-auto h-2 w-2 rounded-full bg-white/70" />}
+                          {!isCompact && <span className="truncate">{t(item.titleKey)}</span>}
+                          {isActive && !isCompact && <span className="ml-auto h-2 w-2 rounded-full bg-white/70" />}
                         </Link>
                       </li>
                     );
                   })}
+
+                  {/* Projects tree slot inside Operations */}
+                  {showProjectsTree && (
+                    <li>
+                      {isCompact ? (
+                        <ProjectsCompact location={location} onNavigate={onClose} />
+                      ) : (
+                        <ProjectsTree
+                          location={location}
+                          onNavigate={onClose}
+                          expanded={expanded}
+                          toggle={toggleNode}
+                          setOpen={setOpen}
+                        />
+                      )}
+                    </li>
+                  )}
                 </ul>
               )}
             </div>
@@ -240,7 +500,7 @@ function Sidebar({
       </nav>
 
       {/* Footer card */}
-      {(!collapsed || mobile) && (
+      {!isCompact && (
         <div className="m-3 p-4 rounded-2xl bg-gradient-to-br from-violet-500 via-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-500/30">
           <div className="flex items-center gap-2 text-xs font-bold mb-1">
             <ShieldCheck className="h-4 w-4" /> Pro Tip
@@ -274,7 +534,6 @@ function TopHeader({
   return (
     <header className="sticky top-0 z-30 backdrop-blur-xl bg-background/70 border-b border-border/60">
       <div className="flex items-center gap-3 px-4 md:px-6 py-3">
-        {/* Sidebar toggles */}
         <button
           onClick={onOpenMobile}
           className="md:hidden h-9 w-9 rounded-xl bg-muted hover:bg-muted/70 flex items-center justify-center"
@@ -291,7 +550,6 @@ function TopHeader({
           <ChevronsLeft className={`h-4 w-4 transition-transform ${collapsed ? "rotate-180" : ""}`} />
         </button>
 
-        {/* Search */}
         <div className="flex-1 max-w-xl relative">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <input
@@ -302,7 +560,6 @@ function TopHeader({
           />
         </div>
 
-        {/* Right cluster */}
         <div className="flex items-center gap-2">
           <LangSwitcher compact />
           <button
@@ -321,7 +578,6 @@ function TopHeader({
             <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-rose-500 border border-background" />
           </button>
 
-          {/* Profile chip */}
           {profile && (
             <div className="hidden sm:flex items-center gap-2.5 pl-2 pr-3 py-1 rounded-full bg-muted/60 hover:bg-muted transition" data-testid="user-chip">
               <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 text-white flex items-center justify-center text-xs font-extrabold ring-2 ring-background">
@@ -353,7 +609,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
   const { data: profile } = useGetMyProfile();
   const { t } = useT();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("mc.sidebar.collapsed") === "1";
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem("mc.sidebar.collapsed", collapsed ? "1" : "0"); } catch {}
+  }, [collapsed]);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const groups = getNavGroups(profile?.role);
@@ -361,7 +623,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen w-full bg-background text-foreground relative overflow-x-hidden">
-      {/* Decorative gradient overlay */}
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute -top-32 -left-32 h-[420px] w-[420px] rounded-full bg-violet-300/20 blur-3xl" />
         <div className="absolute top-1/3 -right-32 h-[420px] w-[420px] rounded-full bg-indigo-300/20 blur-3xl" />
@@ -369,12 +630,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="flex">
-        {/* Desktop sidebar */}
         <div className="hidden md:block">
           <Sidebar groups={groups} collapsed={collapsed} t={t} />
         </div>
 
-        {/* Mobile sidebar + scrim */}
         {mobileOpen && (
           <>
             <div className="fixed inset-0 bg-black/40 z-40 md:hidden" onClick={() => setMobileOpen(false)} />
@@ -382,7 +641,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </>
         )}
 
-        {/* Main column */}
         <div className="flex-1 min-w-0 flex flex-col">
           <TopHeader
             onToggleSidebar={() => setCollapsed((c) => !c)}

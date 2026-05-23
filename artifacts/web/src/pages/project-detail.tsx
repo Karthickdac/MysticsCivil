@@ -5,7 +5,8 @@ import {
   useUpdateProject,
   getGetProjectQueryKey,
 } from "@workspace/api-client-react";
-import { useParams, Link, useSearch } from "wouter";
+import { useParams, Link, useSearch, useLocation } from "wouter";
+import { VALID_PROJECT_TABS as VPT } from "@/lib/project-tabs";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -295,7 +296,7 @@ function ProjectLocationPanel({
   );
 }
 
-const VALID_PROJECT_TABS = ["dashboard","wbs","milestones","estimation","variation-orders","boq-actual","dprs","photos","documents","issues","financial","supply-chain","workforce"] as const;
+const VALID_PROJECT_TABS = VPT;
 
 function ProjectTabs({ id, project, health, nextMilestone, statusColors, chartStatusColors, activityData, miniGantt, ganttBounds, recentPhotos, pendingActions, cost }: {
   id: string;
@@ -312,30 +313,22 @@ function ProjectTabs({ id, project, health, nextMilestone, statusColors, chartSt
   cost: any;
 }) {
   const search = useSearch();
+  const [, setLocation] = useLocation();
   const readTab = () => {
     const t = new URLSearchParams(search).get("tab");
     return t && (VALID_PROJECT_TABS as readonly string[]).includes(t) ? t : "dashboard";
   };
   const [tab, setTab] = useState<string>(readTab());
   useEffect(() => { setTab(readTab()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [search]);
+  const onTabChange = (v: string) => {
+    setTab(v);
+    const params = new URLSearchParams(search);
+    if (v === "dashboard") params.delete("tab"); else params.set("tab", v);
+    const qs = params.toString();
+    setLocation(`/projects/${id}${qs ? `?${qs}` : ""}`);
+  };
   return (
-      <Tabs value={tab} onValueChange={setTab} className="space-y-6">
-        <TabsList className="bg-background border h-auto p-1 overflow-x-auto flex-nowrap w-full justify-start">
-          <TabsTrigger value="dashboard" className="flex items-center gap-2"><LayoutDashboard className="h-4 w-4" /> Dashboard</TabsTrigger>
-          <TabsTrigger value="wbs" className="flex items-center gap-2"><ListTodo className="h-4 w-4" /> WBS</TabsTrigger>
-          <TabsTrigger value="milestones" className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Milestones</TabsTrigger>
-          <TabsTrigger value="estimation" className="flex items-center gap-2"><Calculator className="h-4 w-4" /> Estimation</TabsTrigger>
-          <TabsTrigger value="variation-orders" className="flex items-center gap-2"><GitBranch className="h-4 w-4" /> VOs</TabsTrigger>
-          <TabsTrigger value="boq-actual" className="flex items-center gap-2"><TrendingUp className="h-4 w-4" /> BOQ vs Actual</TabsTrigger>
-          <TabsTrigger value="dprs" className="flex items-center gap-2"><FileText className="h-4 w-4" /> DPRs</TabsTrigger>
-          <TabsTrigger value="photos" className="flex items-center gap-2"><Camera className="h-4 w-4" /> Photos</TabsTrigger>
-          <TabsTrigger value="documents" className="flex items-center gap-2"><FolderOpen className="h-4 w-4" /> Documents</TabsTrigger>
-          <TabsTrigger value="issues" className="flex items-center gap-2"><AlertCircle className="h-4 w-4" /> Issues</TabsTrigger>
-          <TabsTrigger value="financial" className="flex items-center gap-2"><Banknote className="h-4 w-4" /> Financial</TabsTrigger>
-          <TabsTrigger value="supply-chain" className="flex items-center gap-2"><ShoppingCart className="h-4 w-4" /> Supply Chain</TabsTrigger>
-          <TabsTrigger value="workforce" className="flex items-center gap-2"><HardHat className="h-4 w-4" /> Workforce & EHS</TabsTrigger>
-        </TabsList>
-
+      <Tabs value={tab} onValueChange={onTabChange} className="space-y-6">
         <TabsContent value="dashboard" className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {/* Panel 1: Health Ring */}
