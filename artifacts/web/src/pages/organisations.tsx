@@ -171,7 +171,7 @@ export default function Organisations() {
                   {form.logoUrl ? (
                     <div className="mt-2 flex items-center gap-3">
                       <div className="relative inline-block rounded-lg overflow-hidden border bg-muted">
-                        <img src={form.logoUrl} alt="Logo preview" className="h-20 w-20 object-cover" data-testid="org-logo-preview" />
+                        <img src={form.logoUrl} alt="Logo preview" className="h-20 w-20 object-contain bg-muted" data-testid="org-logo-preview" />
                         <button
                           type="button"
                           onClick={() => { setForm({ ...form, logoUrl: "" }); setLogoError(null); }}
@@ -268,7 +268,7 @@ export default function Organisations() {
                       </td>
                       <td className="py-3 pr-3">
                         {o.logoUrl ? (
-                          <img src={o.logoUrl} alt="" className="h-8 w-8 rounded object-cover border" />
+                          <img src={o.logoUrl} alt="" className="h-8 w-8 rounded object-contain bg-muted border" />
                         ) : (
                           <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center text-primary">
                             <Building className="h-4 w-4" />
