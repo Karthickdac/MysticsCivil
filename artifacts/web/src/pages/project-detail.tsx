@@ -112,14 +112,6 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      <ProjectLocationPanel
-        projectId={id}
-        latitude={project.latitude}
-        longitude={project.longitude}
-        location={project.location}
-      />
-
-
       <ProjectTabs
         id={id}
         project={project}
@@ -329,6 +321,15 @@ function ProjectTabs({ id, project, health, nextMilestone, statusColors, chartSt
   };
   return (
       <Tabs value={tab} onValueChange={onTabChange} className="space-y-6">
+        <TabsContent value="site-location" className="space-y-6">
+          <ProjectLocationPanel
+            projectId={id}
+            latitude={project.latitude}
+            longitude={project.longitude}
+            location={project.location}
+          />
+        </TabsContent>
+
         <TabsContent value="dashboard" className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {/* Panel 1: Health Ring */}

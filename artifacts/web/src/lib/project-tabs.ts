@@ -12,6 +12,7 @@ import {
   Banknote,
   ShoppingCart,
   HardHat,
+  MapPin,
   type LucideIcon,
 } from "lucide-react";
 
@@ -23,6 +24,7 @@ export type ProjectTab = {
 
 export const PROJECT_TABS: ProjectTab[] = [
   { value: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { value: "site-location", label: "Site Location", icon: MapPin },
   { value: "wbs", label: "WBS", icon: ListTodo },
   { value: "milestones", label: "Milestones", icon: Calendar },
   { value: "estimation", label: "Estimation", icon: Calculator },
