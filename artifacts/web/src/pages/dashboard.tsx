@@ -238,7 +238,40 @@ export default function Dashboard() {
   const billsAction = (kpi.atRisk + kpi.delayed) * 4;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
+      {/* ── Page header ─────────────────────────────────────────────────── */}
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1">
+          <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-violet-600 dark:text-violet-400">
+            Operations cockpit
+          </p>
+          <h1 className="text-3xl md:text-[34px] font-extrabold tracking-tight text-foreground leading-tight">
+            Portfolio dashboard
+          </h1>
+          <p className="text-sm text-muted-foreground font-medium max-w-2xl">
+            Live snapshot across every project — health, DPRs, bills, safety and approvals in one view.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={refreshAll}
+            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-muted hover:bg-muted/70 text-foreground text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-violet-300"
+            data-testid="dashboard-refresh-all"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetchingPortfolio || isFetchingFeed || isFetchingSafety ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+          <Link
+            href="/projects/new"
+            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-gradient-to-r from-violet-500 to-indigo-600 text-white text-xs font-semibold shadow-md shadow-violet-500/30 hover:shadow-lg hover:shadow-violet-500/40 transition focus:outline-none focus:ring-2 focus:ring-violet-300"
+            data-testid="dashboard-new-project"
+          >
+            <Plus className="h-3.5 w-3.5" /> New project
+          </Link>
+        </div>
+      </header>
+
       {/* ── Row 1: Health · Trends · Bills ──────────────────────────────── */}
       <div className="grid gap-5 lg:grid-cols-3">
         {/* ▸ Project Health (Requests-style) */}

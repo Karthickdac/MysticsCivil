@@ -550,15 +550,18 @@ function TopHeader({
           <ChevronsLeft className={`h-4 w-4 transition-transform ${collapsed ? "rotate-180" : ""}`} />
         </button>
 
-        <div className="flex-1 max-w-xl relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <form role="search" className="flex-1 max-w-xl relative" onSubmit={(e) => e.preventDefault()}>
+          <label htmlFor="header-search" className="sr-only">Search projects, DPRs and RA bills</label>
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-foreground/60 pointer-events-none" />
           <input
+            id="header-search"
             type="search"
             placeholder="Search projects, DPRs, RA bills…"
-            className="w-full h-10 rounded-full bg-muted/60 border border-transparent focus:border-primary focus:bg-card focus:outline-none focus:ring-4 focus:ring-primary/15 pl-10 pr-4 text-sm font-medium placeholder:text-muted-foreground transition"
+            aria-label="Search projects, DPRs and RA bills"
+            className="w-full h-10 rounded-full bg-muted border border-transparent focus:border-primary focus:bg-card focus:outline-none focus:ring-4 focus:ring-primary/15 pl-11 pr-4 text-[14px] font-medium text-foreground placeholder:text-foreground/50 placeholder:font-medium transition"
             data-testid="header-search"
           />
-        </div>
+        </form>
 
         <div className="flex items-center gap-2">
           <LangSwitcher compact />
@@ -579,13 +582,13 @@ function TopHeader({
           </button>
 
           {profile && (
-            <div className="hidden sm:flex items-center gap-2.5 pl-2 pr-3 py-1 rounded-full bg-muted/60 hover:bg-muted transition" data-testid="user-chip">
-              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 text-white flex items-center justify-center text-xs font-extrabold ring-2 ring-background">
+            <div className="hidden sm:flex items-center gap-2.5 pl-1.5 pr-3.5 py-1 rounded-full bg-muted hover:bg-muted/80 transition" data-testid="user-chip">
+              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 text-white flex items-center justify-center text-[13px] font-extrabold ring-2 ring-background">
                 {initials}
               </div>
               <div className="flex flex-col leading-tight">
-                <span className="text-xs font-extrabold">{profile.firstName} {profile.lastName}</span>
-                <span className="text-[10px] text-muted-foreground capitalize">{profile.role}</span>
+                <span className="text-[13px] font-bold text-foreground">{profile.firstName} {profile.lastName}</span>
+                <span className="text-[11px] text-muted-foreground capitalize font-semibold">{profile.role}</span>
               </div>
             </div>
           )}
