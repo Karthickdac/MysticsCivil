@@ -154,7 +154,7 @@ export default function Organisations() {
               <DialogHeader>
                 <DialogTitle>{editingId ? "Edit Organisation" : "New Organisation"}</DialogTitle>
               </DialogHeader>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="col-span-2"><Label>Name *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="org-input-name" /></div>
                 <div className="col-span-2"><Label>Legal Name</Label><Input value={form.legalName} onChange={(e) => setForm({ ...form, legalName: e.target.value })} /></div>
                 <div><Label>GSTIN</Label><Input value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} /></div>

@@ -92,7 +92,7 @@ export function DprsTab({ projectId }: { projectId: string }) {
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>New Daily Progress Report</DialogTitle></DialogHeader>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><Label>Report Date</Label><Input type="date" value={form.reportDate} onChange={(e) => setForm({ ...form, reportDate: e.target.value })} /></div>
               <div><Label>Weather</Label><Input value={form.weather} onChange={(e) => setForm({ ...form, weather: e.target.value })} /></div>
               <div><Label>Temperature (°C)</Label><Input type="number" value={form.temperature} onChange={(e) => setForm({ ...form, temperature: parseFloat(e.target.value) || 0 })} /></div>

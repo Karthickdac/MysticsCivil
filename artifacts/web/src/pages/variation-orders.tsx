@@ -62,7 +62,7 @@ function NewVoDialog({ projectId }: { projectId: string }) {
           <div><label className="text-xs font-medium">Title</label><Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Brief VO title" /></div>
           <div><label className="text-xs font-medium">Description</label><Textarea rows={3} className="resize-none" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Describe the change" /></div>
           <div><label className="text-xs font-medium">Scope Change</label><Textarea rows={2} className="resize-none" value={form.scopeChange} onChange={e => setForm(f => ({ ...f, scopeChange: e.target.value }))} placeholder="Specific items added / removed / modified" /></div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className="text-xs font-medium">Cost Impact (₹)</label><Input type="number" value={form.costImpact} onChange={e => setForm(f => ({ ...f, costImpact: e.target.value }))} /></div>
             <div><label className="text-xs font-medium">Programme Impact (days)</label><Input type="number" value={form.programmeImpactDays} onChange={e => setForm(f => ({ ...f, programmeImpactDays: e.target.value }))} /></div>
           </div>

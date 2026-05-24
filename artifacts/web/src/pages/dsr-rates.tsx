@@ -105,7 +105,7 @@ function NewRateDialog() {
       <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Add Rate</Button></DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>Add DSR/SSR Rate</DialogTitle></DialogHeader>
-        <div className="grid grid-cols-2 gap-3 mt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
           <div><label className="text-xs font-medium">Code</label><Input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="e.g. DSR-5.1.2" /></div>
           <div>
             <label className="text-xs font-medium">Trade</label>
@@ -310,7 +310,7 @@ function SourceDialog({ trigger, existing, onClose }: { trigger: React.ReactNode
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>{existing ? "Edit Source" : "Add Auto-sync Source"}</DialogTitle></DialogHeader>
-        <div className="grid grid-cols-2 gap-3 mt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
           <div className="col-span-2">
             <label className="text-xs font-medium">Label</label>
             <Input value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} placeholder="e.g. CPWD DSR 2024 Delhi" />
@@ -480,7 +480,7 @@ function EscalationDialog() {
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>Apply Annual Escalation</DialogTitle></DialogHeader>
-        <div className="grid grid-cols-2 gap-3 mt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
           <div className="col-span-2">
             <label className="text-xs font-medium">Escalation %</label>
             <Input type="number" step="0.01" value={form.pct} onChange={e => setForm(f => ({ ...f, pct: e.target.value }))} placeholder="e.g. 5" />

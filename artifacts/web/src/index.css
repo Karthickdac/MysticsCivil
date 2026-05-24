@@ -193,7 +193,26 @@
     @apply border-border;
   }
 
+  html,
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    overflow-x: hidden;
+  }
+
+  /* Prevent long titles / paragraphs from forcing horizontal page scroll on mobile.
+     Scoped to prose containers only — KPI numbers, IDs, currency, and table cells
+     keep their atoms together. */
+  h1, h2, h3, h4, h5, h6, p, li {
+    overflow-wrap: anywhere;
+  }
+}
+
+@layer utilities {
+  /* Polished tap-feedback for buttons/cards on touch devices */
+  @media (hover: none) {
+    .tap-press:active {
+      transform: scale(0.98);
+      transition: transform 80ms ease-out;
+    }
   }
 }

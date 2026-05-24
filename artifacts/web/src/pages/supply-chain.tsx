@@ -117,7 +117,7 @@ function VendorsTab({ projectId }: { projectId: string }) {
             <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Vendor</Button></DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader><DialogTitle>New Vendor</DialogTitle></DialogHeader>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[["name","Name *"],["code","Code"],["contactPerson","Contact Person"],["email","Email"],["phone","Phone"],["city","City"],["state","State"],["gstNumber","GST Number"],["pan","PAN"]].map(([k, l]) => (
                   <div key={k} className={k === "name" ? "col-span-2" : ""}>
                     <Label className="text-xs">{l}</Label>
@@ -256,7 +256,7 @@ function InventoryTab({ projectId }: { projectId: string }) {
               <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" /> Add Item</Button></DialogTrigger>
               <DialogContent className="max-w-lg">
                 <DialogHeader><DialogTitle>New Inventory Item</DialogTitle></DialogHeader>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="col-span-2"><Label className="text-xs">Item Name *</Label><Input className="mt-1" value={form.itemName} onChange={e => setForm(f => ({ ...f, itemName: e.target.value }))} /></div>
                   <div><Label className="text-xs">Item Code</Label><Input className="mt-1" value={form.itemCode} onChange={e => setForm(f => ({ ...f, itemCode: e.target.value }))} /></div>
                   <div><Label className="text-xs">Category</Label><Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{categories.map(c => <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>)}</SelectContent></Select></div>
@@ -552,7 +552,7 @@ function PurchaseOrdersTab({ projectId }: { projectId: string }) {
             <DialogContent className="max-w-lg">
               <DialogHeader><DialogTitle>Create Purchase Order</DialogTitle></DialogHeader>
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div><Label className="text-xs">PO Number *</Label><Input className="mt-1" value={form.poNumber} onChange={e => setForm(f => ({ ...f, poNumber: e.target.value }))} placeholder="PO-2025-XXX" /></div>
                   <div><Label className="text-xs">Vendor *</Label><Select value={form.vendorId} onValueChange={v => setForm(f => ({ ...f, vendorId: v }))}><SelectTrigger className="mt-1"><SelectValue placeholder="Select vendor" /></SelectTrigger><SelectContent>{vendors.filter(v => v.status === "active").map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent></Select></div>
                   <div><Label className="text-xs">Delivery Location</Label><Input className="mt-1" value={form.deliveryLocation} onChange={e => setForm(f => ({ ...f, deliveryLocation: e.target.value }))} /></div>
@@ -724,7 +724,7 @@ function GrnTab({ projectId }: { projectId: string }) {
             <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" /> New GRN</Button></DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader><DialogTitle>Create GRN</DialogTitle></DialogHeader>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><Label className="text-xs">GRN Number *</Label><Input className="mt-1" value={form.grnNumber} onChange={e => setForm(f => ({ ...f, grnNumber: e.target.value }))} placeholder="GRN-2025-XXX" /></div>
                 <div><Label className="text-xs">Vendor</Label><Select value={form.vendorId} onValueChange={v => setForm(f => ({ ...f, vendorId: v }))}><SelectTrigger className="mt-1"><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{vendors.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent></Select></div>
                 <div><Label className="text-xs">Against PO</Label><Select value={form.poId} onValueChange={v => setForm(f => ({ ...f, poId: v }))}><SelectTrigger className="mt-1"><SelectValue placeholder="Select PO" /></SelectTrigger><SelectContent>{pos.map(p => <SelectItem key={p.id} value={p.id}>{p.poNumber}</SelectItem>)}</SelectContent></Select></div>
@@ -886,7 +886,7 @@ function QcTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <Card><CardContent className="pt-4 text-center"><CheckCircle2 className="h-5 w-5 text-emerald-500 mx-auto mb-1" /><p className="text-xl font-bold text-emerald-600">{passCount}</p><p className="text-xs text-muted-foreground">Pass</p></CardContent></Card>
         <Card><CardContent className="pt-4 text-center"><XCircle className="h-5 w-5 text-red-500 mx-auto mb-1" /><p className="text-xl font-bold text-red-600">{failCount}</p><p className="text-xs text-muted-foreground">Fail</p></CardContent></Card>
         <Card><CardContent className="pt-4 text-center"><Clock className="h-5 w-5 text-amber-500 mx-auto mb-1" /><p className="text-xl font-bold text-amber-600">{pendingCount}</p><p className="text-xs text-muted-foreground">Pending</p></CardContent></Card>
@@ -899,7 +899,7 @@ function QcTab({ projectId }: { projectId: string }) {
             <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" /> New Test</Button></DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader><DialogTitle>Log Material Test</DialogTitle></DialogHeader>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><Label className="text-xs">Test Type</Label><Select value={form.testType} onValueChange={v => setForm(f => ({ ...f, testType: v }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{["cube_strength","tensile","sieve_analysis","proctor","dimension_check","other"].map(t => <SelectItem key={t} value={t} className="capitalize">{t.replace(/_/g, " ")}</SelectItem>)}</SelectContent></Select></div>
                 <div><Label className="text-xs">IS Code</Label><Input className="mt-1" value={form.isCode} onChange={e => setForm(f => ({ ...f, isCode: e.target.value }))} placeholder="IS:456" /></div>
                 <div className="col-span-2"><Label className="text-xs">Material</Label><Select value={form.inventoryItemId} onValueChange={v => setForm(f => ({ ...f, inventoryItemId: v }))}><SelectTrigger className="mt-1"><SelectValue placeholder="Select material" /></SelectTrigger><SelectContent>{items.map(i => <SelectItem key={i.id} value={i.id}>{i.itemName}</SelectItem>)}</SelectContent></Select></div>
@@ -1120,7 +1120,7 @@ function IssuesWastageTab({ projectId }: { projectId: string }) {
 
       {activeSection === "wastage" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <Card><CardContent className="pt-4"><p className="text-sm text-muted-foreground">Total Entries</p><p className="text-2xl font-bold">{wastage.length}</p></CardContent></Card>
             <Card><CardContent className="pt-4"><p className="text-sm text-muted-foreground">Total Value</p><p className="text-2xl font-bold text-red-600">{fmtL(totalWastageValue)}</p></CardContent></Card>
             <Card><CardContent className="pt-4"><p className="text-sm text-muted-foreground">Above Norm</p><p className="text-2xl font-bold text-amber-600">{aboveNormCount}</p></CardContent></Card>
@@ -1247,7 +1247,7 @@ function RfqTab({ projectId }: { projectId: string }) {
             <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" /> New RFQ</Button></DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader><DialogTitle>Create RFQ</DialogTitle></DialogHeader>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><Label className="text-xs">RFQ Number *</Label><Input className="mt-1" value={form.rfqNumber} onChange={e => setForm(f => ({ ...f, rfqNumber: e.target.value }))} placeholder="RFQ-2025-XXX" /></div>
                 <div><Label className="text-xs">Submission Deadline</Label><Input className="mt-1" type="date" value={form.submissionDeadline} onChange={e => setForm(f => ({ ...f, submissionDeadline: e.target.value }))} /></div>
                 <div><Label className="text-xs">Delivery Deadline</Label><Input className="mt-1" type="date" value={form.deliveryDeadline} onChange={e => setForm(f => ({ ...f, deliveryDeadline: e.target.value }))} /></div>

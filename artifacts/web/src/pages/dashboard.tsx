@@ -38,7 +38,7 @@ type RangeValue = (typeof RANGE_OPTIONS)[number]["value"];
 // ─── Reusable card shell ─────────────────────────────────────────────────────
 function PanelCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-card text-card-foreground rounded-3xl border border-border/70 shadow-[0_2px_16px_-4px_rgba(76,29,149,0.08)] p-5 ${className}`}>
+    <div className={`bg-card text-card-foreground rounded-3xl border border-border/70 shadow-[0_2px_16px_-4px_rgba(76,29,149,0.08)] p-4 sm:p-5 min-w-0 overflow-hidden ${className}`}>
       {children}
     </div>
   );
@@ -416,18 +416,18 @@ export default function Dashboard() {
               { label: "Pending", count: kpi.pendingApprovals, value: kpi.pendingApprovals },
               { label: "CPI", count: null, value: kpi.weightedCpi.toFixed(2) },
             ].map((t) => (
-              <div key={t.label} className={`rounded-2xl px-3 py-2.5 border ${t.highlight ? "bg-violet-50 border-violet-200" : "border-border/60"}`}>
-                <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold">
+              <div key={t.label} className={`min-w-0 rounded-2xl px-2.5 py-2 sm:px-3 sm:py-2.5 border ${t.highlight ? "bg-violet-50 border-violet-200" : "border-border/60"}`}>
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold truncate">
                   {t.label} {t.count !== null && <span className="text-muted-foreground/60">({t.count})</span>}
                 </div>
-                <div className="text-lg font-extrabold tabular-nums">{t.value}</div>
+                <div className="text-base sm:text-lg font-extrabold tabular-nums truncate">{t.value}</div>
               </div>
             ))}
           </div>
 
           {/* Activity table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto -mx-4 sm:-mx-5 px-4 sm:px-5">
+            <table className="w-full min-w-[520px] text-sm">
               <thead className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-bold">
                 <tr>
                   <th className="text-left py-2">Project</th>
@@ -526,25 +526,25 @@ export default function Dashboard() {
               </>
             }
           />
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-bold inline-flex items-center gap-2"><Wallet className="h-4 w-4 text-violet-600" /> Project Portfolio</h4>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h4 className="text-sm font-bold inline-flex items-center gap-2 min-w-0"><Wallet className="h-4 w-4 text-violet-600 flex-shrink-0" /> <span className="truncate">Project Portfolio</span></h4>
             <RangePill value={cashRange} onChange={setCashRange} options={CASH_OPTIONS} testId="range-cash" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-violet-50 rounded-2xl p-3">
-              <div className="flex items-center gap-2">
-                <div className="h-9 w-9 rounded-full bg-violet-500 text-white flex items-center justify-center"><Building2 className="h-4 w-4" /></div>
-                <div className="text-[10px] text-muted-foreground font-semibold leading-tight">Receivable<br/>from clients</div>
+            <div className="bg-violet-50 rounded-2xl p-3 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="h-9 w-9 rounded-full bg-violet-500 text-white flex items-center justify-center flex-shrink-0"><Building2 className="h-4 w-4" /></div>
+                <div className="text-[10px] text-muted-foreground font-semibold leading-tight min-w-0">Receivable<br/>from clients</div>
               </div>
-              <div className="text-lg font-extrabold mt-2 tabular-nums">{formatINR(kpi.totalContractValue - kpi.totalCostToDate)}</div>
+              <div className="text-lg font-extrabold mt-2 tabular-nums truncate">{formatINR(kpi.totalContractValue - kpi.totalCostToDate)}</div>
             </div>
-            <div className="bg-orange-50 rounded-2xl p-3">
-              <div className="flex items-center gap-2">
-                <div className="h-9 w-9 rounded-full bg-orange-500 text-white flex items-center justify-center"><Banknote className="h-4 w-4" /></div>
-                <div className="text-[10px] text-muted-foreground font-semibold leading-tight">Spent<br/>to date</div>
+            <div className="bg-orange-50 rounded-2xl p-3 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="h-9 w-9 rounded-full bg-orange-500 text-white flex items-center justify-center flex-shrink-0"><Banknote className="h-4 w-4" /></div>
+                <div className="text-[10px] text-muted-foreground font-semibold leading-tight min-w-0">Spent<br/>to date</div>
               </div>
-              <div className="text-lg font-extrabold mt-2 tabular-nums">{formatINR(kpi.totalCostToDate)}</div>
+              <div className="text-lg font-extrabold mt-2 tabular-nums truncate">{formatINR(kpi.totalCostToDate)}</div>
             </div>
           </div>
 
@@ -592,8 +592,8 @@ export default function Dashboard() {
         {projects.length === 0 ? (
           <div className="py-10 text-center text-sm text-muted-foreground">No projects yet.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto -mx-4 sm:-mx-5 px-4 sm:px-5">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-bold">
                 <tr>
                   <th className="text-left py-2">Project</th>

@@ -126,7 +126,7 @@ function WorkersTab({ projectId }: { projectId: string }) {
           <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" />Register Worker</Button></DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader><DialogTitle>Register Worker</DialogTitle></DialogHeader>
-            <div className="grid grid-cols-2 gap-3 py-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
               {[["name","Full Name"],["aadhaarNumber","Aadhaar"],["phone","Phone"],["email","Email (for wage slip delivery)"]].map(([k, lbl]) => (
                 <div key={k} className="col-span-2 space-y-1"><Label>{lbl}</Label><Input type={k==="email"?"email":"text"} value={form[k]??""} onChange={e=>f(k,e.target.value)} /></div>
               ))}
@@ -211,7 +211,7 @@ function AttendanceTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold">{records.length}</div><div className="text-sm text-muted-foreground">Total Records (2 weeks)</div></CardContent></Card>
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-blue-600">{todayRecords.length}</div><div className="text-sm text-muted-foreground">Today Present</div></CardContent></Card>
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-orange-600">{Math.round(totalOt * 10) / 10}h</div><div className="text-sm text-muted-foreground">Total OT (period)</div></CardContent></Card>
@@ -253,7 +253,7 @@ function AttendanceTab({ projectId }: { projectId: string }) {
                 </Select>
               </div>
               <div className="space-y-1"><Label>Date</Label><Input type="date" value={form.attendanceDate??""} onChange={e=>f("attendanceDate",e.target.value)} /></div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1"><Label>Mark In</Label><Input type="time" value={form.markInTime??""} onChange={e=>f("markInTime",e.target.value)} /></div>
                 <div className="space-y-1"><Label>Mark Out</Label><Input type="time" value={form.markOutTime??""} onChange={e=>f("markOutTime",e.target.value)} /></div>
               </div>
@@ -349,7 +349,7 @@ function PayrollTab({ projectId }: { projectId: string }) {
                   <SelectContent><SelectItem value="weekly">Weekly</SelectItem><SelectItem value="fortnightly">Fortnightly</SelectItem><SelectItem value="monthly">Monthly</SelectItem></SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1"><Label>From Date</Label><Input type="date" value={form.fromDate??""} onChange={e=>f("fromDate",e.target.value)} /></div>
                 <div className="space-y-1"><Label>To Date</Label><Input type="date" value={form.toDate??""} onChange={e=>f("toDate",e.target.value)} /></div>
               </div>
@@ -536,7 +536,7 @@ function InspectionsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold">{irs.length}</div><div className="text-sm text-muted-foreground">Total IRs</div></CardContent></Card>
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-yellow-600">{pending}</div><div className="text-sm text-muted-foreground">Pending</div></CardContent></Card>
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-green-600">{passed}</div><div className="text-sm text-muted-foreground">Passed</div></CardContent></Card>
@@ -567,7 +567,7 @@ function InspectionsTab({ projectId }: { projectId: string }) {
                 <SelectContent><SelectItem value="passed">Passed</SelectItem><SelectItem value="failed">Failed / NCR Required</SelectItem><SelectItem value="conditional">Conditional Accept</SelectItem></SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1"><Label>Checklist Items ✓ Passed</Label><Input type="number" min={0} value={recordForm.checklistPassed??""} onChange={e=>rf("checklistPassed",e.target.value)} placeholder="e.g. 12" /></div>
               <div className="space-y-1"><Label>Checklist Items ✗ Failed</Label><Input type="number" min={0} value={recordForm.checklistFailed??""} onChange={e=>rf("checklistFailed",e.target.value)} placeholder="e.g. 2" /></div>
             </div>
@@ -657,7 +657,7 @@ function NcrTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold">{ncrs.length}</div><div className="text-sm text-muted-foreground">Total NCRs</div></CardContent></Card>
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-red-600">{open_}</div><div className="text-sm text-muted-foreground">Open</div></CardContent></Card>
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-orange-600">{critical}</div><div className="text-sm text-muted-foreground">Critical</div></CardContent></Card>
@@ -729,7 +729,7 @@ function NcrTab({ projectId }: { projectId: string }) {
                             </Select>
                           </div>
                           <div className="space-y-1"><Label>Description</Label><Textarea value={capa.description??""} onChange={e=>cf("description",e.target.value)} rows={3} placeholder="e.g. Re-bar provided as per BBS; cube test scheduled for 24 May" /></div>
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1"><Label>Responsible</Label><Input value={capa.responsible??""} onChange={e=>cf("responsible",e.target.value)} placeholder="Site engineer" /></div>
                             <div className="space-y-1"><Label>Due Date</Label><Input type="date" value={capa.dueDate??""} onChange={e=>cf("dueDate",e.target.value)} /></div>
                           </div>
@@ -814,7 +814,7 @@ function PermitsTab({ projectId }: { projectId: string }) {
               </div>
               <div className="space-y-1"><Label>Work Description</Label><Textarea value={form.workDescription??""} onChange={e=>f("workDescription",e.target.value)} rows={2} /></div>
               <div className="space-y-1"><Label>Location</Label><Input value={form.location??""} onChange={e=>f("location",e.target.value)} /></div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1"><Label>Start</Label><Input type="datetime-local" value={form.startDateTime??""} onChange={e=>f("startDateTime",e.target.value)} /></div>
                 <div className="space-y-1"><Label>End</Label><Input type="datetime-local" value={form.endDateTime??""} onChange={e=>f("endDateTime",e.target.value)} /></div>
               </div>
@@ -884,7 +884,7 @@ function HiraTab({ projectId }: { projectId: string }) {
             <div className="space-y-3 py-2">
               <div className="space-y-1"><Label>Hazard Description</Label><Textarea value={form.hazardDescription??""} onChange={e=>f("hazardDescription",e.target.value)} rows={2} /></div>
               <div className="space-y-1"><Label>Category</Label><Input value={form.hazardCategory??""} onChange={e=>f("hazardCategory",e.target.value)} placeholder="Physical / Chemical / Electrical…" /></div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[["likelihood","Likelihood (1-5)"],["severity","Severity (1-5)"]].map(([k,lbl])=>(
                   <div key={k} className="space-y-1"><Label>{lbl}</Label>
                     <Select value={String(form[k]??3)} onValueChange={v=>f(k,v)}>
@@ -895,7 +895,7 @@ function HiraTab({ projectId }: { projectId: string }) {
                 ))}
               </div>
               <div className="space-y-1"><Label>Control Measures</Label><Textarea value={form.controlMeasures??""} onChange={e=>f("controlMeasures",e.target.value)} rows={2} /></div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[["residualLikelihood","Residual Likelihood"],["residualSeverity","Residual Severity"]].map(([k,lbl])=>(
                   <div key={k} className="space-y-1"><Label>{lbl}</Label>
                     <Select value={String(form[k]??2)} onValueChange={v=>f(k,v)}>
@@ -961,7 +961,7 @@ function IncidentsTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold">{incidents.length}</div><div className="text-sm text-muted-foreground">Total Incidents</div></CardContent></Card>
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-yellow-600">{(incidents as any[]).filter(i=>i.classification==="near_miss").length}</div><div className="text-sm text-muted-foreground">Near Miss</div></CardContent></Card>
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-red-600">{(incidents as any[]).filter(i=>["lti","fatality"].includes(i.classification)).length}</div><div className="text-sm text-muted-foreground">LTI / Fatality</div></CardContent></Card>
@@ -975,7 +975,7 @@ function IncidentsTab({ projectId }: { projectId: string }) {
             <DialogHeader><DialogTitle>Report Incident</DialogTitle></DialogHeader>
             <div className="space-y-3 py-2">
               <div className="space-y-1"><Label>Title</Label><Input value={form.title??""} onChange={e=>f("title",e.target.value)} /></div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1"><Label>Date</Label><Input type="date" value={form.incidentDate??""} onChange={e=>f("incidentDate",e.target.value)} /></div>
                 <div className="space-y-1"><Label>Classification</Label>
                   <Select value={form.classification??"near_miss"} onValueChange={v=>f("classification",v)}>
@@ -986,7 +986,7 @@ function IncidentsTab({ projectId }: { projectId: string }) {
               </div>
               <div className="space-y-1"><Label>Location</Label><Input value={form.location??""} onChange={e=>f("location",e.target.value)} /></div>
               <div className="space-y-1"><Label>Description</Label><Textarea value={form.description??""} onChange={e=>f("description",e.target.value)} rows={3} /></div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1"><Label>Injured Persons</Label><Input value={form.injured??""} onChange={e=>f("injured",e.target.value)} /></div>
                 <div className="space-y-1"><Label>Lost Days</Label><Input type="number" min="0" value={form.lostDays??""} onChange={e=>f("lostDays",e.target.value)} /></div>
               </div>
@@ -1316,7 +1316,7 @@ function JsaTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold">{(jsa as any[]).length}</div><div className="text-xs text-muted-foreground">Total JSAs</div></CardContent></Card>
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-amber-600">{draftCount}</div><div className="text-xs text-muted-foreground">Drafts (awaiting approval)</div></CardContent></Card>
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-green-600">{approvedCount}</div><div className="text-xs text-muted-foreground">Approved (work can start)</div></CardContent></Card>
@@ -1342,7 +1342,7 @@ function JsaTab({ projectId }: { projectId: string }) {
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Create Daily JSA</DialogTitle></DialogHeader>
             <div className="space-y-3 py-2">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>Activity (WBS)</Label>
                   <Select value={form.wbsActivityId} onValueChange={v => setForm(p => ({ ...p, wbsActivityId: v }))}>
@@ -1352,7 +1352,7 @@ function JsaTab({ projectId }: { projectId: string }) {
                 </div>
                 <div className="space-y-1"><Label>Activity Title</Label><Input value={form.activity} onChange={e => setForm(p => ({ ...p, activity: e.target.value }))} placeholder="e.g. Tower crane lift — Block A" /></div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1"><Label>JSA Date</Label><Input type="date" value={form.jsaDate} onChange={e => setForm(p => ({ ...p, jsaDate: e.target.value }))} /></div>
                 <div className="space-y-1"><Label>Workers Present</Label><Input type="number" value={form.workersPresent} onChange={e => setForm(p => ({ ...p, workersPresent: e.target.value }))} placeholder="0" /></div>
               </div>
@@ -1500,7 +1500,7 @@ function MaterialTestingTab({ projectId }: { projectId: string }) {
   const failedCount = (tests as any[]).filter(t => t.passed === false).length;
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold">{tests.length}</div><div className="text-sm text-muted-foreground">Total Tests</div></CardContent></Card>
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-green-600">{passedCount}</div><div className="text-sm text-muted-foreground">Passed</div></CardContent></Card>
         <Card><CardContent className="pt-4"><div className="text-2xl font-bold text-red-600">{failedCount}</div><div className="text-sm text-muted-foreground">Failed</div></CardContent></Card>
@@ -1530,11 +1530,11 @@ function MaterialTestingTab({ projectId }: { projectId: string }) {
                   <div className="text-blue-700">Acceptance: {limit.minValue !== undefined && `≥ ${limit.minValue}`}{limit.minValue !== undefined && limit.maxValue !== undefined && " and "}{limit.maxValue !== undefined && `≤ ${limit.maxValue}`} {limit.unit}</div>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1"><Label>Sample Location</Label><Input value={form.sampleLocation??""} onChange={e=>f("sampleLocation",e.target.value)} placeholder="Grid B-2, Level +6m" /></div>
                 <div className="space-y-1"><Label>Lab Name</Label><Input value={form.labName??""} onChange={e=>f("labName",e.target.value)} placeholder="Internal / NABL lab" /></div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1"><Label>Sample Date</Label><Input type="date" value={form.sampleDate??""} onChange={e=>f("sampleDate",e.target.value)} /></div>
                 <div className="space-y-1"><Label>Test Date</Label><Input type="date" value={form.testDate??""} onChange={e=>f("testDate",e.target.value)} /></div>
               </div>
@@ -1676,7 +1676,7 @@ function StatutoryExportsTab({ projectId }: { projectId: string }) {
       </Card>
 
       {summary && (
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <Card><CardContent className="pt-4"><div className="text-xs text-muted-foreground">EPF Total</div><div className="text-xl font-bold">{fmtCur(summary.epfEmployee + summary.epfEmployer)}</div></CardContent></Card>
           <Card><CardContent className="pt-4"><div className="text-xs text-muted-foreground">ESI Total</div><div className="text-xl font-bold">{fmtCur(summary.esiEmployee + summary.esiEmployer)}</div></CardContent></Card>
           <Card><CardContent className="pt-4"><div className="text-xs text-muted-foreground">PT + LWF</div><div className="text-xl font-bold">{fmtCur(summary.pt + summary.lwf)}</div></CardContent></Card>
@@ -1926,7 +1926,7 @@ function ContractorBillTab({ projectId }: { projectId: string }) {
           <DialogContent>
             <DialogHeader><DialogTitle>Submit Contractor Bill</DialogTitle></DialogHeader>
             <div className="space-y-3 py-2">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>Contractor</Label>
                   <Select value={form.contractorId??""} onValueChange={v=>f("contractorId",v)}>
@@ -1958,11 +1958,11 @@ function ContractorBillTab({ projectId }: { projectId: string }) {
                   No contractors found. Add a vendor in <span className="font-medium">Supply Chain → Vendors</span> before submitting a labour bill.
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1"><Label>Period From</Label><Input type="date" value={form.periodFrom??""} onChange={e=>f("periodFrom",e.target.value)} /></div>
                 <div className="space-y-1"><Label>Period To</Label><Input type="date" value={form.periodTo??""} onChange={e=>f("periodTo",e.target.value)} /></div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1"><Label>Claimed Headcount</Label><Input type="number" value={form.claimedHeadcount??""} onChange={e=>f("claimedHeadcount",e.target.value)} /></div>
                 <div className="space-y-1"><Label>Claimed Mandays</Label><Input type="number" step="0.5" value={form.claimedDays??""} onChange={e=>f("claimedDays",e.target.value)} /></div>
               </div>
@@ -1995,7 +1995,7 @@ function ContractorBillTab({ projectId }: { projectId: string }) {
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">{detail.billNumber} — Cross-Verification</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="border rounded p-3">
                     <Label className="text-xs">Contractor Claimed</Label>
                     <div className="text-2xl font-bold mt-1">{fmtCur(detail.claimedAmount)}</div>

@@ -740,7 +740,7 @@ function ProjectSummaryBlock({ summary }: { summary: ProjectSummary }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 pt-2 border-t">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-2 border-t">
               <MiniStat label="Activities done" value={summary.workCompleted.toString()} accent="emerald" />
               <MiniStat label="In progress / pending" value={summary.workPending.toString()} accent="amber" />
               <MiniStat label="Total activities" value={summary.workTotal.toString()} accent="slate" />

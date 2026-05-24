@@ -945,7 +945,7 @@ function L5Panel({ projectId, estimates }: { projectId: string; estimates: Estim
       {showCreate && (
         <Card className="border-primary/30">
           <CardContent className="pt-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium mb-1 block">Sub-contractor Name *</label>
                 <Input className="h-8" placeholder="e.g. M/s Sharma Constructions" value={form.subcontractor} onChange={e => setForm(f => ({ ...f, subcontractor: e.target.value }))} />
@@ -955,7 +955,7 @@ function L5Panel({ projectId, estimates }: { projectId: string; estimates: Estim
                 <Input className="h-8" placeholder="e.g. RCC Works — Superstructure" value={form.workPackage} onChange={e => setForm(f => ({ ...f, workPackage: e.target.value }))} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium mb-1 block">Source L3 Estimate <span className="text-muted-foreground font-normal">(auto-populate BOQ)</span></label>
                 <Select

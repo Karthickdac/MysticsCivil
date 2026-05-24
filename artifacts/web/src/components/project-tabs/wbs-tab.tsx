@@ -84,7 +84,7 @@ export function WbsTab({ projectId }: { projectId: string }) {
             <DialogHeader>
               <DialogTitle>New WBS Activity</DialogTitle>
             </DialogHeader>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="col-span-1">
                 <Label>Code</Label>
                 <Input
