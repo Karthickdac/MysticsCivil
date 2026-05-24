@@ -1,8 +1,9 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, projectsTable, milestonesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { serializeProject } from "../lib/serialize";
+import { getAccessCtx, getAccessibleProjectIds, PROJECT_ACCESS_BYPASS_ROLES } from "../lib/access";
 
 const router: IRouter = Router();
 
@@ -31,8 +32,22 @@ function parseProjectBody(b: any): Record<string, unknown> {
   return out;
 }
 
-router.get("/projects", requireAuth, async (_req, res: Response) => {
-  const rows = await db.select().from(projectsTable);
+router.get("/projects", requireAuth, async (req: Request, res: Response) => {
+  const ctx = await getAccessCtx(req);
+  // admin/owner bypass: see all in org (or all if no org)
+  if (ctx.role && PROJECT_ACCESS_BYPASS_ROLES.has(ctx.role)) {
+    const rows = ctx.organisationId
+      ? await db.select().from(projectsTable).where(eq(projectsTable.organisationId, ctx.organisationId))
+      : await db.select().from(projectsTable);
+    res.json(rows.map(serializeProject));
+    return;
+  }
+  const ids = await getAccessibleProjectIds(ctx);
+  if (!ids.length) {
+    res.json([]);
+    return;
+  }
+  const rows = await db.select().from(projectsTable).where(inArray(projectsTable.id, ids));
   res.json(rows.map(serializeProject));
 });
 

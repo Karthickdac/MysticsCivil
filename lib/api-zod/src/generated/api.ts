@@ -178,6 +178,7 @@ export const ListOrganisationsResponseItem = zod.object({
   "state": zod.string().nullable(),
   "pincode": zod.string().nullable(),
   "logoUrl": zod.string().nullable(),
+  "enabledModules": zod.array(zod.string()).nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListOrganisationsResponse = zod.array(ListOrganisationsResponseItem)
@@ -214,6 +215,7 @@ export const GetOrganisationResponse = zod.object({
   "state": zod.string().nullable(),
   "pincode": zod.string().nullable(),
   "logoUrl": zod.string().nullable(),
+  "enabledModules": zod.array(zod.string()).nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -248,7 +250,101 @@ export const UpdateOrganisationResponse = zod.object({
   "state": zod.string().nullable(),
   "pincode": zod.string().nullable(),
   "logoUrl": zod.string().nullable(),
+  "enabledModules": zod.array(zod.string()).nullish(),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Canonical list of toggleable modules
+ */
+export const ListModulesResponse = zod.object({
+  "modules": zod.array(zod.string())
+})
+
+
+export const UpdateOrganisationModulesParams = zod.object({
+  "organisationId": zod.coerce.string()
+})
+
+export const UpdateOrganisationModulesBody = zod.object({
+  "enabled": zod.array(zod.string()).nullish()
+})
+
+export const UpdateOrganisationModulesResponse = zod.object({
+  "organisationId": zod.string(),
+  "enabledModules": zod.array(zod.string()).nullable()
+})
+
+
+export const ListOrganisationUsersParams = zod.object({
+  "organisationId": zod.coerce.string()
+})
+
+export const ListOrganisationUsersResponseItem = zod.object({
+  "userId": zod.string(),
+  "role": zod.string(),
+  "firstName": zod.string().nullable(),
+  "lastName": zod.string().nullable(),
+  "email": zod.string().nullable()
+})
+export const ListOrganisationUsersResponse = zod.array(ListOrganisationUsersResponseItem)
+
+
+export const UpdateProjectModulesParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const UpdateProjectModulesBody = zod.object({
+  "enabled": zod.array(zod.string()).nullish()
+})
+
+export const UpdateProjectModulesResponse = zod.object({
+  "projectId": zod.string(),
+  "enabledModulesOverride": zod.array(zod.string()).nullable()
+})
+
+
+export const ListProjectAccessParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const ListProjectAccessResponseItem = zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "projectId": zod.string().optional(),
+  "firstName": zod.string().nullable(),
+  "lastName": zod.string().nullable(),
+  "email": zod.string().nullable(),
+  "role": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const ListProjectAccessResponse = zod.array(ListProjectAccessResponseItem)
+
+
+export const GrantProjectAccessParams = zod.object({
+  "projectId": zod.coerce.string()
+})
+
+export const GrantProjectAccessBody = zod.object({
+  "userId": zod.string()
+})
+
+export const GrantProjectAccessResponse = zod.object({
+  "id": zod.string(),
+  "userId": zod.string(),
+  "projectId": zod.string().optional(),
+  "firstName": zod.string().nullable(),
+  "lastName": zod.string().nullable(),
+  "email": zod.string().nullable(),
+  "role": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const RevokeProjectAccessParams = zod.object({
+  "projectId": zod.coerce.string(),
+  "userId": zod.coerce.string()
 })
 
 
@@ -297,6 +393,7 @@ export const ListProjectsResponseItem = zod.object({
   "spi": zod.number(),
   "pmId": zod.string().nullable(),
   "coverImageUrl": zod.string().nullable(),
+  "enabledModulesOverride": zod.array(zod.string()).nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -354,6 +451,7 @@ export const GetProjectResponse = zod.object({
   "spi": zod.number(),
   "pmId": zod.string().nullable(),
   "coverImageUrl": zod.string().nullable(),
+  "enabledModulesOverride": zod.array(zod.string()).nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -405,6 +503,7 @@ export const UpdateProjectResponse = zod.object({
   "spi": zod.number(),
   "pmId": zod.string().nullable(),
   "coverImageUrl": zod.string().nullable(),
+  "enabledModulesOverride": zod.array(zod.string()).nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -447,6 +546,7 @@ export const GetProjectDashboardResponse = zod.object({
   "spi": zod.number(),
   "pmId": zod.string().nullable(),
   "coverImageUrl": zod.string().nullable(),
+  "enabledModulesOverride": zod.array(zod.string()).nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 }),
@@ -1890,6 +1990,7 @@ export const GetPortfolioDashboardResponse = zod.object({
   "spi": zod.number(),
   "pmId": zod.string().nullable(),
   "coverImageUrl": zod.string().nullable(),
+  "enabledModulesOverride": zod.array(zod.string()).nullish(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 }))

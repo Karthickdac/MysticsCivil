@@ -25,5 +25,7 @@ export interface Organisation {
   pincode: string | null;
   /** @nullable */
   logoUrl: string | null;
+  /** @nullable */
+  enabledModules?: string[] | null;
   createdAt: Date;
 }

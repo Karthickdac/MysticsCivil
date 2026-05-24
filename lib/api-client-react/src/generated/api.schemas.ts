@@ -184,6 +184,8 @@ export interface Organisation {
   pincode: string | null;
   /** @nullable */
   logoUrl: string | null;
+  /** @nullable */
+  enabledModules?: string[] | null;
   createdAt: string;
 }
 
@@ -211,6 +213,32 @@ export interface OrganisationUpdate {
   state?: string;
   pincode?: string;
   logoUrl?: string;
+}
+
+export interface OrganisationUser {
+  userId: string;
+  role: string;
+  /** @nullable */
+  firstName: string | null;
+  /** @nullable */
+  lastName: string | null;
+  /** @nullable */
+  email: string | null;
+}
+
+export interface ProjectAccessEntry {
+  id: string;
+  userId: string;
+  projectId?: string;
+  /** @nullable */
+  firstName: string | null;
+  /** @nullable */
+  lastName: string | null;
+  /** @nullable */
+  email: string | null;
+  /** @nullable */
+  role: string | null;
+  createdAt: string;
 }
 
 export interface ReverseGeocodeRequest {
@@ -266,6 +294,8 @@ export interface Project {
   pmId: string | null;
   /** @nullable */
   coverImageUrl: string | null;
+  /** @nullable */
+  enabledModulesOverride?: string[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1664,6 +1694,36 @@ export interface LabourContractorBill {
 }
 
 export type AuthorizationSessionHeaderParameter = string;
+
+export type ListModules200 = {
+  modules: string[];
+};
+
+export type UpdateOrganisationModulesBody = {
+  /** @nullable */
+  enabled?: string[] | null;
+};
+
+export type UpdateOrganisationModules200 = {
+  organisationId: string;
+  /** @nullable */
+  enabledModules: string[] | null;
+};
+
+export type UpdateProjectModulesBody = {
+  /** @nullable */
+  enabled?: string[] | null;
+};
+
+export type UpdateProjectModules200 = {
+  projectId: string;
+  /** @nullable */
+  enabledModulesOverride: string[] | null;
+};
+
+export type GrantProjectAccessBody = {
+  userId: string;
+};
 
 export type ListDsrRatesParams = {
 q?: string;

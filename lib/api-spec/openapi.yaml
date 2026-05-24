@@ -297,6 +297,146 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
 
+  /modules:
+    get:
+      tags: [Modules]
+      operationId: listModules
+      summary: Canonical list of toggleable modules
+      responses:
+        '200':
+          description: Module registry
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [modules]
+                properties:
+                  modules:
+                    type: array
+                    items: { type: string }
+  /organisations/{organisationId}/modules:
+    parameters:
+      - $ref: '#/components/parameters/OrganisationIdParam'
+    patch:
+      tags: [Modules]
+      operationId: updateOrganisationModules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: [array, 'null']
+                  items: { type: string }
+      responses:
+        '200':
+          description: Updated org modules
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organisationId, enabledModules]
+                properties:
+                  organisationId: { type: string }
+                  enabledModules:
+                    type: [array, 'null']
+                    items: { type: string }
+  /organisations/{organisationId}/users:
+    parameters:
+      - $ref: '#/components/parameters/OrganisationIdParam'
+    get:
+      tags: [Organisations]
+      operationId: listOrganisationUsers
+      responses:
+        '200':
+          description: Users belonging to the organisation
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/OrganisationUser' }
+  /projects/{projectId}/modules:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    patch:
+      tags: [Modules]
+      operationId: updateProjectModules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: [array, 'null']
+                  items: { type: string }
+      responses:
+        '200':
+          description: Updated project module override
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [projectId, enabledModulesOverride]
+                properties:
+                  projectId: { type: string }
+                  enabledModulesOverride:
+                    type: [array, 'null']
+                    items: { type: string }
+  /projects/{projectId}/access:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+    get:
+      tags: [ProjectAccess]
+      operationId: listProjectAccess
+      responses:
+        '200':
+          description: Users with access to the project
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProjectAccessEntry' }
+    post:
+      tags: [ProjectAccess]
+      operationId: grantProjectAccess
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId: { type: string }
+      responses:
+        '200':
+          description: Already had access (idempotent)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectAccessEntry' }
+        '201':
+          description: Access granted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectAccessEntry' }
+  /projects/{projectId}/access/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectIdParam'
+      - name: userId
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [ProjectAccess]
+      operationId: revokeProjectAccess
+      responses:
+        '204':
+          description: Revoked
+
   /geocode/reverse:
     post:
       tags: [Organisations]
@@ -3181,6 +3321,9 @@ components:
         state: { type: [string, 'null'] }
         pincode: { type: [string, 'null'] }
         logoUrl: { type: [string, 'null'] }
+        enabledModules:
+          type: [array, 'null']
+          items: { type: string }
         createdAt: { type: string, format: date-time }
     OrganisationInput:
       type: object
@@ -3207,6 +3350,27 @@ components:
         state: { type: string }
         pincode: { type: string }
         logoUrl: { type: string }
+    OrganisationUser:
+      type: object
+      required: [userId, role, firstName, lastName, email]
+      properties:
+        userId: { type: string }
+        role: { type: string }
+        firstName: { type: [string, 'null'] }
+        lastName: { type: [string, 'null'] }
+        email: { type: [string, 'null'] }
+    ProjectAccessEntry:
+      type: object
+      required: [id, userId, firstName, lastName, email, role, createdAt]
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        projectId: { type: string }
+        firstName: { type: [string, 'null'] }
+        lastName: { type: [string, 'null'] }
+        email: { type: [string, 'null'] }
+        role: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
     ReverseGeocodeRequest:
       type: object
       required: [lat, lon]
@@ -3246,6 +3410,9 @@ components:
         spi: { type: number }
         pmId: { type: [string, 'null'] }
         coverImageUrl: { type: [string, 'null'] }
+        enabledModulesOverride:
+          type: [array, 'null']
+          items: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     ProjectInput:

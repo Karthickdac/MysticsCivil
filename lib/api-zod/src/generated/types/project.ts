@@ -42,6 +42,8 @@ export interface Project {
   pmId: string | null;
   /** @nullable */
   coverImageUrl: string | null;
+  /** @nullable */
+  enabledModulesOverride?: string[] | null;
   createdAt: Date;
   updatedAt: Date;
 }

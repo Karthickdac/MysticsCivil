@@ -3,11 +3,13 @@ import {
   getGetProjectDashboardQueryKey,
   useReverseGeocode,
   useUpdateProject,
+  useListOrganisations,
   getGetProjectQueryKey,
 } from "@workspace/api-client-react";
 import { useParams, Link, useSearch, useLocation } from "wouter";
-import { VALID_PROJECT_TABS as VPT } from "@/lib/project-tabs";
-import { useEffect, useRef, useState } from "react";
+import { PROJECT_TABS, VALID_PROJECT_TABS as VPT } from "@/lib/project-tabs";
+import { getEffectiveModules, moduleEnabled } from "@/lib/modules";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Building2, Calendar, FileText, LayoutDashboard, ListTodo, MapPin, AlertCircle, Camera, FolderOpen, Calculator, GitBranch, TrendingUp, Banknote, ShoppingCart, HardHat, Loader2 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Badge } from "@/components/ui/badge";
+import { SettingsTab } from "@/components/project-tabs/settings-tab";
 import { WbsTab } from "@/components/project-tabs/wbs-tab";
 import { MilestonesTab } from "@/components/project-tabs/milestones-tab";
 import { DprsTab } from "@/components/project-tabs/dprs-tab";
@@ -306,12 +309,26 @@ function ProjectTabs({ id, project, health, nextMilestone, statusColors, chartSt
 }) {
   const search = useSearch();
   const [, setLocation] = useLocation();
+  const { data: orgs } = useListOrganisations();
+  const effectiveModules = useMemo(() => {
+    const org = (orgs ?? []).find((o: any) => o.id === project?.organisationId);
+    return getEffectiveModules(
+      (org as any)?.enabledModules ?? null,
+      (project as any)?.enabledModulesOverride ?? null,
+    );
+  }, [orgs, project?.organisationId, (project as any)?.enabledModulesOverride]);
+  const isTabAllowed = (v: string) => {
+    const tabDef = PROJECT_TABS.find((t) => t.value === v);
+    if (!tabDef) return false;
+    return moduleEnabled(effectiveModules, tabDef.moduleKey);
+  };
   const readTab = () => {
     const t = new URLSearchParams(search).get("tab");
-    return t && (VALID_PROJECT_TABS as readonly string[]).includes(t) ? t : "dashboard";
+    const candidate = t && (VALID_PROJECT_TABS as readonly string[]).includes(t) ? t : "dashboard";
+    return isTabAllowed(candidate) ? candidate : "dashboard";
   };
   const [tab, setTab] = useState<string>(readTab());
-  useEffect(() => { setTab(readTab()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [search]);
+  useEffect(() => { setTab(readTab()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [search, effectiveModules]);
   const onTabChange = (v: string) => {
     setTab(v);
     const params = new URLSearchParams(search);
@@ -567,6 +584,7 @@ function ProjectTabs({ id, project, health, nextMilestone, statusColors, chartSt
         <TabsContent value="financial"><FinancialPage projectId={id} /></TabsContent>
         <TabsContent value="supply-chain"><SupplyChainPage projectId={id} /></TabsContent>
         <TabsContent value="workforce"><WorkforcePage projectId={id} /></TabsContent>
+        <TabsContent value="settings"><SettingsTab projectId={id} /></TabsContent>
       </Tabs>
   );
 }

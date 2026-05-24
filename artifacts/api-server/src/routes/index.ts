@@ -21,12 +21,27 @@ import supplyChainRouter from "./supply-chain";
 import workforceRouter from "./workforce";
 import storageRouter from "./storage";
 import geocodeRouter from "./geocode";
+import modulesAccessRouter from "./modules-access";
+import { requireProjectAccess } from "../lib/access";
 
 const router: IRouter = Router();
+
+// Gate every /projects/:projectId/... request (incl. GET /projects/:projectId itself).
+// admin/owner bypass automatically inside requireProjectAccess via context check.
+router.use((req, res, next) => {
+  if (req.method === "OPTIONS") return next();
+  const m = req.path.match(/^\/projects\/([^/?]+)(?:\/|$)/);
+  if (!m) return next();
+  // POST /projects (no :projectId) is excluded by the regex.
+  // Inject the captured projectId so the middleware can read it from req.params.
+  (req as any).params = { ...(req.params || {}), projectId: m[1] };
+  return requireProjectAccess()(req, res, next);
+});
 
 router.use(healthRouter);
 router.use(authRouter);
 router.use(meRouter);
+router.use(modulesAccessRouter);
 router.use(organisationsRouter);
 router.use(projectsRouter);
 router.use(wbsRouter);

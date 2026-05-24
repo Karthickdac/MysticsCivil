@@ -8,6 +8,7 @@ import {
 } from "@workspace/api-client-react";
 import { useT, type Lang } from "@/lib/i18n";
 import { PROJECT_TABS } from "@/lib/project-tabs";
+import { getEffectiveModules, moduleEnabled } from "@/lib/modules";
 import {
   Home,
   Building2,
@@ -33,24 +34,24 @@ import {
 
 const ALL_ROLES = ["owner", "pm", "site_engineer", "qs", "finance", "contractor", "qc", "store", "hr", "admin"];
 
-type NavItem = { titleKey: string; url: string; icon: any; roles: string[] };
+type NavItem = { titleKey: string; url: string; icon: any; roles: string[]; moduleKey?: string };
 type NavGroup = { key: string; labelKey: string; items: NavItem[] };
 
-function getNavGroups(role: string | undefined): NavGroup[] {
+function getNavGroups(role: string | undefined, enabledModules: Set<string> | null): NavGroup[] {
   const groups: NavGroup[] = [
     {
       key: "operations",
       labelKey: "nav.group.operations",
       items: [
-        { titleKey: "nav.dashboard", url: "/", icon: Home, roles: ALL_ROLES },
-        { titleKey: "nav.approvals", url: "/approvals", icon: ClipboardList, roles: ["owner", "pm", "qs", "finance"] },
+        { titleKey: "nav.dashboard", url: "/", icon: Home, roles: ALL_ROLES, moduleKey: "dashboard" },
+        { titleKey: "nav.approvals", url: "/approvals", icon: ClipboardList, roles: ["owner", "pm", "qs", "finance"], moduleKey: "approvals" },
       ],
     },
     {
       key: "commercial",
       labelKey: "nav.group.commercial",
       items: [
-        { titleKey: "nav.dsrRates", url: "/dsr-rates", icon: BookOpen, roles: ["owner", "pm", "qs", "admin"] },
+        { titleKey: "nav.dsrRates", url: "/dsr-rates", icon: BookOpen, roles: ["owner", "pm", "qs", "admin"], moduleKey: "dsr_rates" },
       ],
     },
     {
@@ -63,7 +64,14 @@ function getNavGroups(role: string | undefined): NavGroup[] {
     },
   ];
   return groups
-    .map((g) => ({ ...g, items: g.items.filter((i) => !role || i.roles.includes(role)) }))
+    .map((g) => ({
+      ...g,
+      items: g.items.filter(
+        (i) =>
+          (!role || i.roles.includes(role)) &&
+          moduleEnabled(enabledModules, i.moduleKey ?? null),
+      ),
+    }))
     .filter((g) => g.items.length > 0);
 }
 
@@ -181,6 +189,11 @@ function ProjectsTree({
 }) {
   const { data: projects } = useListProjects();
   const { data: orgs } = useListOrganisations();
+  const orgById = useMemo(() => {
+    const m = new Map<string, any>();
+    (orgs || []).forEach((o: any) => m.set(o.id, o));
+    return m;
+  }, [orgs]);
 
   // Match /projects, /projects/:id and read ?tab=
   const activeMatch = useMemo(() => {
@@ -324,7 +337,16 @@ function ProjectsTree({
                           </div>
                           {projOpen && (
                             <ul className="ml-2 pl-2 border-l border-sidebar-border/30 mt-0.5 space-y-0.5">
-                              {PROJECT_TABS.map((tab) => {
+                              {(() => {
+                                const org = orgById.get(p.organisationId);
+                                const effective = getEffectiveModules(
+                                  org?.enabledModules ?? null,
+                                  p.enabledModulesOverride ?? null,
+                                );
+                                return PROJECT_TABS.filter((tab) =>
+                                  moduleEnabled(effective, tab.moduleKey),
+                                );
+                              })().map((tab) => {
                                 const Icon = tab.icon;
                                 const isLeafActive =
                                   isProjActive && activeTab === tab.value;
@@ -629,7 +651,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { logout } = useAuth();
   const [, setLocation] = useLocation();
   const { data: profile } = useGetMyProfile();
+  const { data: orgs } = useListOrganisations();
   const { t } = useT();
+  const myOrg = useMemo(
+    () => (orgs ?? []).find((o: any) => o.id === profile?.organisationId),
+    [orgs, profile?.organisationId],
+  );
+  const myOrgModules = useMemo<Set<string> | null>(() => {
+    const list = (myOrg as any)?.enabledModules;
+    return list == null ? null : new Set(list as string[]);
+  }, [myOrg]);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("mc.sidebar.collapsed") === "1";
@@ -639,7 +670,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [collapsed]);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const groups = getNavGroups(profile?.role);
+  const groups = getNavGroups(profile?.role, myOrgModules);
   const handleLogout = async () => { await logout(); setLocation("/login"); };
 
   return (

@@ -14,6 +14,7 @@ import {
 } from "@workspace/db";
 import { eq, desc, and, gt, gte, asc, sql, inArray, or } from "drizzle-orm";
 import { requireAuth, loadRole } from "../middlewares/requireAuth";
+import { getAccessCtx, getAccessibleProjectIds } from "../lib/access";
 import {
   serializeProject,
   serializeMilestone,
@@ -24,12 +25,22 @@ import {
 
 const router: IRouter = Router();
 
-router.get("/dashboard/portfolio", requireAuth, async (_req, res: Response) => {
-  const projects = await db.select().from(projectsTable);
-  const pending = await db
-    .select({ id: approvalsTable.id })
-    .from(approvalsTable)
-    .where(eq(approvalsTable.status, "pending"));
+router.get("/dashboard/portfolio", requireAuth, async (req: Request, res: Response) => {
+  const ctx = await getAccessCtx(req);
+  const accessibleIds = await getAccessibleProjectIds(ctx);
+  const projects = accessibleIds.length
+    ? await db.select().from(projectsTable).where(inArray(projectsTable.id, accessibleIds))
+    : [];
+  const accessibleSet = new Set(accessibleIds);
+  const pendingRows = accessibleIds.length
+    ? await db
+        .select({ id: approvalsTable.id, projectId: approvalsTable.projectId })
+        .from(approvalsTable)
+        .where(eq(approvalsTable.status, "pending"))
+    : [];
+  const pending = pendingRows.filter(
+    (r) => !r.projectId || accessibleSet.has(r.projectId),
+  );
 
   let totalContractValue = 0;
   let totalCostToDate = 0;
@@ -71,7 +82,14 @@ router.get("/dashboard/portfolio", requireAuth, async (_req, res: Response) => {
   });
 });
 
-router.get("/dashboard/activity-feed", requireAuth, async (_req, res: Response) => {
+router.get("/dashboard/activity-feed", requireAuth, async (req: Request, res: Response) => {
+  const ctx = await getAccessCtx(req);
+  const accessibleIds = await getAccessibleProjectIds(ctx);
+  if (!accessibleIds.length) {
+    res.json([]);
+    return;
+  }
+  const accessibleSet = new Set(accessibleIds);
   const dprs = await db
     .select({
       id: dprsTable.id,
@@ -88,6 +106,7 @@ router.get("/dashboard/activity-feed", requireAuth, async (_req, res: Response) 
     .from(dprsTable)
     .leftJoin(projectsTable, eq(dprsTable.projectId, projectsTable.id))
     .leftJoin(usersTable, eq(dprsTable.submittedById, usersTable.id))
+    .where(inArray(dprsTable.projectId, accessibleIds))
     .orderBy(desc(dprsTable.createdAt))
     .limit(15);
 
@@ -105,6 +124,7 @@ router.get("/dashboard/activity-feed", requireAuth, async (_req, res: Response) 
     .from(sitePhotosTable)
     .leftJoin(projectsTable, eq(sitePhotosTable.projectId, projectsTable.id))
     .leftJoin(usersTable, eq(sitePhotosTable.uploadedById, usersTable.id))
+    .where(inArray(sitePhotosTable.projectId, accessibleIds))
     .orderBy(desc(sitePhotosTable.capturedAt))
     .limit(15);
 
@@ -121,7 +141,7 @@ router.get("/dashboard/activity-feed", requireAuth, async (_req, res: Response) 
     .from(approvalsTable)
     .leftJoin(projectsTable, eq(approvalsTable.projectId, projectsTable.id))
     .orderBy(desc(approvalsTable.createdAt))
-    .limit(15);
+    .limit(30);
 
   const actorName = (f?: string | null, l?: string | null, e?: string | null) =>
     [f, l].filter(Boolean).join(" ") || e || null;
@@ -145,7 +165,10 @@ router.get("/dashboard/activity-feed", requireAuth, async (_req, res: Response) 
       actorName: actorName(r.actorFirst, r.actorLast, r.actorEmail),
       occurredAt: dReq(r.capturedAt),
     })),
-    ...approvals.map((r) => ({
+    ...approvals
+      .filter((r) => !r.projectId || accessibleSet.has(r.projectId))
+      .slice(0, 15)
+      .map((r) => ({
       id: `approval-${r.id}`,
       kind: `approval_${r.status}`,
       projectId: r.projectId ?? null,
@@ -153,7 +176,7 @@ router.get("/dashboard/activity-feed", requireAuth, async (_req, res: Response) 
       title: r.title,
       actorName: null,
       occurredAt: dReq(r.resolvedAt ?? r.createdAt),
-    })),
+      })),
   ]
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))
     .slice(0, 25);
@@ -287,24 +310,15 @@ router.get("/dashboard/safety-trends", requireAuth, async (req: Request, res: Re
   const day30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const overdueCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  // Org-scope: explicitly resolve role + org from user_profiles (do not trust req.userRole,
-  // which is only populated by requireRole, not requireAuth). Non-admins MUST have an org.
-  const userId = req.user?.id;
-  if (!userId) { res.status(401).json({ error: "Unauthenticated" }); return; }
-  const [profile] = await db.select({
-    role: userProfilesTable.role,
-    organisationId: userProfilesTable.organisationId,
-  }).from(userProfilesTable).where(eq(userProfilesTable.userId, userId));
-  const role = profile?.role ?? (await loadRole(userId));
-  const isAdmin = role === "admin";
-  if (!isAdmin && !profile?.organisationId) {
-    res.status(403).json({ error: "Forbidden — no organisation" });
-    return;
-  }
-  const projects = isAdmin
-    ? await db.select({ id: projectsTable.id, name: projectsTable.name }).from(projectsTable)
-    : await db.select({ id: projectsTable.id, name: projectsTable.name })
-        .from(projectsTable).where(eq(projectsTable.organisationId, profile!.organisationId!));
+  // Filter to projects the caller can access (admin/owner: all in org; others: assignments).
+  const ctx = await getAccessCtx(req);
+  const accessibleIds = await getAccessibleProjectIds(ctx);
+  const projects = accessibleIds.length
+    ? await db
+        .select({ id: projectsTable.id, name: projectsTable.name })
+        .from(projectsTable)
+        .where(inArray(projectsTable.id, accessibleIds))
+    : [];
   const projectIds = projects.map((p) => p.id);
   const projectName = new Map(projects.map((p) => [p.id, p.name]));
 

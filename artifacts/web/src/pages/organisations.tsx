@@ -4,10 +4,15 @@ import {
   useListOrganisations,
   useCreateOrganisation,
   useUpdateOrganisation,
+  useUpdateOrganisationModules,
+  useListModules,
   useGetMyProfile,
   getListOrganisationsQueryKey,
   type Organisation,
 } from "@workspace/api-client-react";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { MODULE_LABELS } from "@/lib/modules";
 import { useUpload } from "@workspace/object-storage-web";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -234,6 +239,8 @@ export default function Organisations() {
         )}
       </div>
 
+      {isAdmin && <OrgModulesSection organisations={data ?? []} />}
+
       <Card>
         <CardHeader><CardTitle className="text-base">All Organisations</CardTitle></CardHeader>
         <CardContent>
@@ -305,5 +312,106 @@ export default function Organisations() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function OrgModulesSection({ organisations }: { organisations: Organisation[] }) {
+  const qc = useQueryClient();
+  const { data: modulesResp } = useListModules();
+  const update = useUpdateOrganisationModules();
+  const allModules = modulesResp?.modules ?? [];
+  const [drafts, setDrafts] = useState<Record<string, string[] | null>>({});
+
+  const enabledFor = (o: Organisation): string[] | null => {
+    if (o.id in drafts) return drafts[o.id];
+    return (o.enabledModules as string[] | null | undefined) ?? null;
+  };
+  const setDraft = (id: string, val: string[] | null) =>
+    setDrafts((d) => ({ ...d, [id]: val }));
+  const isDirty = (o: Organisation) => o.id in drafts;
+
+  const toggleAll = (o: Organisation, on: boolean) => {
+    setDraft(o.id, on ? null : []);
+  };
+  const toggleModule = (o: Organisation, key: string) => {
+    const cur = enabledFor(o);
+    const list = cur === null ? [...allModules] : [...cur];
+    const idx = list.indexOf(key);
+    if (idx >= 0) list.splice(idx, 1);
+    else list.push(key);
+    setDraft(o.id, list);
+  };
+  const save = (o: Organisation) => {
+    const payload = enabledFor(o);
+    update.mutate(
+      { organisationId: o.id, data: { enabled: payload } },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListOrganisationsQueryKey() });
+          setDrafts((d) => {
+            const { [o.id]: _omit, ...rest } = d;
+            return rest;
+          });
+        },
+      },
+    );
+  };
+
+  if (!organisations.length) return null;
+
+  return (
+    <Card data-testid="org-modules-section">
+      <CardHeader>
+        <CardTitle className="text-base">Modules per Organisation</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {organisations.map((o) => {
+          const enabled = enabledFor(o);
+          const allOn = enabled === null;
+          const set = new Set(enabled ?? allModules);
+          return (
+            <div key={o.id} className="rounded-xl border p-4 space-y-3" data-testid={`org-modules-${o.id}`}>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">{o.name}</span>
+                  {allOn && <Badge variant="outline" className="text-[10px]">All modules</Badge>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={allOn}
+                    onCheckedChange={(on) => toggleAll(o, on)}
+                    data-testid={`org-modules-${o.id}-all`}
+                  />
+                  <span className="text-xs text-muted-foreground">All modules</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {allModules.map((k) => (
+                  <label key={k} className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-sm">
+                    <Switch
+                      checked={set.has(k)}
+                      disabled={allOn}
+                      onCheckedChange={() => toggleModule(o, k)}
+                      data-testid={`org-modules-${o.id}-${k}`}
+                    />
+                    <span className="flex-1">{MODULE_LABELS[k] ?? k}</span>
+                  </label>
+                ))}
+              </div>
+              {isDirty(o) && (
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setDrafts((d) => { const { [o.id]: _, ...rest } = d; return rest; })}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={() => save(o)} disabled={update.isPending} data-testid={`org-modules-${o.id}-save`}>
+                    {update.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />} Save
+                  </Button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }

@@ -53,6 +53,29 @@ export type MilestoneStatus = (typeof MILESTONE_STATUSES)[number];
 
 export const ISSUE_SEVERITIES = ["low", "medium", "high", "critical"] as const;
 
+// Canonical module registry — admins toggle these on/off per org / per project.
+// Keep in sync with UI nav & per-project tab keys.
+export const MODULES = [
+  "dashboard",
+  "approvals",
+  "projects",
+  "dprs",
+  "milestones",
+  "wbs",
+  "workforce",
+  "supply_chain",
+  "estimation",
+  "boq",
+  "financial",
+  "variation_orders",
+  "dsr_rates",
+  "quality",
+  "safety",
+  "photos",
+  "documents",
+] as const;
+export type ModuleKey = (typeof MODULES)[number];
+
 export const userProfilesTable = pgTable("user_profiles", {
   userId: varchar("user_id")
     .primaryKey()
@@ -80,6 +103,8 @@ export const organisationsTable = pgTable("organisations", {
   state: varchar("state", { length: 128 }),
   pincode: varchar("pincode", { length: 16 }),
   logoUrl: varchar("logo_url"),
+  // null = all modules enabled (default). Array = explicit allow-list of ModuleKey strings.
+  enabledModules: jsonb("enabled_modules"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type Organisation = typeof organisationsTable.$inferSelect;
@@ -115,6 +140,8 @@ export const projectsTable = pgTable("projects", {
   pmId: varchar("pm_id").references(() => usersTable.id),
   coverImageUrl: varchar("cover_image_url"),
   notificationRecipients: jsonb("notification_recipients").notNull().default(sql`'{}'::jsonb`),
+  // null = inherit organisation. Array = explicit override allow-list of ModuleKey strings.
+  enabledModulesOverride: jsonb("enabled_modules_override"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
@@ -129,6 +156,27 @@ export const insertProjectSchema = createInsertSchema(projectsTable).omit({
   cpi: true,
   spi: true,
 });
+
+// Explicit per-user project access. Admin/owner roles bypass this and see all projects in their org.
+// Non-admin/owner users must have a row here to see/use the project.
+export const projectAccessTable = pgTable(
+  "project_access",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    projectId: varchar("project_id")
+      .notNull()
+      .references(() => projectsTable.id, { onDelete: "cascade" }),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => usersTable.id, { onDelete: "cascade" }),
+    createdBy: varchar("created_by").references(() => usersTable.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("project_access_project_user_uq").on(table.projectId, table.userId),
+  ],
+);
+export type ProjectAccess = typeof projectAccessTable.$inferSelect;
 
 export const wbsActivitiesTable = pgTable("wbs_activities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
