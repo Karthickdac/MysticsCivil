@@ -7,6 +7,7 @@ import {
   organisationsTable,
   projectsTable,
   projectAccessTable,
+  customRolesTable,
 } from "@workspace/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { requireAuth, loadRole } from "../middlewares/requireAuth";
@@ -81,6 +82,8 @@ router.get("/admin/users", requireAuth, async (req: Request, res: Response) => {
     role: userProfilesTable.role,
     organisationId: userProfilesTable.organisationId,
     organisationName: organisationsTable.name,
+    customRoleId: userProfilesTable.customRoleId,
+    customRoleName: customRolesTable.name,
     createdAt: usersTable.createdAt,
   };
 
@@ -90,11 +93,13 @@ router.get("/admin/users", requireAuth, async (req: Request, res: Response) => {
         .from(usersTable)
         .leftJoin(userProfilesTable, eq(userProfilesTable.userId, usersTable.id))
         .leftJoin(organisationsTable, eq(organisationsTable.id, userProfilesTable.organisationId))
+        .leftJoin(customRolesTable, eq(customRolesTable.id, userProfilesTable.customRoleId))
     : await db
         .select(baseSelect)
         .from(usersTable)
         .leftJoin(userProfilesTable, eq(userProfilesTable.userId, usersTable.id))
         .leftJoin(organisationsTable, eq(organisationsTable.id, userProfilesTable.organisationId))
+        .leftJoin(customRolesTable, eq(customRolesTable.id, userProfilesTable.customRoleId))
         .where(eq(userProfilesTable.organisationId, ctx.organisationId ?? "__none__"));
 
   res.json(
@@ -106,6 +111,8 @@ router.get("/admin/users", requireAuth, async (req: Request, res: Response) => {
       role: r.role,
       organisationId: r.organisationId,
       organisationName: r.organisationName,
+      customRoleId: r.customRoleId,
+      customRoleName: r.customRoleName,
       createdAt: r.createdAt?.toISOString() ?? null,
     })),
   );
@@ -236,6 +243,35 @@ router.patch("/admin/users/:userId", requireAuth, async (req: Request, res: Resp
       return;
     }
     profileUpdate.organisationId = b.organisationId ? String(b.organisationId) : null;
+  }
+  // Custom role assignment — must belong to the same organisation as the target.
+  if (b.customRoleId !== undefined) {
+    if (b.customRoleId === null || b.customRoleId === "") {
+      profileUpdate.customRoleId = null;
+    } else {
+      const cid = String(b.customRoleId);
+      const [cr] = await db
+        .select({ organisationId: customRolesTable.organisationId })
+        .from(customRolesTable)
+        .where(eq(customRolesTable.id, cid));
+      if (!cr) {
+        res.status(400).json({ error: "Custom role not found" });
+        return;
+      }
+      const targetOrg =
+        (profileUpdate.organisationId as string | null | undefined) ??
+        target.organisationId ??
+        null;
+      if (!ctx.isSuper && cr.organisationId !== ctx.organisationId) {
+        res.status(403).json({ error: "Custom role belongs to a different organisation" });
+        return;
+      }
+      if (targetOrg && cr.organisationId !== targetOrg) {
+        res.status(400).json({ error: "Custom role must belong to the user's organisation" });
+        return;
+      }
+      profileUpdate.customRoleId = cid;
+    }
   }
   if (Object.keys(profileUpdate).length) {
     await db

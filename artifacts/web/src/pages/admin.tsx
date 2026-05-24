@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, ShieldCheck, Trash2, KeyRound, Building2 } from "lucide-react";
+import { Loader2, Plus, ShieldCheck, Trash2, KeyRound, Building2, Shield } from "lucide-react";
 
 type AdminUser = {
   id: string;
@@ -36,7 +36,26 @@ type AdminUser = {
   role: string | null;
   organisationId: string | null;
   organisationName: string | null;
+  customRoleId: string | null;
+  customRoleName: string | null;
   createdAt: string | null;
+};
+
+type CustomRole = {
+  id: string;
+  organisationId: string | null;
+  name: string;
+  description: string | null;
+  permissions: string[];
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+type CapabilityDef = {
+  key: string;
+  group: string;
+  label: string;
+  description: string;
 };
 
 type AdminOrg = {
@@ -101,10 +120,12 @@ export default function AdminPage() {
     if (!meLoading && me && !isAdmin) setLocation("/");
   }, [meLoading, me, isAdmin, setLocation]);
 
-  const [tab, setTab] = useState<"users" | "orgs">("users");
+  const [tab, setTab] = useState<"users" | "roles" | "orgs">("users");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [orgs, setOrgs] = useState<AdminOrg[]>([]);
   const [assignableRoles, setAssignableRoles] = useState<string[]>([]);
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([]);
+  const [capabilities, setCapabilities] = useState<CapabilityDef[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,14 +145,18 @@ export default function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const [u, o, r] = await Promise.all([
+      const [u, o, r, cr, caps] = await Promise.all([
         api<AdminUser[]>("GET", "/admin/users"),
         api<AdminOrg[]>("GET", "/admin/organisations"),
         api<{ roles: string[] }>("GET", "/admin/assignable-roles"),
+        api<CustomRole[]>("GET", "/custom-roles"),
+        api<CapabilityDef[]>("GET", "/custom-roles/capabilities"),
       ]);
       setUsers(u);
       setOrgs(o);
       setAssignableRoles(r.roles);
+      setCustomRoles(cr);
+      setCapabilities(caps);
     } catch (e: any) {
       setError(e?.message ?? "Failed to load");
     } finally {
@@ -149,6 +174,7 @@ export default function AdminPage() {
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const [accessUser, setAccessUser] = useState<AdminUser | null>(null);
   const [quotaOrg, setQuotaOrg] = useState<AdminOrg | null>(null);
+  const [roleEdit, setRoleEdit] = useState<CustomRole | "new" | null>(null);
 
   if (meLoading) {
     return (
@@ -189,6 +215,17 @@ export default function AdminPage() {
           data-testid="tab-users"
         >
           Users ({users.length})
+        </button>
+        <button
+          onClick={() => setTab("roles")}
+          className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${
+            tab === "roles"
+              ? "border-violet-600 text-violet-700 dark:text-violet-300"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+          data-testid="tab-roles"
+        >
+          Custom roles ({customRoles.length})
         </button>
         {isSuper && (
           <button
@@ -232,6 +269,28 @@ export default function AdminPage() {
             }
           }}
         />
+      ) : tab === "roles" ? (
+        <CustomRolesTable
+          roles={customRoles}
+          orgs={orgs}
+          isSuper={isSuper}
+          onCreate={() => setRoleEdit("new")}
+          onEdit={(r) => setRoleEdit(r)}
+          onDelete={async (r) => {
+            const inUse = users.filter((u) => u.customRoleId === r.id).length;
+            const warn = inUse
+              ? `Delete custom role "${r.name}"? ${inUse} user${inUse === 1 ? "" : "s"} will lose its extra capabilities.`
+              : `Delete custom role "${r.name}"?`;
+            if (!confirm(warn)) return;
+            try {
+              await api("DELETE", `/custom-roles/${r.id}`);
+              toast({ title: "Role deleted" });
+              await reload();
+            } catch (e: any) {
+              toast({ title: "Delete failed", description: e?.message, variant: "destructive" });
+            }
+          }}
+        />
       ) : (
         <OrgsTable orgs={orgs} onEditQuota={(o) => setQuotaOrg(o)} />
       )}
@@ -257,11 +316,28 @@ export default function AdminPage() {
           user={editUser}
           orgs={orgs}
           assignableRoles={assignableRoles}
+          customRoles={customRoles}
           isSuper={isSuper}
           onClose={() => setEditUser(null)}
           onSaved={async () => {
             setEditUser(null);
             toast({ title: "User updated" });
+            await reload();
+          }}
+        />
+      )}
+
+      {roleEdit && (
+        <CustomRoleDialog
+          role={roleEdit === "new" ? null : roleEdit}
+          orgs={orgs}
+          capabilities={capabilities}
+          isSuper={isSuper}
+          defaultOrgId={isSuper ? "" : ((me as any)?.organisationId ?? "")}
+          onClose={() => setRoleEdit(null)}
+          onSaved={async () => {
+            setRoleEdit(null);
+            toast({ title: "Role saved" });
             await reload();
           }}
         />
@@ -587,6 +663,7 @@ function EditUserDialog({
   user,
   orgs,
   assignableRoles,
+  customRoles,
   isSuper,
   onClose,
   onSaved,
@@ -594,6 +671,7 @@ function EditUserDialog({
   user: AdminUser;
   orgs: AdminOrg[];
   assignableRoles: string[];
+  customRoles: CustomRole[];
   isSuper: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -602,15 +680,26 @@ function EditUserDialog({
   const [lastName, setLastName] = useState(user.lastName ?? "");
   const [role, setRole] = useState(user.role ?? "pm");
   const [organisationId, setOrganisationId] = useState(user.organisationId ?? "");
+  const [customRoleId, setCustomRoleId] = useState<string>(user.customRoleId ?? "__none__");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const customRoleOptions = customRoles.filter(
+    (r) => !organisationId || r.organisationId === organisationId,
+  );
 
   async function submit() {
     setBusy(true);
     setErr(null);
     try {
-      const body: Record<string, unknown> = { firstName, lastName, role, organisationId };
+      const body: Record<string, unknown> = {
+        firstName,
+        lastName,
+        role,
+        organisationId,
+        customRoleId: customRoleId === "__none__" ? null : customRoleId,
+      };
       if (password) body.password = password;
       await api("PATCH", `/admin/users/${user.id}`, body);
       onSaved();
@@ -665,6 +754,21 @@ function EditUserDialog({
             </Select>
           </div>
           <div>
+            <Label className="text-xs">Custom role (optional)</Label>
+            <Select value={customRoleId} onValueChange={setCustomRoleId}>
+              <SelectTrigger data-testid="select-custom-role"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">— None —</SelectItem>
+                {customRoleOptions.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Adds extra capabilities on top of the built-in role.
+            </p>
+          </div>
+          <div>
             <Label className="text-xs">Reset password (optional)</Label>
             <Input type="password" placeholder="Leave blank to keep" value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
@@ -675,6 +779,252 @@ function EditUserDialog({
           <Button onClick={submit} disabled={busy}>
             {busy && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
             Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CustomRolesTable({
+  roles,
+  orgs,
+  isSuper,
+  onCreate,
+  onEdit,
+  onDelete,
+}: {
+  roles: CustomRole[];
+  orgs: AdminOrg[];
+  isSuper: boolean;
+  onCreate: () => void;
+  onEdit: (r: CustomRole) => void;
+  onDelete: (r: CustomRole) => void;
+}) {
+  const orgName = (id: string | null) =>
+    id ? (orgs.find((o) => o.id === id)?.name ?? "—") : "—";
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <Button size="sm" onClick={onCreate} data-testid="btn-create-role">
+          <Plus className="h-4 w-4 mr-1" /> New role
+        </Button>
+      </div>
+      {roles.length === 0 ? (
+        <Card>
+          <CardContent className="py-10 text-center text-muted-foreground text-sm">
+            No custom roles yet. Create one to grant extra capabilities to specific users
+            without changing their built-in role.
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0 -mx-px">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-semibold">Name</th>
+                    {isSuper && <th className="text-left px-4 py-3 font-semibold">Organisation</th>}
+                    <th className="text-left px-4 py-3 font-semibold">Capabilities</th>
+                    <th className="text-right px-4 py-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {roles.map((r) => (
+                    <tr key={r.id} data-testid={`role-row-${r.id}`}>
+                      <td className="px-4 py-3 font-medium flex items-center gap-2">
+                        <Shield className="h-4 w-4 text-violet-600" /> {r.name}
+                        {r.description && (
+                          <span className="text-muted-foreground font-normal text-xs">
+                            — {r.description}
+                          </span>
+                        )}
+                      </td>
+                      {isSuper && (
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {orgName(r.organisationId)}
+                        </td>
+                      )}
+                      <td className="px-4 py-3 text-muted-foreground text-xs">
+                        {r.permissions.length === 0
+                          ? <span className="italic">none</span>
+                          : `${r.permissions.length} capability${r.permissions.length === 1 ? "" : "ies"}`}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => onEdit(r)} data-testid={`btn-edit-role-${r.id}`}>
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => onDelete(r)}
+                            data-testid={`btn-delete-role-${r.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function CustomRoleDialog({
+  role,
+  orgs,
+  capabilities,
+  isSuper,
+  defaultOrgId,
+  onClose,
+  onSaved,
+}: {
+  role: CustomRole | null;
+  orgs: AdminOrg[];
+  capabilities: CapabilityDef[];
+  isSuper: boolean;
+  defaultOrgId: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const isEdit = !!role;
+  const [name, setName] = useState(role?.name ?? "");
+  const [description, setDescription] = useState(role?.description ?? "");
+  const [organisationId, setOrganisationId] = useState(role?.organisationId ?? defaultOrgId);
+  const [perms, setPerms] = useState<Set<string>>(new Set(role?.permissions ?? []));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const groups = useMemo(() => {
+    const m = new Map<string, CapabilityDef[]>();
+    for (const c of capabilities) {
+      if (!m.has(c.group)) m.set(c.group, []);
+      m.get(c.group)!.push(c);
+    }
+    return Array.from(m.entries());
+  }, [capabilities]);
+
+  function toggle(k: string) {
+    setPerms((s) => {
+      const n = new Set(s);
+      if (n.has(k)) n.delete(k); else n.add(k);
+      return n;
+    });
+  }
+
+  async function submit() {
+    setBusy(true);
+    setErr(null);
+    try {
+      const body: Record<string, unknown> = {
+        name: name.trim(),
+        description: description.trim() || null,
+        permissions: [...perms],
+      };
+      if (!isEdit) body.organisationId = organisationId || null;
+      if (isEdit) {
+        await api("PATCH", `/custom-roles/${role!.id}`, body);
+      } else {
+        await api("POST", "/custom-roles", body);
+      }
+      onSaved();
+    } catch (e: any) {
+      setErr(e?.message ?? "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? `Edit role — ${role!.name}` : "New custom role"}</DialogTitle>
+          <DialogDescription>
+            Pick the extra capabilities this role grants. Users keep every capability from
+            their built-in role plus the ones ticked here.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 overflow-y-auto pr-1">
+          <div>
+            <Label className="text-xs">Name</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Junior PM"
+              data-testid="input-role-name"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Description (optional)</Label>
+            <Input
+              value={description ?? ""}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Short summary shown in admin"
+            />
+          </div>
+          {!isEdit && isSuper && (
+            <div>
+              <Label className="text-xs">Organisation</Label>
+              <Select value={organisationId} onValueChange={setOrganisationId}>
+                <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                <SelectContent>
+                  {orgs.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div>
+            <Label className="text-xs">Capabilities ({perms.size} selected)</Label>
+            <div className="space-y-3 mt-1 border rounded-lg p-3 max-h-[40vh] overflow-y-auto">
+              {groups.map(([group, items]) => (
+                <div key={group} className="space-y-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {group}
+                  </p>
+                  {items.map((c) => (
+                    <label
+                      key={c.key}
+                      className="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-muted/60 cursor-pointer"
+                      data-testid={`cap-${c.key}`}
+                    >
+                      <Checkbox
+                        checked={perms.has(c.key)}
+                        onCheckedChange={() => toggle(c.key)}
+                        className="mt-0.5"
+                      />
+                      <span className="flex-1">
+                        <span className="text-sm font-medium block">{c.label}</span>
+                        <span className="text-[11px] text-muted-foreground">{c.description}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+          {err && <p className="text-xs text-destructive">{err}</p>}
+        </div>
+        <DialogFooter className="pt-2">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={submit}
+            disabled={busy || !name.trim() || (!isEdit && !organisationId)}
+            data-testid="btn-save-role"
+          >
+            {busy && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+            {isEdit ? "Save" : "Create"}
           </Button>
         </DialogFooter>
       </DialogContent>

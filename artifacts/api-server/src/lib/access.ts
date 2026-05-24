@@ -5,11 +5,13 @@ import {
   projectAccessTable,
   organisationsTable,
   userProfilesTable,
+  customRolesTable,
   MODULES,
   type ModuleKey,
 } from "@workspace/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { loadRole } from "../middlewares/requireAuth";
+import { effectiveCaps, type Capability } from "./capabilities";
 
 // Roles that bypass per-project access checks (see every project in their org).
 // super_admin bypasses both project access AND org scoping (cross-org visibility).
@@ -108,6 +110,8 @@ export interface AccessContext {
   userId: string;
   role: string | null;
   organisationId: string | null;
+  customRoleId: string | null;
+  customPermissions: string[];
 }
 
 async function loadContext(req: Request): Promise<AccessContext> {
@@ -115,10 +119,52 @@ async function loadContext(req: Request): Promise<AccessContext> {
   const role = req.userRole ?? (await loadRole(userId));
   req.userRole = role ?? undefined;
   const [profile] = await db
-    .select({ organisationId: userProfilesTable.organisationId })
+    .select({
+      organisationId: userProfilesTable.organisationId,
+      customRoleId: userProfilesTable.customRoleId,
+    })
     .from(userProfilesTable)
     .where(eq(userProfilesTable.userId, userId));
-  return { userId, role, organisationId: profile?.organisationId ?? null };
+  let customPermissions: string[] = [];
+  if (profile?.customRoleId) {
+    const [cr] = await db
+      .select({ permissions: customRolesTable.permissions })
+      .from(customRolesTable)
+      .where(eq(customRolesTable.id, profile.customRoleId));
+    if (Array.isArray(cr?.permissions)) customPermissions = cr.permissions;
+  }
+  return {
+    userId,
+    role,
+    organisationId: profile?.organisationId ?? null,
+    customRoleId: profile?.customRoleId ?? null,
+    customPermissions,
+  };
+}
+
+/** True if the user's effective capability set (builtin preset ∪ custom role) includes `cap`. */
+export function hasCapability(ctx: AccessContext, cap: Capability): boolean {
+  return effectiveCaps(ctx.role, ctx.customPermissions).has(cap);
+}
+
+/** Express middleware: 403 unless caller has `cap`. */
+export function requireCapability(cap: Capability) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!req.isAuthenticated?.()) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    try {
+      const ctx = await getAccessCtx(req);
+      if (!hasCapability(ctx, cap)) {
+        res.status(403).json({ error: `Forbidden — capability required: ${cap}` });
+        return;
+      }
+      next();
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message ?? "Capability check failed" });
+    }
+  };
 }
 
 // Returns the list of project ids the user can see.

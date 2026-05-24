@@ -83,6 +83,9 @@ export const userProfilesTable = pgTable("user_profiles", {
     .references(() => usersTable.id, { onDelete: "cascade" }),
   role: varchar("role", { length: 32 }).notNull().default("site_engineer"),
   organisationId: varchar("organisation_id"),
+  // Optional custom role layered ADDITIVELY on top of the built-in `role`.
+  // Built-in role still drives org/admin gates; custom role grants extra capabilities.
+  customRoleId: varchar("custom_role_id"),
   phone: varchar("phone", { length: 32 }),
   designation: varchar("designation", { length: 128 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -92,6 +95,30 @@ export const userProfilesTable = pgTable("user_profiles", {
     .$onUpdate(() => new Date()),
 });
 export type UserProfile = typeof userProfilesTable.$inferSelect;
+
+// Custom roles — org-scoped named bundles of additional capabilities.
+// The built-in `userProfilesTable.role` always sets the baseline; a user's
+// custom role (if any) adds extra capabilities on top.
+export const customRolesTable = pgTable(
+  "custom_roles",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    organisationId: varchar("organisation_id").notNull(),
+    name: varchar("name", { length: 64 }).notNull(),
+    description: varchar("description", { length: 256 }),
+    // Array of capability keys from the CAPABILITIES catalog (api-server lib/capabilities.ts).
+    permissions: jsonb("permissions").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => ({
+    orgNameUq: uniqueIndex("custom_roles_org_name_uq").on(t.organisationId, t.name),
+  }),
+);
+export type CustomRole = typeof customRolesTable.$inferSelect;
 
 export const organisationsTable = pgTable("organisations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

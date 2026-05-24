@@ -24,6 +24,7 @@ import geocodeRouter from "./geocode";
 import modulesAccessRouter from "./modules-access";
 import reportsRouter from "./reports";
 import adminRouter from "./admin";
+import customRolesRouter from "./custom-roles";
 import { requireProjectAccess } from "../lib/access";
 
 const router: IRouter = Router();
@@ -44,6 +45,7 @@ router.use(healthRouter);
 router.use(authRouter);
 router.use(meRouter);
 router.use(adminRouter);
+router.use(customRolesRouter);
 router.use(modulesAccessRouter);
 router.use(reportsRouter);
 router.use(organisationsRouter);
