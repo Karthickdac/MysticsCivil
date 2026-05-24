@@ -5,6 +5,10 @@ import {
   useUpdateProject,
   useListOrganisations,
   getGetProjectQueryKey,
+  useGetMyProfile,
+  useListApprovals,
+  useResolveApproval,
+  getListApprovalsQueryKey,
 } from "@workspace/api-client-react";
 import { useParams, Link, useSearch, useLocation } from "wouter";
 import { PROJECT_TABS, VALID_PROJECT_TABS as VPT } from "@/lib/project-tabs";
@@ -15,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Building2, Calendar, FileText, LayoutDashboard, ListTodo, MapPin, AlertCircle, Camera, FolderOpen, Calculator, GitBranch, TrendingUp, Banknote, ShoppingCart, HardHat, Loader2 } from "lucide-react";
+import { ArrowLeft, Building2, Calendar, FileText, LayoutDashboard, ListTodo, MapPin, AlertCircle, Camera, FolderOpen, Calculator, GitBranch, TrendingUp, Banknote, ShoppingCart, HardHat, Loader2, Play, Pause, CheckCircle, RotateCcw, Send, ClipboardCheck } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
 import { CheckCircle2, AlertTriangle, XCircle, TrendingDown, Wallet, Coins, PiggyBank, Target } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -76,6 +80,7 @@ export default function ProjectDetail() {
   })();
 
   const statusColors: Record<string, string> = {
+    pending_approval: "bg-amber-100 text-amber-900",
     not_started: "bg-slate-200 text-slate-700",
     on_track: "bg-emerald-100 text-emerald-800",
     at_risk: "bg-amber-100 text-amber-800",
@@ -84,7 +89,8 @@ export default function ProjectDetail() {
     completed: "bg-blue-100 text-blue-800",
   };
 
-  const chartStatusColors = {
+  const chartStatusColors: Record<string, string> = {
+    pending_approval: "#f59e0b", // amber-500
     not_started: "#94a3b8", // slate-400
     on_track: "#10b981", // emerald-500
     at_risk: "#f59e0b", // amber-500
@@ -119,6 +125,8 @@ export default function ProjectDetail() {
         </div>
       </div>
 
+      <ProjectLifecycleCard project={project} />
+
       <ProjectTabs
         id={id}
         project={project}
@@ -135,6 +143,253 @@ export default function ProjectDetail() {
         summary={summary}
       />
     </div>
+  );
+}
+
+// ─── Lifecycle / approval workflow card ──────────────────────────────────────
+// Renders the project's current stage + the buttons the current role is
+// allowed to press. Approval-stage transitions go through POST /approvals/.../resolve
+// (so they appear in the Approvals inbox too); every other stage move calls
+// POST /api/projects/:id/transition. Both invalidate the dashboard query so
+// the badge + activity counters refresh in place.
+type LifecycleAction = {
+  to: string;
+  label: string;
+  icon: typeof Play;
+  tone: "primary" | "success" | "warning" | "danger" | "neutral";
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  pending_approval: "Pending Approval",
+  not_started: "Not Started",
+  on_track: "On Track",
+  at_risk: "At Risk",
+  delayed: "Delayed",
+  on_hold: "On Hold",
+  completed: "Completed",
+};
+
+const STATUS_DESCRIPTION: Record<string, string> = {
+  pending_approval:
+    "Waiting for an Admin or Super Admin to approve this project before work can begin.",
+  not_started: "Approved and ready. A Project Manager or Owner can start it now.",
+  on_track: "Work is on schedule. Mark at risk / delayed / on hold as needed.",
+  at_risk: "Watch closely — adjust the schedule or escalate.",
+  delayed: "Behind plan. Recover the schedule or pause the project.",
+  on_hold: "Paused. Resume when ready, or resubmit for re-approval after edits.",
+  completed: "Closed out. No further transitions allowed.",
+};
+
+function getLifecycleActions(status: string, role: string | null): LifecycleAction[] {
+  const isAdmin = role === "admin" || role === "super_admin";
+  const isOperator = isAdmin || role === "owner" || role === "pm";
+  switch (status) {
+    case "pending_approval":
+      // Approve/reject happens via the Approvals page resolve flow so it stays
+      // in the inbox; we surface inline shortcuts here for the same admins.
+      if (isAdmin) {
+        return [
+          { to: "not_started", label: "Approve", icon: ClipboardCheck, tone: "success" },
+          { to: "on_hold", label: "Reject (park on hold)", icon: Pause, tone: "danger" },
+        ];
+      }
+      return [];
+    case "not_started":
+      return isOperator
+        ? [
+            { to: "on_track", label: "Start project", icon: Play, tone: "primary" },
+            { to: "on_hold", label: "Hold", icon: Pause, tone: "neutral" },
+          ]
+        : [];
+    case "on_track":
+      return isOperator
+        ? [
+            { to: "at_risk", label: "Flag at risk", icon: AlertCircle, tone: "warning" },
+            { to: "delayed", label: "Mark delayed", icon: AlertCircle, tone: "danger" },
+            { to: "on_hold", label: "Hold", icon: Pause, tone: "neutral" },
+            ...(isAdmin
+              ? [{ to: "completed" as const, label: "Mark complete", icon: CheckCircle, tone: "success" as const }]
+              : []),
+          ]
+        : [];
+    case "at_risk":
+      return isOperator
+        ? [
+            { to: "on_track", label: "Back on track", icon: Play, tone: "success" },
+            { to: "delayed", label: "Mark delayed", icon: AlertCircle, tone: "danger" },
+            { to: "on_hold", label: "Hold", icon: Pause, tone: "neutral" },
+            ...(isAdmin
+              ? [{ to: "completed" as const, label: "Mark complete", icon: CheckCircle, tone: "success" as const }]
+              : []),
+          ]
+        : [];
+    case "delayed":
+      return isOperator
+        ? [
+            { to: "on_track", label: "Back on track", icon: Play, tone: "success" },
+            { to: "at_risk", label: "Mark at risk", icon: AlertCircle, tone: "warning" },
+            { to: "on_hold", label: "Hold", icon: Pause, tone: "neutral" },
+            ...(isAdmin
+              ? [{ to: "completed" as const, label: "Mark complete", icon: CheckCircle, tone: "success" as const }]
+              : []),
+          ]
+        : [];
+    case "on_hold":
+      return isOperator
+        ? [
+            { to: "on_track", label: "Resume", icon: RotateCcw, tone: "success" },
+            { to: "pending_approval", label: "Resubmit for approval", icon: Send, tone: "primary" },
+          ]
+        : [];
+    default:
+      return [];
+  }
+}
+
+const TONE_CLASS: Record<LifecycleAction["tone"], string> = {
+  primary: "bg-violet-600 hover:bg-violet-700 text-white",
+  success: "bg-emerald-600 hover:bg-emerald-700 text-white",
+  warning: "bg-amber-500 hover:bg-amber-600 text-white",
+  danger: "bg-rose-600 hover:bg-rose-700 text-white",
+  neutral: "bg-slate-200 hover:bg-slate-300 text-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100",
+};
+
+function ProjectLifecycleCard({ project }: { project: any }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data: profile } = useGetMyProfile();
+  const role: string | null = (profile as any)?.role ?? null;
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const status: string = project.status;
+  const actions = getLifecycleActions(status, role);
+
+  // For pending_approval, the inline Approve/Reject buttons must go through
+  // the approval-ticket resolve route so the Approvals inbox and the project
+  // status stay in lockstep (and the admin-only gate lives in one place).
+  // We look up the open approval row for this project from the user's inbox.
+  const { data: approvals } = useListApprovals();
+  const pendingApproval = useMemo(() => {
+    if (status !== "pending_approval" || !Array.isArray(approvals)) return null;
+    return (
+      (approvals as any[]).find(
+        (a) => a.entityType === "project" && a.entityId === project.id,
+      ) ?? null
+    );
+  }, [approvals, project.id, status]);
+  const resolveApproval = useResolveApproval();
+
+  const invalidateAll = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getGetProjectDashboardQueryKey(project.id) }),
+      queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(project.id) }),
+      queryClient.invalidateQueries({ queryKey: getListApprovalsQueryKey() }),
+    ]);
+  };
+
+  const runTransition = async (to: string) => {
+    setBusy(to);
+    try {
+      // pending_approval → not_started/on_hold must go through the resolve
+      // route (state-machine endpoint refuses these moves intentionally).
+      if (status === "pending_approval") {
+        if (!pendingApproval) {
+          throw new Error(
+            "No open approval ticket found for this project. Refresh and try again.",
+          );
+        }
+        const decision = to === "not_started" ? "approved" : "rejected";
+        await resolveApproval.mutateAsync({
+          approvalId: pendingApproval.id,
+          data: { decision },
+        });
+      } else {
+        const resp = await fetch(`/api/projects/${project.id}/transition`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ to }),
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.error || `Transition failed (${resp.status})`);
+        }
+      }
+      await invalidateAll();
+      toast({
+        title: "Project updated",
+        description: `Status moved to ${STATUS_LABEL[to] ?? to}.`,
+      });
+    } catch (e: any) {
+      toast({
+        title: "Could not change status",
+        description: e?.message ?? "Transition failed.",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const isPending = status === "pending_approval";
+
+  return (
+    <Card
+      data-testid="project-lifecycle-card"
+      className={isPending ? "border-amber-300 bg-amber-50/60 dark:bg-amber-950/20" : undefined}
+    >
+      <CardContent className="p-5 flex flex-col lg:flex-row lg:items-center gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="text-[11px] uppercase tracking-wider font-bold text-muted-foreground">
+            Project Lifecycle
+          </div>
+          <div className="mt-1 flex items-center gap-2">
+            <span className="text-lg font-semibold">{STATUS_LABEL[status] ?? status}</span>
+            {isPending && (
+              <Badge variant="outline" className="text-[11px] border-amber-400 text-amber-800 dark:text-amber-200">
+                Awaiting admin approval
+              </Badge>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">{STATUS_DESCRIPTION[status] ?? ""}</p>
+          {project.lastTransitionNote && (
+            <p className="text-xs text-muted-foreground mt-1 italic">
+              Note: {project.lastTransitionNote}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2 shrink-0">
+          {actions.length === 0 ? (
+            <span className="text-xs text-muted-foreground italic">
+              {status === "completed"
+                ? "Project complete."
+                : "No actions available for your role."}
+            </span>
+          ) : (
+            actions.map((a) => {
+              const Icon = a.icon;
+              return (
+                <button
+                  key={a.to}
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() => runTransition(a.to)}
+                  className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${TONE_CLASS[a.tone]}`}
+                  data-testid={`lifecycle-${a.to}`}
+                >
+                  {busy === a.to ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Icon className="h-4 w-4" />
+                  )}
+                  {a.label}
+                </button>
+              );
+            })
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

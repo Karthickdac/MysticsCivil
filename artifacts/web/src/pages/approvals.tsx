@@ -23,6 +23,7 @@ import {
   AlertCircle,
   ExternalLink,
   Inbox,
+  Building2,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -57,6 +58,11 @@ const ENTITY_META: Record<
     icon: AlertCircle,
     tone: "text-amber-600 bg-amber-50 dark:bg-amber-950/40",
   },
+  project: {
+    label: "New Project",
+    icon: Building2,
+    tone: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40",
+  },
 };
 
 function entityDetailHref(item: ApprovalRow): string | null {
@@ -68,6 +74,8 @@ function entityDetailHref(item: ApprovalRow): string | null {
       return `/projects/${item.projectId}?tab=variation-orders`;
     case "issue":
       return `/projects/${item.projectId}?tab=issues`;
+    case "project":
+      return `/projects/${item.projectId}`;
     default:
       return `/projects/${item.projectId}`;
   }

@@ -130,6 +130,20 @@ router.post(
         return { conflict: `Approval already ${existing.status}` as const };
       }
 
+      // Role-gate by the approval's `assignedToRole`. super_admin/admin always
+      // override; otherwise the caller must hold the exact assigned role.
+      // Project-lifecycle approvals are admin-only by policy regardless of any
+      // (mis)assignment on the row.
+      const callerRole = ctx.role ?? "";
+      const isAdminOverride =
+        callerRole === "super_admin" || callerRole === "admin";
+      if (existing.entityType === "project" && !isAdminOverride) {
+        return { forbidden: true as const };
+      }
+      if (!isAdminOverride && callerRole !== existing.assignedToRole) {
+        return { forbidden: true as const };
+      }
+
       const [row] = await tx
         .update(approvalsTable)
         .set({ status: b.decision, resolvedAt: new Date() })
@@ -161,6 +175,23 @@ router.post(
               approvedAt: new Date(),
             })
             .where(eq(variationOrdersTable.id, existing.entityId));
+        } else if (existing.entityType === "project") {
+          // Approving moves the project into active work; rejecting parks it
+          // on_hold so the requester can edit and POST /transition to
+          // pending_approval again. Either way we stamp the lifecycle audit
+          // columns so the project page shows who actioned it and when.
+          const nextStatus = b.decision === "approved" ? "not_started" : "on_hold";
+          const now = new Date();
+          await tx
+            .update(projectsTable)
+            .set({
+              status: nextStatus,
+              approvedById: b.decision === "approved" ? userId : null,
+              approvedAt: b.decision === "approved" ? now : null,
+              lastTransitionNote:
+                b.reason ? String(b.reason) : (b.decision === "rejected" ? "Rejected at approval" : null),
+            } as any)
+            .where(eq(projectsTable.id, existing.entityId));
         }
       }
 

@@ -29,6 +29,7 @@ export const USER_ROLES = [
 export type UserRole = (typeof USER_ROLES)[number];
 
 export const PROJECT_STATUSES = [
+  "pending_approval",
   "not_started",
   "on_track",
   "at_risk",
@@ -132,7 +133,13 @@ export const projectsTable = pgTable("projects", {
   startDate: timestamp("start_date", { withTimezone: true }),
   targetEndDate: timestamp("target_end_date", { withTimezone: true }),
   forecastEndDate: timestamp("forecast_end_date", { withTimezone: true }),
-  status: varchar("status", { length: 32 }).notNull().default("not_started"),
+  status: varchar("status", { length: 32 }).notNull().default("pending_approval"),
+  initiatedById: varchar("initiated_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  initiatedAt: timestamp("initiated_at", { withTimezone: true }),
+  approvedById: varchar("approved_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  lastTransitionNote: text("last_transition_note"),
   plannedPercent: numeric("planned_percent", { precision: 5, scale: 2 }).notNull().default("0"),
   actualPercent: numeric("actual_percent", { precision: 5, scale: 2 }).notNull().default("0"),
   costToDate: numeric("cost_to_date", { precision: 18, scale: 2 }).notNull().default("0"),
@@ -343,18 +350,29 @@ export const insertIssueSchema = createInsertSchema(issuesTable).omit({
   raisedById: true,
 });
 
-export const approvalsTable = pgTable("approvals", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectId: varchar("project_id").references(() => projectsTable.id, { onDelete: "cascade" }),
-  entityType: varchar("entity_type", { length: 32 }).notNull(),
-  entityId: varchar("entity_id").notNull(),
-  title: varchar("title", { length: 256 }).notNull(),
-  requestedById: varchar("requested_by_id").references(() => usersTable.id),
-  assignedToRole: varchar("assigned_to_role", { length: 32 }).notNull(),
-  status: varchar("status", { length: 32 }).notNull().default("pending"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-});
+export const approvalsTable = pgTable(
+  "approvals",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    projectId: varchar("project_id").references(() => projectsTable.id, { onDelete: "cascade" }),
+    entityType: varchar("entity_type", { length: 32 }).notNull(),
+    entityId: varchar("entity_id").notNull(),
+    title: varchar("title", { length: 256 }).notNull(),
+    requestedById: varchar("requested_by_id").references(() => usersTable.id),
+    assignedToRole: varchar("assigned_to_role", { length: 32 }).notNull(),
+    status: varchar("status", { length: 32 }).notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => ({
+    // At most one open approval per (entity_type, entity_id). DB-enforced so
+    // concurrent resubmits / double-clicks cannot create duplicate pending
+    // rows even if the app-side select-then-insert race-loses.
+    onePendingPerEntityUq: uniqueIndex("approvals_one_pending_per_entity_uq")
+      .on(t.entityType, t.entityId)
+      .where(sql`status = 'pending'`),
+  }),
+);
 export type Approval = typeof approvalsTable.$inferSelect;
 
 // ─────────────────────────────────────────────

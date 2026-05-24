@@ -1,0 +1,2 @@
+- [Approval ticket integrity](approval-tickets.md) — pending-approval rows need (a) DB-level partial unique index, (b) admin-only resolve, (c) single state path (resolve route, not transition).
+- [Project lifecycle gates](project-lifecycle-gates.md) — every project status change must check per-project access (userCanSeeProject), not just org match.
