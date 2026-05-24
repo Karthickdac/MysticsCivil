@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "BK3j_-jZnNf6jGo4S8WPk"
@@ -18,3 +17,9 @@ id = "aItDHfKcOVQ_jZ0lIXCT0"
 uri = "file://artifacts/web/public/assets/site3.png"
 type = "image"
 title = "site office blueprint"
+
+[[outputs]]
+id = "lAUNAe8BZQvTqvABcgo-c"
+uri = "file://docs/APPLICATION_WORKFLOW.md"
+type = "text"
+title = "KattidaCore — Application Workflow Reference"
