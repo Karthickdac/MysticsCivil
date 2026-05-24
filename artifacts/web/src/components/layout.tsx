@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@workspace/replit-auth-web";
 import {
   useGetMyProfile,
@@ -206,11 +206,11 @@ function ProjectsTree({
     const m = location.match(/^\/projects\/([^?]+)/);
     return m ? { projectId: m[1] } : null;
   }, [location]);
+  const search = useSearch();
   const activeTab = useMemo(() => {
-    const q = typeof window !== "undefined" ? window.location.search : "";
-    const t = new URLSearchParams(q).get("tab");
+    const t = new URLSearchParams(search).get("tab");
     return t || "dashboard";
-  }, [location]);
+  }, [search]);
 
   // Auto-expand to active project
   useEffect(() => {
