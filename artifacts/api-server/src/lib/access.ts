@@ -12,7 +12,12 @@ import { and, eq, inArray } from "drizzle-orm";
 import { loadRole } from "../middlewares/requireAuth";
 
 // Roles that bypass per-project access checks (see every project in their org).
-export const PROJECT_ACCESS_BYPASS_ROLES = new Set(["admin", "owner"]);
+// super_admin bypasses both project access AND org scoping (cross-org visibility).
+export const PROJECT_ACCESS_BYPASS_ROLES = new Set(["super_admin", "admin", "owner"]);
+export const SUPER_ADMIN_ROLE = "super_admin";
+export function isSuperAdmin(role: string | null | undefined): boolean {
+  return role === SUPER_ADMIN_ROLE;
+}
 
 // Map first path segment after /projects/:projectId/<segment> to a module key.
 // Segments not in the map (e.g. "modules", "access", "dashboard", "site-location")
@@ -120,6 +125,11 @@ async function loadContext(req: Request): Promise<AccessContext> {
 // admin/owner: all projects in their org (or all projects if no org bound).
 // others: only projects with a project_access row.
 export async function getAccessibleProjectIds(ctx: AccessContext): Promise<string[]> {
+  // super_admin: every project, regardless of org binding.
+  if (isSuperAdmin(ctx.role)) {
+    const rows = await db.select({ id: projectsTable.id }).from(projectsTable);
+    return rows.map((r) => r.id);
+  }
   if (ctx.role && PROJECT_ACCESS_BYPASS_ROLES.has(ctx.role)) {
     const rows = ctx.organisationId
       ? await db
@@ -155,6 +165,8 @@ export async function projectModuleEnabled(
 }
 
 export async function userCanSeeProject(ctx: AccessContext, projectId: string): Promise<boolean> {
+  // super_admin sees every project globally.
+  if (isSuperAdmin(ctx.role)) return true;
   if (ctx.role && PROJECT_ACCESS_BYPASS_ROLES.has(ctx.role)) {
     if (!ctx.organisationId) return true;
     const [p] = await db

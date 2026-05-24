@@ -3,6 +3,7 @@ import { db, organisationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS, loadRole } from "../middlewares/requireAuth";
 import { serializeOrg, serializeOrgPublic } from "../lib/serialize";
+import { getAccessCtx, isSuperAdmin } from "../lib/access";
 
 const router: IRouter = Router();
 
@@ -19,7 +20,7 @@ function parseOrgBody(b: any): Record<string, unknown> {
 async function isAdmin(req: Request): Promise<boolean> {
   const role = req.userRole ?? (await loadRole(req.user!.id));
   req.userRole = role ?? undefined;
-  return role === "admin";
+  return role === "admin" || role === "super_admin";
 }
 
 router.get("/organisations", requireAuth, async (req: Request, res: Response) => {
@@ -29,6 +30,13 @@ router.get("/organisations", requireAuth, async (req: Request, res: Response) =>
 });
 
 router.post("/organisations", requireAuth, requireRole(...ROLE_GROUPS.ADMIN), async (req: Request, res: Response) => {
+  // SECURITY: only super_admin may create new organisations. A regular admin is
+  // bound to their own org and cannot spawn parallel orgs.
+  const ctx = await getAccessCtx(req);
+  if (!isSuperAdmin(ctx.role)) {
+    res.status(403).json({ error: "Only Super Admin can create organisations." });
+    return;
+  }
   const b = req.body ?? {};
   if (!b.name || typeof b.name !== "string") {
     res.status(400).json({ error: "name is required" });
@@ -59,6 +67,12 @@ router.patch(
   requireAuth,
   requireRole(...ROLE_GROUPS.ADMIN),
   async (req: Request, res: Response) => {
+    // SECURITY: non-super admins may only edit their own organisation.
+    const ctx = await getAccessCtx(req);
+    if (!isSuperAdmin(ctx.role) && ctx.organisationId !== req.params.organisationId) {
+      res.status(403).json({ error: "You can only edit your own organisation." });
+      return;
+    }
     const update = parseOrgBody(req.body ?? {});
     if (!Object.keys(update).length) {
       const [row] = await db

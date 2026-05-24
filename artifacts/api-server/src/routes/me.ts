@@ -51,9 +51,10 @@ router.get("/me/profile", requireAuth, async (req: Request, res: Response) => {
 router.patch("/me/profile", requireAuth, async (req: Request, res: Response) => {
   const body = req.body ?? {};
   await ensureProfile(req.user!.id);
+  // SECURITY: role and organisationId are NOT self-mutable here — that would
+  // allow any user to self-promote to admin/super_admin. They must be changed
+  // by an admin via /api/admin/users/:userId.
   const update: Record<string, unknown> = {};
-  if (typeof body.role === "string") update.role = body.role;
-  if (typeof body.organisationId === "string") update.organisationId = body.organisationId;
   if (typeof body.phone === "string") update.phone = body.phone;
   if (typeof body.designation === "string") update.designation = body.designation;
   if (Object.keys(update).length) {

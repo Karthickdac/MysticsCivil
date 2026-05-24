@@ -105,6 +105,8 @@ export const organisationsTable = pgTable("organisations", {
   logoUrl: varchar("logo_url"),
   // null = all modules enabled (default). Array = explicit allow-list of ModuleKey strings.
   enabledModules: jsonb("enabled_modules"),
+  // null = unlimited. Otherwise enforced on POST /projects. Set by super_admin.
+  maxProjects: integer("max_projects"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type Organisation = typeof organisationsTable.$inferSelect;

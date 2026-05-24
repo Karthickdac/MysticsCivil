@@ -23,6 +23,7 @@ import storageRouter from "./storage";
 import geocodeRouter from "./geocode";
 import modulesAccessRouter from "./modules-access";
 import reportsRouter from "./reports";
+import adminRouter from "./admin";
 import { requireProjectAccess } from "../lib/access";
 
 const router: IRouter = Router();
@@ -42,6 +43,7 @@ router.use((req, res, next) => {
 router.use(healthRouter);
 router.use(authRouter);
 router.use(meRouter);
+router.use(adminRouter);
 router.use(modulesAccessRouter);
 router.use(reportsRouter);
 router.use(organisationsRouter);

@@ -1,9 +1,9 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, projectsTable, milestonesTable } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import { db, projectsTable, milestonesTable, organisationsTable } from "@workspace/db";
+import { eq, inArray, sql } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { serializeProject } from "../lib/serialize";
-import { getAccessCtx, getAccessibleProjectIds, PROJECT_ACCESS_BYPASS_ROLES } from "../lib/access";
+import { getAccessCtx, getAccessibleProjectIds, PROJECT_ACCESS_BYPASS_ROLES, isSuperAdmin } from "../lib/access";
 
 const router: IRouter = Router();
 
@@ -34,6 +34,12 @@ function parseProjectBody(b: any): Record<string, unknown> {
 
 router.get("/projects", requireAuth, async (req: Request, res: Response) => {
   const ctx = await getAccessCtx(req);
+  // super_admin sees every project across every org.
+  if (isSuperAdmin(ctx.role)) {
+    const rows = await db.select().from(projectsTable);
+    res.json(rows.map(serializeProject));
+    return;
+  }
   // admin/owner bypass: see all in org (or all if no org)
   if (ctx.role && PROJECT_ACCESS_BYPASS_ROLES.has(ctx.role)) {
     const rows = ctx.organisationId
@@ -56,6 +62,37 @@ router.post("/projects", requireAuth, requireRole(...ROLE_GROUPS.OWNER_PM), asyn
   if (!b.organisationId || !b.code || !b.name) {
     res.status(400).json({ error: "organisationId, code, name required" });
     return;
+  }
+  // Enforce per-org scoping + maxProjects quota (super_admin bypasses both).
+  const ctx = await getAccessCtx(req);
+  if (!isSuperAdmin(ctx.role)) {
+    // SECURITY: non-super users can only create projects in their own org.
+    if (!ctx.organisationId || String(b.organisationId) !== ctx.organisationId) {
+      res.status(403).json({
+        error: "You can only create projects within your own organisation.",
+      });
+      return;
+    }
+    const [org] = await db
+      .select({ maxProjects: organisationsTable.maxProjects, name: organisationsTable.name })
+      .from(organisationsTable)
+      .where(eq(organisationsTable.id, String(b.organisationId)));
+    if (!org) {
+      res.status(400).json({ error: "Organisation not found" });
+      return;
+    }
+    if (org.maxProjects != null) {
+      const [{ count }] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(projectsTable)
+        .where(eq(projectsTable.organisationId, String(b.organisationId)));
+      if (Number(count) >= org.maxProjects) {
+        res.status(403).json({
+          error: `Project quota reached for ${org.name} (${org.maxProjects}). Ask Super Admin to raise the limit.`,
+        });
+        return;
+      }
+    }
   }
   const row = await db.transaction(async (tx) => {
     const [created] = await tx

@@ -49,10 +49,12 @@ export function requireRole(...allowed: string[]) {
   };
 }
 
+// super_admin is added to every group automatically — it has full access by definition.
 export const ROLE_GROUPS = {
-  ADMIN: ["admin"] as const,
-  OWNER_PM: ["owner", "pm", "admin"] as const,
-  OWNER_PM_QS: ["owner", "pm", "qs", "admin"] as const,
-  OWNER_PM_FINANCE: ["owner", "pm", "finance", "admin"] as const,
-  SITE_WRITE: ["owner", "pm", "site_engineer", "qc", "admin"] as const,
+  SUPER_ADMIN: ["super_admin"] as const,
+  ADMIN: ["super_admin", "admin"] as const,
+  OWNER_PM: ["super_admin", "owner", "pm", "admin"] as const,
+  OWNER_PM_QS: ["super_admin", "owner", "pm", "qs", "admin"] as const,
+  OWNER_PM_FINANCE: ["super_admin", "owner", "pm", "finance", "admin"] as const,
+  SITE_WRITE: ["super_admin", "owner", "pm", "site_engineer", "qc", "admin"] as const,
 };

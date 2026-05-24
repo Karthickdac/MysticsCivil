@@ -9,6 +9,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed": "tsx src/scripts/seed.ts",
+    "seed:rbac": "tsx src/scripts/seed-rbac.ts",
     "seed:estimation": "tsx src/scripts/seed-estimation.ts",
     "seed:financial": "tsx src/scripts/seed-financial.ts",
     "seed:supply-chain": "tsx src/scripts/seed-supply-chain.ts"

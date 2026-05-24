@@ -17,6 +17,7 @@ import Approvals from "@/pages/approvals";
 import Reports from "@/pages/reports";
 import Organisations from "@/pages/organisations";
 import Profile from "@/pages/profile";
+import Admin from "@/pages/admin";
 import DsrRates from "@/pages/dsr-rates";
 import NotFound from "@/pages/not-found";
 
@@ -56,6 +57,7 @@ function Router() {
       <Route path="/reports" component={() => <ProtectedRoute component={Reports} />} />
       <Route path="/dsr-rates" component={() => <ProtectedRoute component={DsrRates} />} />
       <Route path="/organisations" component={() => <ProtectedRoute component={Organisations} />} />
+      <Route path="/admin" component={() => <ProtectedRoute component={Admin} />} />
       <Route path="/profile" component={() => <ProtectedRoute component={Profile} />} />
       <Route component={NotFound} />
     </Switch>

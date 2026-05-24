@@ -36,7 +36,7 @@ import {
   FolderTree,
 } from "lucide-react";
 
-const ALL_ROLES = ["owner", "pm", "site_engineer", "qs", "finance", "contractor", "qc", "store", "hr", "admin"];
+const ALL_ROLES = ["super_admin", "owner", "pm", "site_engineer", "qs", "finance", "contractor", "qc", "store", "hr", "admin"];
 
 type NavItem = { titleKey: string; url: string; icon: any; roles: string[]; moduleKey?: string };
 type NavGroup = { key: string; labelKey: string; items: NavItem[] };
@@ -63,7 +63,8 @@ function getNavGroups(role: string | undefined, enabledModules: Set<string> | nu
       key: "admin",
       labelKey: "nav.group.admin",
       items: [
-        { titleKey: "nav.organisations", url: "/organisations", icon: Users, roles: ["admin"] },
+        { titleKey: "nav.admin", url: "/admin", icon: ShieldCheck, roles: ["super_admin", "admin"] },
+        { titleKey: "nav.organisations", url: "/organisations", icon: Users, roles: ["super_admin", "admin"] },
         { titleKey: "nav.profile", url: "/profile", icon: Settings, roles: ALL_ROLES },
       ],
     },
