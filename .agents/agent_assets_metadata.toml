@@ -29,3 +29,9 @@ id = "k5mUC4PT5GP0WY3CQVvbw"
 uri = "file://exports/Mystics Civil.pdf"
 type = "pdf"
 title = "Mystics Civil — Complete Guide & Demo Handbook"
+
+[[outputs]]
+id = "Q7krd8Yn__ZpNxK3QG_rV"
+uri = "file://exports/Mystics Civil - Pitch Deck.pdf"
+type = "pdf"
+title = "Mystics Civil — Pitch Deck"
