@@ -16,7 +16,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Building2, Calendar, FileText, LayoutDashboard, ListTodo, MapPin, AlertCircle, Camera, FolderOpen, Calculator, GitBranch, TrendingUp, Banknote, ShoppingCart, HardHat, Loader2 } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
+import { CheckCircle2, AlertTriangle, XCircle, TrendingDown, Wallet, Coins, PiggyBank, Target } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SettingsTab } from "@/components/project-tabs/settings-tab";
 import { WbsTab } from "@/components/project-tabs/wbs-tab";
@@ -56,6 +57,9 @@ export default function ProjectDetail() {
   if (!data) return <div>Project not found</div>;
 
   const { project, health, cost, miniGantt, activityStatusCounts, recentPhotos, pendingActions, nextMilestone } = data;
+  // `summary` is added by the api-server but not yet in the generated OpenAPI
+  // types; cast through `any` to read it without forcing a codegen cycle.
+  const summary = (data as any).summary as ProjectSummary | undefined;
 
   const ganttBounds = (() => {
     const dates: number[] = [];
@@ -128,6 +132,7 @@ export default function ProjectDetail() {
         recentPhotos={recentPhotos}
         pendingActions={pendingActions}
         cost={cost}
+        summary={summary}
       />
     </div>
   );
@@ -293,7 +298,7 @@ function ProjectLocationPanel({
 
 const VALID_PROJECT_TABS = VPT;
 
-function ProjectTabs({ id, project, health, nextMilestone, statusColors, chartStatusColors, activityData, miniGantt, ganttBounds, recentPhotos, pendingActions, cost }: {
+function ProjectTabs({ id, project, health, nextMilestone, statusColors, chartStatusColors, activityData, miniGantt, ganttBounds, recentPhotos, pendingActions, cost, summary }: {
   id: string;
   project: any;
   health: any;
@@ -306,6 +311,7 @@ function ProjectTabs({ id, project, health, nextMilestone, statusColors, chartSt
   recentPhotos: any[];
   pendingActions: any;
   cost: any;
+  summary: ProjectSummary | undefined;
 }) {
   const search = useSearch();
   const [, setLocation] = useLocation();
@@ -348,6 +354,7 @@ function ProjectTabs({ id, project, health, nextMilestone, statusColors, chartSt
         </TabsContent>
 
         <TabsContent value="dashboard" className="space-y-6">
+          {summary && <ProjectSummaryBlock summary={summary} />}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {/* Panel 1: Health Ring */}
             <Card>
@@ -586,5 +593,253 @@ function ProjectTabs({ id, project, health, nextMilestone, statusColors, chartSt
         <TabsContent value="workforce"><WorkforcePage projectId={id} /></TabsContent>
         <TabsContent value="settings"><SettingsTab projectId={id} /></TabsContent>
       </Tabs>
+  );
+}
+
+// ── Project Summary block (Overview tab top) ────────────────────────────────
+// Renders the high-signal cockpit numbers (progress, cost, utilization,
+// remaining) above the rest of the dashboard. Source data comes from the
+// `summary` field on `/projects/:id/dashboard`.
+type ProjectSummary = {
+  percentComplete: number;
+  plannedPercent: number;
+  variancePercent: number;
+  workCompleted: number;
+  workPending: number;
+  workTotal: number;
+  estimatedCost: number;
+  amountUtilized: number;
+  remainingBalance: number;
+  utilizationPercent: number;
+  utilizationBreakdown: {
+    contractor: number;
+    labour: number;
+    materials: number;
+    advances: number;
+  };
+  insights: Array<{ tone: "positive" | "warning" | "danger"; text: string }>;
+};
+
+function formatInr(value: number): string {
+  if (!Number.isFinite(value)) return "₹0";
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+  if (abs >= 10000000) return `${sign}₹${(abs / 10000000).toFixed(2)} Cr`;
+  if (abs >= 100000) return `${sign}₹${(abs / 100000).toFixed(2)} L`;
+  if (abs >= 1000) return `${sign}₹${(abs / 1000).toFixed(1)} K`;
+  return `${sign}₹${abs.toFixed(0)}`;
+}
+
+function ProjectSummaryBlock({ summary }: { summary: ProjectSummary }) {
+  const pct = Math.max(0, Math.min(100, summary.percentComplete));
+  const utilPct = Math.max(0, Math.min(100, summary.utilizationPercent));
+  const overBudget = summary.utilizationPercent > 100;
+
+  const breakdown = [
+    { name: "Contractor bills", value: summary.utilizationBreakdown.contractor, fill: "#6366f1" },
+    { name: "Labour", value: summary.utilizationBreakdown.labour, fill: "#10b981" },
+    { name: "Materials (GRN)", value: summary.utilizationBreakdown.materials, fill: "#f59e0b" },
+    { name: "PO advances", value: summary.utilizationBreakdown.advances, fill: "#8b5cf6" },
+  ].filter((s) => s.value > 0);
+
+  const toneClass = (tone: "positive" | "warning" | "danger") =>
+    tone === "positive"
+      ? "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900"
+      : tone === "warning"
+        ? "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900"
+        : "bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900";
+
+  const ToneIcon = ({ tone }: { tone: "positive" | "warning" | "danger" }) =>
+    tone === "positive" ? <CheckCircle2 className="h-3.5 w-3.5" /> :
+    tone === "warning" ? <AlertTriangle className="h-3.5 w-3.5" /> :
+    <XCircle className="h-3.5 w-3.5" />;
+
+  return (
+    <section className="space-y-4" data-testid="project-summary">
+      {/* KPI cards */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          icon={<Target className="h-5 w-5" />}
+          tint="sky"
+          label="% Complete"
+          value={`${pct.toFixed(1)}%`}
+          sub={`Planned ${summary.plannedPercent.toFixed(1)}% • ${summary.variancePercent >= 0 ? "+" : ""}${summary.variancePercent.toFixed(1)}% var`}
+        />
+        <KpiCard
+          icon={<Wallet className="h-5 w-5" />}
+          tint="violet"
+          label="Estimated Cost"
+          value={formatInr(summary.estimatedCost)}
+          sub={summary.estimatedCost > 0 ? "Contract value" : "Not set"}
+        />
+        <KpiCard
+          icon={<Coins className="h-5 w-5" />}
+          tint={overBudget ? "rose" : "amber"}
+          label="Amount Utilized"
+          value={formatInr(summary.amountUtilized)}
+          sub={`${utilPct.toFixed(1)}% of estimate`}
+        />
+        <KpiCard
+          icon={summary.remainingBalance < 0 ? <TrendingDown className="h-5 w-5" /> : <PiggyBank className="h-5 w-5" />}
+          tint={summary.remainingBalance < 0 ? "rose" : "emerald"}
+          label="Remaining Balance"
+          value={formatInr(summary.remainingBalance)}
+          sub={summary.remainingBalance < 0 ? "Over budget" : "Available headroom"}
+        />
+      </div>
+
+      {/* Progress + cost split */}
+      <div className="grid gap-4 grid-cols-1 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">Work Progress</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div>
+              <div className="flex justify-between text-sm mb-1.5">
+                <span className="text-muted-foreground">Actual completion</span>
+                <span className="font-semibold">{pct.toFixed(1)}%</span>
+              </div>
+              <div className="relative h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="absolute inset-y-0 left-0 bg-slate-300 dark:bg-slate-700"
+                  style={{ width: `${Math.max(0, Math.min(100, summary.plannedPercent))}%` }}
+                  title={`Planned ${summary.plannedPercent.toFixed(1)}%`}
+                />
+                <div
+                  className={`absolute inset-y-0 left-0 rounded-full ${summary.variancePercent < -5 ? "bg-rose-500" : summary.variancePercent < 0 ? "bg-amber-500" : "bg-emerald-500"}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[11px] text-muted-foreground mt-1.5">
+                <span>Planned {summary.plannedPercent.toFixed(1)}%</span>
+                <span>{summary.variancePercent >= 0 ? "Ahead" : "Behind"} by {Math.abs(summary.variancePercent).toFixed(1)}%</span>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between text-sm mb-1.5">
+                <span className="text-muted-foreground">Budget utilization</span>
+                <span className={`font-semibold ${overBudget ? "text-rose-600" : ""}`}>{utilPct.toFixed(1)}%</span>
+              </div>
+              <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${overBudget ? "bg-rose-500" : utilPct > 85 ? "bg-amber-500" : "bg-emerald-500"}`}
+                  style={{ width: `${utilPct}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[11px] text-muted-foreground mt-1.5">
+                <span>Spent {formatInr(summary.amountUtilized)}</span>
+                <span>of {formatInr(summary.estimatedCost)}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 pt-2 border-t">
+              <MiniStat label="Activities done" value={summary.workCompleted.toString()} accent="emerald" />
+              <MiniStat label="In progress / pending" value={summary.workPending.toString()} accent="amber" />
+              <MiniStat label="Total activities" value={summary.workTotal.toString()} accent="slate" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">Where the Money Went</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {breakdown.length === 0 ? (
+              <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground text-center">
+                No spend recorded against this project yet.
+              </div>
+            ) : (
+              <div className="h-[220px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={breakdown}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={85}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {breakdown.map((s, i) => <Cell key={i} fill={s.fill} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => formatInr(v)} />
+                    <Legend
+                      verticalAlign="bottom"
+                      iconType="circle"
+                      wrapperStyle={{ fontSize: 11 }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Insights chips */}
+      {summary.insights.length > 0 && (
+        <div className="flex flex-wrap gap-2" data-testid="summary-insights">
+          {summary.insights.map((ins, i) => (
+            <span
+              key={i}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${toneClass(ins.tone)}`}
+            >
+              <ToneIcon tone={ins.tone} />
+              {ins.text}
+            </span>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function KpiCard({
+  icon, label, value, sub, tint,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  sub: string;
+  tint: "sky" | "violet" | "amber" | "rose" | "emerald";
+}) {
+  const tints: Record<string, string> = {
+    sky: "bg-sky-50 text-sky-600 dark:bg-sky-950/40",
+    violet: "bg-violet-50 text-violet-600 dark:bg-violet-950/40",
+    amber: "bg-amber-50 text-amber-600 dark:bg-amber-950/40",
+    rose: "bg-rose-50 text-rose-600 dark:bg-rose-950/40",
+    emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40",
+  };
+  return (
+    <Card>
+      <CardContent className="p-4 flex items-start gap-3">
+        <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${tints[tint]}`}>
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">{label}</div>
+          <div className="text-xl font-bold tracking-tight mt-0.5 truncate">{value}</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5 truncate">{sub}</div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MiniStat({ label, value, accent }: { label: string; value: string; accent: "emerald" | "amber" | "slate" }) {
+  const colors: Record<string, string> = {
+    emerald: "text-emerald-600",
+    amber: "text-amber-600",
+    slate: "text-slate-700 dark:text-slate-300",
+  };
+  return (
+    <div className="text-center">
+      <div className={`text-2xl font-bold ${colors[accent]}`}>{value}</div>
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground mt-0.5">{label}</div>
+    </div>
   );
 }

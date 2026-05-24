@@ -1,5 +1,12 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, approvalsTable, projectsTable, usersTable } from "@workspace/db";
+import {
+  db,
+  approvalsTable,
+  projectsTable,
+  usersTable,
+  dprsTable,
+  variationOrdersTable,
+} from "@workspace/db";
 import { and, eq, desc, inArray } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { dReq, d } from "../lib/serialize";
@@ -89,15 +96,87 @@ router.post(
       res.status(400).json({ error: "decision must be approved|rejected" });
       return;
     }
-    const [row] = await db
-      .update(approvalsTable)
-      .set({ status: b.decision, resolvedAt: new Date() })
-      .where(eq(approvalsTable.id, req.params.approvalId))
-      .returning();
-    if (!row) {
+
+    // Resolve the approval row AND propagate the decision to the source entity
+    // (DPR / VO status). Wrapped in a transaction so both commit together —
+    // otherwise the approval inbox and entity status drift out of sync.
+    const ctx = await getAccessCtx(req.user!.id);
+    const canBypassScope = PROJECT_ACCESS_BYPASS_ROLES.has(ctx.role);
+    const accessibleProjectIds = canBypassScope
+      ? null
+      : new Set(await getAccessibleProjectIds(req.user!.id));
+
+    const result = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(approvalsTable)
+        .where(eq(approvalsTable.id, req.params.approvalId));
+      if (!existing) return { notFound: true as const };
+      // Project-scope check: a privileged role (e.g. QS) is allowed to resolve,
+      // but only for projects they're actually assigned to. Mirrors the scoping
+      // already enforced on GET /approvals so the inbox and the resolve verb
+      // agree on what the caller can touch.
+      if (
+        accessibleProjectIds &&
+        existing.projectId &&
+        !accessibleProjectIds.has(existing.projectId)
+      ) {
+        return { forbidden: true as const };
+      }
+      if (existing.status !== "pending") {
+        return { conflict: `Approval already ${existing.status}` as const };
+      }
+
+      const [row] = await tx
+        .update(approvalsTable)
+        .set({ status: b.decision, resolvedAt: new Date() })
+        .where(eq(approvalsTable.id, req.params.approvalId))
+        .returning();
+
+      // Entity-specific status propagation. Keep this dispatch small and
+      // explicit; other entity types (indents, POs, bills) own their own
+      // status transitions today and intentionally aren't routed through here.
+      if (existing.entityId) {
+        const userId = req.user!.id;
+        if (existing.entityType === "dpr") {
+          await tx
+            .update(dprsTable)
+            .set({
+              status: b.decision,
+              approvedById: userId,
+              approvedAt: new Date(),
+              rejectionReason:
+                b.decision === "rejected" ? (b.reason ?? null) : null,
+            })
+            .where(eq(dprsTable.id, existing.entityId));
+        } else if (existing.entityType === "variation_order") {
+          await tx
+            .update(variationOrdersTable)
+            .set({
+              status: b.decision,
+              approvedById: userId,
+              approvedAt: new Date(),
+            })
+            .where(eq(variationOrdersTable.id, existing.entityId));
+        }
+      }
+
+      return { row };
+    });
+
+    if ("notFound" in result) {
       res.status(404).json({ error: "Not found" });
       return;
     }
+    if ("forbidden" in result) {
+      res.status(403).json({ error: "Not authorized for this project" });
+      return;
+    }
+    if ("conflict" in result) {
+      res.status(409).json({ error: result.conflict });
+      return;
+    }
+    const row = result.row;
     let projectName: string | null = null;
     if (row.projectId) {
       const [p] = await db

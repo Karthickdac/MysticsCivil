@@ -11,6 +11,10 @@ import {
   userProfilesTable,
   jsaEntriesTable,
   qualityTestsTable,
+  contractorBillsTable,
+  labourContractorBillsTable,
+  purchaseOrdersTable,
+  grnsTable,
 } from "@workspace/db";
 import { eq, desc, and, gt, gte, asc, sql, inArray, or } from "drizzle-orm";
 import { requireAuth, loadRole } from "../middlewares/requireAuth";
@@ -261,18 +265,137 @@ router.get(
       .limit(1);
 
     const plannedPercent = n(project.plannedPercent);
-    const actualPercent = n(project.actualPercent);
+    // Prefer a weighted rollup from WBS activities (sum(weight * actual%) / sum(weight))
+    // so the % matches what's actually progressing on site. Fall back to the
+    // project field when there are no activities or weights.
+    let actualPercent = n(project.actualPercent);
+    let workCompleted = 0;
+    let workPending = 0;
+    if (activities.length > 0) {
+      let wNum = 0;
+      let wDen = 0;
+      for (const a of activities) {
+        const weight = n(a.weight) || 1;
+        wDen += weight;
+        wNum += weight * n(a.actualPercent);
+        if (a.status === "completed") workCompleted++;
+        else workPending++;
+      }
+      if (wDen > 0) actualPercent = wNum / wDen;
+    }
+
     const contractValue = n(project.contractValue);
     const costToDate = n(project.costToDate);
     const budgetToDate = n(project.budgetToDate);
     const cpi = n(project.cpi);
+
+    // ── Real-money utilization, derived from source ledgers ─────────────────
+    // We sum bills/POs/GRNs directly instead of trusting projects.cost_to_date,
+    // which only updates on certain workflows and drifts over time.
+    // Bills count as "committed cost" once they've passed PM certification —
+    // earlier states (draft, qs_scrutiny) can still be rejected or heavily
+    // deducted and would over-state utilization. Adjust this set if the
+    // business definition of "utilized" changes.
+    const COMMITTED_BILL_STATUSES = [
+      "pm_certification",
+      "auto_deductions",
+      "gst_invoice",
+      "finance_approval",
+      "payment_released",
+      "ledger_posting",
+      "closed",
+    ];
+    const [contractorSum] = await db
+      .select({
+        total: sql<string>`COALESCE(SUM(${contractorBillsTable.grossAmount}), 0)`,
+      })
+      .from(contractorBillsTable)
+      .where(
+        and(
+          eq(contractorBillsTable.projectId, projectId),
+          inArray(contractorBillsTable.status, COMMITTED_BILL_STATUSES),
+        ),
+      );
+    const [labourSum] = await db
+      .select({
+        total: sql<string>`COALESCE(SUM(COALESCE(${labourContractorBillsTable.verifiedAmount}, ${labourContractorBillsTable.claimedAmount})), 0)`,
+      })
+      .from(labourContractorBillsTable)
+      .where(
+        and(
+          eq(labourContractorBillsTable.projectId, projectId),
+          inArray(labourContractorBillsTable.status, ["approved", "paid"]),
+        ),
+      );
+    const [materialsSum] = await db
+      .select({
+        total: sql<string>`COALESCE(SUM(${grnsTable.invoiceAmount}), 0)`,
+      })
+      .from(grnsTable)
+      .where(eq(grnsTable.projectId, projectId));
+    const [advanceSum] = await db
+      .select({
+        total: sql<string>`COALESCE(SUM(${purchaseOrdersTable.advancePaid}), 0)`,
+      })
+      .from(purchaseOrdersTable)
+      .where(eq(purchaseOrdersTable.projectId, projectId));
+
+    const utilContractor = n(contractorSum?.total);
+    const utilLabour = n(labourSum?.total);
+    const utilMaterials = n(materialsSum?.total);
+    const utilAdvances = n(advanceSum?.total);
+    const amountUtilized =
+      utilContractor + utilLabour + utilMaterials + utilAdvances;
+
+    const estimatedCost = contractValue > 0 ? contractValue : budgetToDate;
+    const remainingBalance = estimatedCost - amountUtilized;
+    const utilizationPercent =
+      estimatedCost > 0 ? (amountUtilized / estimatedCost) * 100 : 0;
+    const variancePercent = actualPercent - plannedPercent;
+
+    // Human-readable insights derived from the numbers above. Kept short and
+    // categorical so the UI can chip-render them without extra parsing.
+    const insights: Array<{ tone: "positive" | "warning" | "danger"; text: string }> = [];
+    if (variancePercent <= -5) {
+      insights.push({ tone: "danger", text: `Behind schedule by ${Math.abs(variancePercent).toFixed(1)}%` });
+    } else if (variancePercent < 0) {
+      insights.push({ tone: "warning", text: `Slightly behind plan (${variancePercent.toFixed(1)}%)` });
+    } else if (variancePercent >= 2) {
+      insights.push({ tone: "positive", text: `Ahead of plan by ${variancePercent.toFixed(1)}%` });
+    } else {
+      insights.push({ tone: "positive", text: "On schedule" });
+    }
+    if (estimatedCost > 0) {
+      if (utilizationPercent > 100) {
+        insights.push({
+          tone: "danger",
+          text: `Over budget by ${(utilizationPercent - 100).toFixed(1)}%`,
+        });
+      } else if (utilizationPercent > 85 && actualPercent < 75) {
+        insights.push({
+          tone: "warning",
+          text: `${utilizationPercent.toFixed(0)}% budget used at ${actualPercent.toFixed(0)}% progress`,
+        });
+      } else {
+        insights.push({
+          tone: "positive",
+          text: `Budget healthy (${utilizationPercent.toFixed(0)}% utilized)`,
+        });
+      }
+    }
+    if (pendingActions.length > 0) {
+      const overdue = pendingActions.filter((p) => p.severity === "high").length;
+      if (overdue > 0) {
+        insights.push({ tone: "warning", text: `${overdue} approval${overdue === 1 ? "" : "s"} overdue` });
+      }
+    }
 
     res.json({
       project: serializeProject(project),
       health: {
         plannedPercent,
         actualPercent,
-        variancePercent: actualPercent - plannedPercent,
+        variancePercent,
         status: project.status,
       },
       cost: {
@@ -281,6 +404,25 @@ router.get(
         contractValue,
         cpi,
         overrunPercent: budgetToDate > 0 ? ((costToDate - budgetToDate) / budgetToDate) * 100 : 0,
+      },
+      summary: {
+        percentComplete: actualPercent,
+        plannedPercent,
+        variancePercent,
+        workCompleted,
+        workPending,
+        workTotal: workCompleted + workPending,
+        estimatedCost,
+        amountUtilized,
+        remainingBalance,
+        utilizationPercent,
+        utilizationBreakdown: {
+          contractor: utilContractor,
+          labour: utilLabour,
+          materials: utilMaterials,
+          advances: utilAdvances,
+        },
+        insights,
       },
       miniGantt: activities.slice(0, 8).map((a) => ({
         activityId: a.id,
