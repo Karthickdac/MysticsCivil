@@ -8,6 +8,7 @@ import {
   getGetProjectDashboardQueryKey,
   getListProjectDprsQueryKey,
   getListProjectIssuesQueryKey,
+  getListVariationOrdersQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -133,6 +134,11 @@ export default function Approvals() {
             if (item.entityType === "issue") {
               queryClient.invalidateQueries({
                 queryKey: getListProjectIssuesQueryKey(item.projectId),
+              });
+            }
+            if (item.entityType === "variation_order") {
+              queryClient.invalidateQueries({
+                queryKey: getListVariationOrdersQueryKey(item.projectId),
               });
             }
           }

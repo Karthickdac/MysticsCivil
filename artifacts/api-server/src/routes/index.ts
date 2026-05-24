@@ -22,6 +22,7 @@ import workforceRouter from "./workforce";
 import storageRouter from "./storage";
 import geocodeRouter from "./geocode";
 import modulesAccessRouter from "./modules-access";
+import reportsRouter from "./reports";
 import { requireProjectAccess } from "../lib/access";
 
 const router: IRouter = Router();
@@ -42,6 +43,7 @@ router.use(healthRouter);
 router.use(authRouter);
 router.use(meRouter);
 router.use(modulesAccessRouter);
+router.use(reportsRouter);
 router.use(organisationsRouter);
 router.use(projectsRouter);
 router.use(wbsRouter);

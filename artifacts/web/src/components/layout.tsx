@@ -16,6 +16,7 @@ import {
   Home,
   Building2,
   ClipboardList,
+  FileBarChart,
   BookOpen,
   Users,
   Settings,
@@ -48,6 +49,7 @@ function getNavGroups(role: string | undefined, enabledModules: Set<string> | nu
       items: [
         { titleKey: "nav.dashboard", url: "/", icon: Home, roles: ALL_ROLES, moduleKey: "dashboard" },
         { titleKey: "nav.approvals", url: "/approvals", icon: ClipboardList, roles: ["owner", "pm", "qs", "finance"], moduleKey: "approvals" },
+        { titleKey: "nav.reports", url: "/reports", icon: FileBarChart, roles: ["owner", "pm", "qs", "finance", "admin"] },
       ],
     },
     {

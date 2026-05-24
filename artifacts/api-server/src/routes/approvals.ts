@@ -100,17 +100,20 @@ router.post(
     // Resolve the approval row AND propagate the decision to the source entity
     // (DPR / VO status). Wrapped in a transaction so both commit together —
     // otherwise the approval inbox and entity status drift out of sync.
-    const ctx = await getAccessCtx(req.user!.id);
-    const canBypassScope = PROJECT_ACCESS_BYPASS_ROLES.has(ctx.role);
+    const ctx = await getAccessCtx(req);
+    const canBypassScope = ctx.role
+      ? PROJECT_ACCESS_BYPASS_ROLES.has(ctx.role)
+      : false;
     const accessibleProjectIds = canBypassScope
       ? null
-      : new Set(await getAccessibleProjectIds(req.user!.id));
+      : new Set(await getAccessibleProjectIds(ctx));
 
+    const approvalId = String(req.params["approvalId"] ?? "");
     const result = await db.transaction(async (tx) => {
       const [existing] = await tx
         .select()
         .from(approvalsTable)
-        .where(eq(approvalsTable.id, req.params.approvalId));
+        .where(eq(approvalsTable.id, approvalId));
       if (!existing) return { notFound: true as const };
       // Project-scope check: a privileged role (e.g. QS) is allowed to resolve,
       // but only for projects they're actually assigned to. Mirrors the scoping
@@ -130,7 +133,7 @@ router.post(
       const [row] = await tx
         .update(approvalsTable)
         .set({ status: b.decision, resolvedAt: new Date() })
-        .where(eq(approvalsTable.id, req.params.approvalId))
+        .where(eq(approvalsTable.id, approvalId))
         .returning();
 
       // Entity-specific status propagation. Keep this dispatch small and

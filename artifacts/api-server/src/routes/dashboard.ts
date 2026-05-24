@@ -344,8 +344,12 @@ router.get(
     const utilLabour = n(labourSum?.total);
     const utilMaterials = n(materialsSum?.total);
     const utilAdvances = n(advanceSum?.total);
+    // PO advances are intentionally excluded from the utilization total:
+    // they're prepayments later recovered against GRN-invoiced amounts
+    // already in `utilMaterials`, so adding them would double-count cash
+    // out. `utilAdvances` is still returned in the breakdown for visibility.
     const amountUtilized =
-      utilContractor + utilLabour + utilMaterials + utilAdvances;
+      utilContractor + utilLabour + utilMaterials;
 
     const estimatedCost = contractValue > 0 ? contractValue : budgetToDate;
     const remainingBalance = estimatedCost - amountUtilized;

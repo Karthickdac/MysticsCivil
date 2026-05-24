@@ -677,7 +677,13 @@ function ProjectSummaryBlock({ summary }: { summary: ProjectSummary }) {
           tint={overBudget ? "rose" : "amber"}
           label="Amount Utilized"
           value={formatInr(summary.amountUtilized)}
-          sub={`${utilPct.toFixed(1)}% of estimate`}
+          sub={
+            summary.estimatedCost > 0
+              ? `${utilPct.toFixed(1)}% of estimate`
+              : summary.amountUtilized > 0
+                ? "No estimate set"
+                : "—"
+          }
         />
         <KpiCard
           icon={summary.remainingBalance < 0 ? <TrendingDown className="h-5 w-5" /> : <PiggyBank className="h-5 w-5" />}
