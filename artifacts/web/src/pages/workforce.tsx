@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import {
   Users, CalendarCheck, Wallet, FileSpreadsheet,
   ClipboardCheck, AlertTriangle, ShieldCheck, HardHat,
@@ -2087,6 +2088,48 @@ function ContractorBillTab({ projectId }: { projectId: string }) {
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 const VALID_WORKFORCE_TABS = ["workers","attendance","payroll","itp","inspections","ncr","permits","hira","jsa","ppe","incidents","material-test","contractor-bill","statutory","safety-dashboard"] as const;
 
+const WORKFORCE_GROUPS = [
+  {
+    label: "People & Payroll",
+    icon: Users,
+    items: [
+      { value: "workers",         label: "Workers",         icon: Users },
+      { value: "attendance",      label: "Attendance",      icon: CalendarCheck },
+      { value: "payroll",         label: "Payroll",         icon: Wallet },
+      { value: "contractor-bill", label: "Contractor Bill", icon: Banknote },
+    ],
+  },
+  {
+    label: "Quality",
+    icon: ClipboardCheck,
+    items: [
+      { value: "itp",           label: "ITP",           icon: ClipboardCheck },
+      { value: "inspections",   label: "Inspections",   icon: CheckCircle },
+      { value: "ncr",           label: "NCR",           icon: AlertCircle },
+      { value: "material-test", label: "Material Test", icon: FlaskConical },
+    ],
+  },
+  {
+    label: "Safety (EHS)",
+    icon: ShieldCheck,
+    items: [
+      { value: "permits",          label: "Permits",       icon: ShieldCheck },
+      { value: "hira",             label: "HIRA",          icon: AlertTriangle },
+      { value: "jsa",              label: "JSA",           icon: Zap },
+      { value: "ppe",              label: "PPE",           icon: HardHat },
+      { value: "incidents",        label: "Incidents",     icon: TrendingUp },
+      { value: "safety-dashboard", label: "Safety Dash",   icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Compliance",
+    icon: FileText,
+    items: [
+      { value: "statutory", label: "Statutory Exports", icon: FileText },
+    ],
+  },
+] as const;
+
 export default function WorkforcePage({ projectId }: { projectId: string }) {
   const search = useSearch();
   const initialTab = (() => {
@@ -2101,40 +2144,91 @@ export default function WorkforcePage({ projectId }: { projectId: string }) {
   }, [search]);
   return (
     <div className="space-y-6">
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-background border h-auto p-1 overflow-x-auto flex-nowrap w-full justify-start">
-          <TabsTrigger value="workers" className="flex items-center gap-1.5"><Users className="h-4 w-4" />Workers</TabsTrigger>
-          <TabsTrigger value="attendance" className="flex items-center gap-1.5"><CalendarCheck className="h-4 w-4" />Attendance</TabsTrigger>
-          <TabsTrigger value="payroll" className="flex items-center gap-1.5"><Wallet className="h-4 w-4" />Payroll</TabsTrigger>
-          <TabsTrigger value="itp" className="flex items-center gap-1.5"><ClipboardCheck className="h-4 w-4" />ITP</TabsTrigger>
-          <TabsTrigger value="inspections" className="flex items-center gap-1.5"><CheckCircle className="h-4 w-4" />Inspections</TabsTrigger>
-          <TabsTrigger value="ncr" className="flex items-center gap-1.5"><AlertCircle className="h-4 w-4" />NCR</TabsTrigger>
-          <TabsTrigger value="permits" className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" />Permits</TabsTrigger>
-          <TabsTrigger value="hira" className="flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" />HIRA</TabsTrigger>
-          <TabsTrigger value="jsa" className="flex items-center gap-1.5"><Zap className="h-4 w-4" />JSA</TabsTrigger>
-          <TabsTrigger value="ppe" className="flex items-center gap-1.5"><HardHat className="h-4 w-4" />PPE</TabsTrigger>
-          <TabsTrigger value="incidents" className="flex items-center gap-1.5"><TrendingUp className="h-4 w-4" />Incidents</TabsTrigger>
-          <TabsTrigger value="material-test" className="flex items-center gap-1.5"><FlaskConical className="h-4 w-4" />Material Test</TabsTrigger>
-          <TabsTrigger value="contractor-bill" className="flex items-center gap-1.5"><Banknote className="h-4 w-4" />Contractor Bill</TabsTrigger>
-          <TabsTrigger value="statutory" className="flex items-center gap-1.5"><FileText className="h-4 w-4" />Statutory</TabsTrigger>
-          <TabsTrigger value="safety-dashboard" className="flex items-center gap-1.5"><BarChart3 className="h-4 w-4" />Safety Dash</TabsTrigger>
-        </TabsList>
+      <Tabs value={tab} onValueChange={setTab} orientation="vertical" className="w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4 lg:gap-6">
+          {/* Mobile + tablet (<lg): grouped Select dropdown */}
+          <div className="lg:hidden">
+            <Select value={tab} onValueChange={setTab}>
+              <SelectTrigger className="w-full h-11 text-base" aria-label="Select Workforce & EHS section">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="max-h-[70vh]">
+                {WORKFORCE_GROUPS.map((g) => (
+                  <div key={g.label}>
+                    <div className="flex items-center gap-2 px-2 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      <g.icon className="h-3 w-3" />
+                      {g.label}
+                    </div>
+                    {g.items.map((it) => {
+                      const Icon = it.icon;
+                      return (
+                        <SelectItem key={it.value} value={it.value} className="pl-3">
+                          <span className="flex items-center gap-2">
+                            <Icon className="h-4 w-4 text-muted-foreground" />
+                            {it.label}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </div>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        <TabsContent value="workers"><WorkersTab projectId={projectId} /></TabsContent>
-        <TabsContent value="attendance"><AttendanceTab projectId={projectId} /></TabsContent>
-        <TabsContent value="payroll"><PayrollTab projectId={projectId} /></TabsContent>
-        <TabsContent value="itp"><ItpTab projectId={projectId} /></TabsContent>
-        <TabsContent value="inspections"><InspectionsTab projectId={projectId} /></TabsContent>
-        <TabsContent value="ncr"><NcrTab projectId={projectId} /></TabsContent>
-        <TabsContent value="permits"><PermitsTab projectId={projectId} /></TabsContent>
-        <TabsContent value="hira"><HiraTab projectId={projectId} /></TabsContent>
-        <TabsContent value="jsa"><JsaTab projectId={projectId} /></TabsContent>
-        <TabsContent value="ppe"><PpeTab projectId={projectId} /></TabsContent>
-        <TabsContent value="incidents"><IncidentsTab projectId={projectId} /></TabsContent>
-        <TabsContent value="material-test"><MaterialTestingTab projectId={projectId} /></TabsContent>
-        <TabsContent value="contractor-bill"><ContractorBillTab projectId={projectId} /></TabsContent>
-        <TabsContent value="statutory"><StatutoryExportsTab projectId={projectId} /></TabsContent>
-        <TabsContent value="safety-dashboard"><SafetyDashboardTab projectId={projectId} /></TabsContent>
+          {/* Desktop (lg+): vertical grouped tablist — real Radix tab semantics + arrow-key nav */}
+          <TabsList
+            aria-label="Workforce & EHS navigation"
+            className="hidden lg:flex lg:flex-col lg:items-stretch lg:justify-start lg:sticky lg:top-20 lg:self-start lg:h-auto lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:border lg:rounded-lg lg:bg-card lg:p-2 lg:gap-3 lg:w-full"
+          >
+            {WORKFORCE_GROUPS.map((g) => (
+              <div key={g.label} className="w-full">
+                <div className="flex items-center gap-1.5 px-2 pt-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  <g.icon className="h-3 w-3" />
+                  {g.label}
+                </div>
+                <div className="space-y-0.5">
+                  {g.items.map((it) => {
+                    const Icon = it.icon;
+                    return (
+                      <TabsTrigger
+                        key={it.value}
+                        value={it.value}
+                        className={cn(
+                          "w-full justify-start gap-2 px-2.5 py-2 h-auto rounded-md text-sm text-left bg-transparent",
+                          "text-foreground/80 hover:bg-accent hover:text-accent-foreground",
+                          "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-medium data-[state=active]:shadow-sm",
+                        )}
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{it.label}</span>
+                      </TabsTrigger>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </TabsList>
+
+          {/* Content panel — min-w-0 lets inner tables/scrollers behave on narrow widths */}
+          <div className="min-w-0">
+            <TabsContent value="workers" className="mt-0"><WorkersTab projectId={projectId} /></TabsContent>
+            <TabsContent value="attendance" className="mt-0"><AttendanceTab projectId={projectId} /></TabsContent>
+            <TabsContent value="payroll" className="mt-0"><PayrollTab projectId={projectId} /></TabsContent>
+            <TabsContent value="itp" className="mt-0"><ItpTab projectId={projectId} /></TabsContent>
+            <TabsContent value="inspections" className="mt-0"><InspectionsTab projectId={projectId} /></TabsContent>
+            <TabsContent value="ncr" className="mt-0"><NcrTab projectId={projectId} /></TabsContent>
+            <TabsContent value="permits" className="mt-0"><PermitsTab projectId={projectId} /></TabsContent>
+            <TabsContent value="hira" className="mt-0"><HiraTab projectId={projectId} /></TabsContent>
+            <TabsContent value="jsa" className="mt-0"><JsaTab projectId={projectId} /></TabsContent>
+            <TabsContent value="ppe" className="mt-0"><PpeTab projectId={projectId} /></TabsContent>
+            <TabsContent value="incidents" className="mt-0"><IncidentsTab projectId={projectId} /></TabsContent>
+            <TabsContent value="material-test" className="mt-0"><MaterialTestingTab projectId={projectId} /></TabsContent>
+            <TabsContent value="contractor-bill" className="mt-0"><ContractorBillTab projectId={projectId} /></TabsContent>
+            <TabsContent value="statutory" className="mt-0"><StatutoryExportsTab projectId={projectId} /></TabsContent>
+            <TabsContent value="safety-dashboard" className="mt-0"><SafetyDashboardTab projectId={projectId} /></TabsContent>
+          </div>
+        </div>
       </Tabs>
     </div>
   );
