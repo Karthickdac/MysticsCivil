@@ -250,7 +250,7 @@ export default function Dashboard() {
           <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-violet-600 dark:text-violet-400">
             Operations cockpit
           </p>
-          <h1 className="text-3xl md:text-[34px] font-extrabold tracking-tight text-foreground leading-tight">
+          <h1 className="text-2xl sm:text-3xl md:text-[34px] font-extrabold tracking-tight text-foreground leading-tight">
             Portfolio dashboard
           </h1>
           <p className="text-sm text-muted-foreground font-medium max-w-2xl">

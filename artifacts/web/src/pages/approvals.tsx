@@ -1,4 +1,12 @@
-import { useListApprovals, useResolveApproval, getListApprovalsQueryKey } from "@workspace/api-client-react";
+import {
+  useListApprovals,
+  useResolveApproval,
+  getListApprovalsQueryKey,
+  getGetPortfolioDashboardQueryKey,
+  getGetProjectDashboardQueryKey,
+  getListProjectDprsQueryKey,
+  getListProjectIssuesQueryKey,
+} from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,12 +21,26 @@ export default function Approvals() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const handleResolve = (id: string, decision: "approved" | "rejected") => {
+  const handleResolve = (id: string, decision: "approved" | "rejected", item?: any) => {
     resolveApproval.mutate(
       { approvalId: id, data: { decision } },
       {
         onSuccess: () => {
+          // Refresh approvals list + downstream caches so the resolved entity
+          // (DPR / issue / dashboard counts) reflects the new state immediately.
           queryClient.invalidateQueries({ queryKey: getListApprovalsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetPortfolioDashboardQueryKey() });
+          if (item?.projectId) {
+            queryClient.invalidateQueries({
+              queryKey: getGetProjectDashboardQueryKey(item.projectId),
+            });
+            if (item?.entityType === "dpr") {
+              queryClient.invalidateQueries({ queryKey: getListProjectDprsQueryKey(item.projectId) });
+            }
+            if (item?.entityType === "issue") {
+              queryClient.invalidateQueries({ queryKey: getListProjectIssuesQueryKey(item.projectId) });
+            }
+          }
           toast({
             title: `Item ${decision}`,
             description: `The approval item has been ${decision}.`,
@@ -83,14 +105,14 @@ export default function Approvals() {
                     <Button 
                       variant="outline" 
                       className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                      onClick={() => handleResolve(item.id, "rejected")}
+                      onClick={() => handleResolve(item.id, "rejected", item)}
                       disabled={resolveApproval.isPending}
                     >
                       <X className="w-4 h-4 mr-2" /> Reject
                     </Button>
                     <Button 
                       className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                      onClick={() => handleResolve(item.id, "approved")}
+                      onClick={() => handleResolve(item.id, "approved", item)}
                       disabled={resolveApproval.isPending}
                     >
                       <Check className="w-4 h-4 mr-2" /> Approve

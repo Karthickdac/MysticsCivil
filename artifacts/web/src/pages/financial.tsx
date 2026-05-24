@@ -17,6 +17,7 @@ import {
   ChevronRight, Plus, Shield, Receipt, Building2,
 } from "lucide-react";
 import { formatINR } from "@/lib/ocms-format";
+import { useToast } from "@/hooks/use-toast";
 
 // ─── Status Config ─────────────────────────────────────────────────────────
 const BILL_STEPS = [
@@ -127,6 +128,7 @@ function CreateBillDialog({ projectId, onCreated }: { projectId: string; onCreat
 
 // ─── Advance Bill Dialog ───────────────────────────────────────────────────
 function AdvanceBillDialog({ bill, onAdvanced }: { bill: any; onAdvanced: () => void }) {
+  const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [remarks, setRemarks] = useState("");
   const [utr, setUtr] = useState("");
@@ -155,9 +157,13 @@ function AdvanceBillDialog({ bill, onAdvanced }: { bill: any; onAdvanced: () => 
 
   const advance = async () => {
     if (isPayment) {
-      if (modeMeta.needsBank && !bankName.trim()) { alert("Bank name is required for this payment mode."); return; }
+      if (modeMeta.needsBank && !bankName.trim()) {
+        toast({ title: "Bank name required", description: "Bank name is required for this payment mode.", variant: "destructive" });
+        return;
+      }
       if ((mode === "bank_transfer" || mode === "neft" || mode === "rtgs") && !utr.trim()) {
-        alert("UTR is required for bank transfers."); return;
+        toast({ title: "UTR required", description: "UTR is required for bank transfers.", variant: "destructive" });
+        return;
       }
     }
     setLoading(true);
@@ -175,7 +181,9 @@ function AdvanceBillDialog({ bill, onAdvanced }: { bill: any; onAdvanced: () => 
         }),
       });
       setOpen(false); onAdvanced();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) {
+      toast({ title: "Failed to advance", description: e?.message ?? "Unknown error", variant: "destructive" });
+    }
     finally { setLoading(false); }
   };
 

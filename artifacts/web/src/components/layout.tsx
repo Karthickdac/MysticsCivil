@@ -5,7 +5,10 @@ import {
   useGetMyProfile,
   useListProjects,
   useListOrganisations,
+  useListApprovals,
+  getListApprovalsQueryKey,
 } from "@workspace/api-client-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useT, type Lang } from "@/lib/i18n";
 import { PROJECT_TABS } from "@/lib/project-tabs";
 import { getEffectiveModules, moduleEnabled } from "@/lib/modules";
@@ -452,7 +455,7 @@ function Sidebar({
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-4">
+      <nav className="flex-1 min-h-0 overflow-y-auto py-4 px-3 space-y-4">
         {groups.map((group) => {
           const showHeader = !isCompact;
           const isFolded = showHeader && !!collapsedGroups[group.key];
@@ -552,6 +555,118 @@ function Sidebar({
   );
 }
 
+// ─── Notification Bell ───────────────────────────────────────────────────────
+// In-app notifications are surfaced as the pending-approvals inbox for the
+// current user. Clicking an item navigates to /approvals where it can be acted on.
+const APPROVER_ROLES = new Set(["owner", "pm", "qs", "finance", "admin"]);
+function NotificationBell({
+  role,
+  enabledModules,
+}: {
+  role?: string;
+  enabledModules: Set<string> | null;
+}) {
+  const [, navigate] = useLocation();
+  // Only roles that can act on approvals subscribe — avoids needless polling
+  // and a visible "0" badge for users who have nothing to action.
+  const canSee =
+    !!role && APPROVER_ROLES.has(role) && moduleEnabled(enabledModules, "approvals");
+  const { data: approvals = [] } = useListApprovals({
+    query: {
+      refetchInterval: 60_000,
+      staleTime: 30_000,
+      enabled: canSee,
+      queryKey: getListApprovalsQueryKey(),
+    },
+  });
+  if (!canSee) return null;
+  const items = (approvals as any[]) ?? [];
+  const count = items.length;
+  const overdue = items.filter((a) => (a?.ageDays ?? 0) > 3).length;
+  const preview = items.slice(0, 6);
+
+  const go = (href: string) => {
+    navigate(href);
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          className="relative h-9 w-9 rounded-xl bg-muted hover:bg-muted/70 flex items-center justify-center text-muted-foreground hover:text-foreground transition"
+          data-testid="btn-notifications"
+          aria-label={`Notifications${count ? `, ${count} pending` : ""}`}
+        >
+          <Bell className="h-4 w-4" />
+          {count > 0 && (
+            <span
+              className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center border border-background ${
+                overdue > 0 ? "bg-rose-500 text-white" : "bg-violet-600 text-white"
+              }`}
+              data-testid="notifications-count"
+            >
+              {count > 99 ? "99+" : count}
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[320px] p-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <div>
+            <div className="text-sm font-semibold">Notifications</div>
+            <div className="text-[11px] text-muted-foreground">
+              {count === 0
+                ? "You're all caught up"
+                : `${count} pending${overdue ? ` · ${overdue} overdue` : ""}`}
+            </div>
+          </div>
+          <button
+            type="button"
+            className="text-[11px] font-semibold text-violet-600 hover:underline"
+            onClick={() => go("/approvals")}
+            data-testid="notifications-viewall"
+          >
+            View all
+          </button>
+        </div>
+        <div className="max-h-[320px] overflow-y-auto">
+          {preview.length === 0 ? (
+            <div className="px-4 py-6 text-center text-xs text-muted-foreground">
+              No pending approvals.
+            </div>
+          ) : (
+            <ul className="divide-y">
+              {preview.map((a: any) => (
+                <li key={a.id}>
+                  <button
+                    type="button"
+                    onClick={() => go("/approvals")}
+                    className="w-full text-left px-4 py-3 hover:bg-muted/40 transition flex flex-col gap-1"
+                    data-testid={`notification-${a.id}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
+                        {a.entityType}
+                      </span>
+                      {(a.ageDays ?? 0) > 3 && (
+                        <span className="text-[10px] font-bold text-rose-600">Overdue</span>
+                      )}
+                    </div>
+                    <div className="text-sm font-medium leading-snug truncate">{a.title}</div>
+                    <div className="text-[11px] text-muted-foreground truncate">
+                      {a.projectName} · {a.ageDays}d ago
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // ─── Top header ──────────────────────────────────────────────────────────────
 function TopHeader({
   onToggleSidebar,
@@ -560,6 +675,7 @@ function TopHeader({
   profile,
   onLogout,
   t,
+  enabledModules,
 }: {
   onToggleSidebar: () => void;
   onOpenMobile: () => void;
@@ -567,6 +683,7 @@ function TopHeader({
   profile: any;
   onLogout: () => void;
   t: (k: string) => string;
+  enabledModules: Set<string> | null;
 }) {
   const { dark, toggle } = useDarkMode();
   const initials = `${profile?.firstName?.[0] ?? ""}${profile?.lastName?.[0] ?? ""}`.toUpperCase() || "U";
@@ -613,13 +730,7 @@ function TopHeader({
           >
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
-          <button
-            className="relative h-9 w-9 rounded-xl bg-muted hover:bg-muted/70 flex items-center justify-center text-muted-foreground hover:text-foreground transition"
-            data-testid="btn-notifications"
-          >
-            <Bell className="h-4 w-4" />
-            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-rose-500 border border-background" />
-          </button>
+          <NotificationBell role={profile?.role} enabledModules={enabledModules} />
 
           {profile && (
             <div className="hidden sm:flex items-center gap-2.5 pl-1.5 pr-3.5 py-1 rounded-full bg-muted hover:bg-muted/80 transition" data-testid="user-chip">
@@ -701,6 +812,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             profile={profile}
             onLogout={handleLogout}
             t={t}
+            enabledModules={myOrgModules}
           />
           <main className="flex-1 p-4 md:p-6 lg:p-8">
             {children}

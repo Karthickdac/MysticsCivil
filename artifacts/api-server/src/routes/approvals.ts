@@ -1,8 +1,9 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, approvalsTable, projectsTable, usersTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc, inArray } from "drizzle-orm";
 import { requireAuth, requireRole, ROLE_GROUPS } from "../middlewares/requireAuth";
 import { dReq, d } from "../lib/serialize";
+import { getAccessCtx, getAccessibleProjectIds, PROJECT_ACCESS_BYPASS_ROLES } from "../lib/access";
 
 const router: IRouter = Router();
 
@@ -29,7 +30,29 @@ function serializeApproval(a: any, projectName: string | null, requesterName: st
   };
 }
 
-router.get("/approvals", requireAuth, async (_req, res: Response) => {
+router.get("/approvals", requireAuth, async (req: Request, res: Response) => {
+  // Scope:
+  //   - admin/owner: every pending approval in projects they can see.
+  //   - other roles: only pending approvals targeting their role, in projects they're assigned to.
+  // This makes /approvals a per-user inbox safe to poll from the header bell.
+  const ctx = await getAccessCtx(req);
+  const accessibleIds = await getAccessibleProjectIds(ctx);
+  const isBypass = !!ctx.role && PROJECT_ACCESS_BYPASS_ROLES.has(ctx.role);
+
+  // Empty access set → return empty list immediately (avoids inArray with no values).
+  if (accessibleIds.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  const whereParts = [
+    eq(approvalsTable.status, "pending"),
+    inArray(approvalsTable.projectId, accessibleIds),
+  ];
+  if (!isBypass && ctx.role) {
+    whereParts.push(eq(approvalsTable.assignedToRole, ctx.role));
+  }
+
   const rows = await db
     .select({
       a: approvalsTable,
@@ -41,7 +64,7 @@ router.get("/approvals", requireAuth, async (_req, res: Response) => {
     .from(approvalsTable)
     .leftJoin(projectsTable, eq(approvalsTable.projectId, projectsTable.id))
     .leftJoin(usersTable, eq(approvalsTable.requestedById, usersTable.id))
-    .where(eq(approvalsTable.status, "pending"))
+    .where(and(...whereParts))
     .orderBy(desc(approvalsTable.createdAt));
   res.json(
     rows.map((r) =>
