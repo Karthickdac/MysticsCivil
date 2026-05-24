@@ -23,3 +23,9 @@ id = "lAUNAe8BZQvTqvABcgo-c"
 uri = "file://docs/APPLICATION_WORKFLOW.md"
 type = "text"
 title = "KattidaCore — Application Workflow Reference"
+
+[[outputs]]
+id = "k5mUC4PT5GP0WY3CQVvbw"
+uri = "file://exports/Mystics Civil.pdf"
+type = "pdf"
+title = "Mystics Civil — KattidaCore Workflow"
